@@ -34,7 +34,7 @@
     ]
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.8",
+    "@biomejs/biome": "^2.5.9",
     "@changesets/cli": "^2.31.0",
     "typescript": "^6.0.3"
   }
