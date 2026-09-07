@@ -51,14 +51,14 @@
   "dependencies": {
     "@testivai/witness": "workspace:*",
     "fs-extra": "^11.4.0",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",
-    "jest": "^30.4.2",
+    "jest": "^30.5.1",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.0",
     "typescript": "^6.0.3"
