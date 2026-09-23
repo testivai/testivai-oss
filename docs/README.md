@@ -43,6 +43,7 @@ Pick the framework you use:
 
 - **[Python (playwright-python)](./frameworks/python.md)**
 - **[Java (playwright-java)](./frameworks/java.md)**
+- **[Mobile web](./guides/mobile-web.md)** — one Playwright project per device profile
 - **[AI agents & code assistants](./guides/ai-agents.md)**
 - **[Vibe-coded apps (Lovable, Bolt, v0)](./guides/vibe-coded-apps.md)**
 - **[CI/CD](./guides/ci-cd.md)**

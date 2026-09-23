@@ -546,7 +546,7 @@ function renderDomHint(snapshot: SnapshotResult): string {
       snapshot.dom.styleCheck === 'match'
         ? ' Styles verified unchanged.'
         : snapshot.dom.styleCheck === 'unavailable'
-          ? ' (Style check unavailable — no element maps on both sides.)'
+          ? ' (Style check unavailable — no comparable style digests on both sides.)'
           : '';
     return `
       <div class="dom-hint noise" title="DOM tree is identical between baseline and candidate; the pixel diff is likely render noise.">

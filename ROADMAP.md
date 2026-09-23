@@ -62,15 +62,31 @@ full-page.
 `viewports: [[1280,800],[375,812]]` in config → one `witness()` call captures
 each, baselines keyed per viewport.
 
+This is the *in-project* matrix and it is genuinely unbuilt. It is not the same
+thing as mobile coverage, which already works: one Playwright **project** per
+device profile keys baselines as `<name>__<project>` (1.1), and the DOM and
+computed-style attribution survives device emulation intact. See
+[the mobile web guide](./docs/guides/mobile-web.md). 2.3 would remove the
+per-device project boilerplate, not enable mobile.
+
 ### 2.4 Report: diff view modes, filtering, keyboard nav — **M** *(community)*
 The report has side-by-side + zoom. Reviewers of 50+ snapshots need: overlay
 blink/swipe/onion-skin modes, status + name filtering, `j/k` keyboard
 navigation, "copy approve command" per snapshot (exists) and per selection.
 
-### 2.5 Sharded CI merge — **M**
-Playwright shards are standard on large suites; today each shard writes its
-own `visual-report/`. Add `testivai merge-reports <dirs...>` producing one
-report + one results.json, and document the shard workflow in the action.
+### 2.5 Sharded CI merge — SHIPPED (witness 1.12.0)
+Shipped by not merging reports at all: a shard that only ran a slice of the
+suite must not compare, so the reporter switches to capture-only on a sharded
+run and `testivai merge-captures <dirs...>` unions the shards' captures for a
+single comparison — one report, one results.json, one exit code.
+`merge-captures` also refuses to proceed when a shard never reported, naming
+the missing indices (`--expect <n>`, `--allow-incomplete`). Since 1.13.0 the
+contract is cross-language: `TESTIVAI_SHARD=i/N` and `TESTIVAI_CAPTURE_ONLY=1`
+are honoured by the Playwright, Selenium, Python, Java and Ruby adapters, with
+Playwright's `--shard` auto-detection as a convenience on top. The workflow is
+documented in [the CI/CD guide](./docs/guides/ci-cd.md#sharded-runs). Still open:
+- `docs/github-action.md` doesn't mention sharding; the recipe lives only in
+  the CI/CD guide
 
 ### 2.6 `testivai status` — **S** *(community)*
 Print the latest results summary in the terminal (per-snapshot verdicts,

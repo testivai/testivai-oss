@@ -12,6 +12,7 @@
 import {
   parseElementMap,
   attributeRegions,
+  compareStyleHashes,
   detectPageShift,
   type ElementMapEntry,
 } from '../diff/attribution';
@@ -150,5 +151,65 @@ describe('detectPageShift', () => {
   it('returns null for identical maps', () => {
     const baseline = [mk(1, 0), mk(2, 50)];
     expect(detectPageShift(baseline, baseline, 2)).toBeNull();
+  });
+});
+
+describe('compareStyleHashes', () => {
+  const bounds = (path: string, styleHash: string): ElementMapEntry => ({
+    path, x: 0, y: 0, width: 100, height: 20, styleHash,
+  });
+
+  it('reports match and mismatch when both sides carry digests', () => {
+    const baseline = [bounds('body > h1', 'aaaa1111'), bounds('body > p', 'bbbb2222')];
+    expect(compareStyleHashes(baseline, baseline)).toEqual({ status: 'match', changed: [] });
+
+    const restyled = [bounds('body > h1', 'cccc3333'), bounds('body > p', 'bbbb2222')];
+    expect(compareStyleHashes(baseline, restyled)).toEqual({
+      status: 'mismatch',
+      changed: ['body > h1'],
+    });
+  });
+
+  it('is unavailable — not a match — when neither side carries a digest', () => {
+    // A hierarchy-derived or bounds-only map (the Extension API asks adapters
+    // for a path and a box, not styles). Comparing '' to '' would render in the
+    // report as "computed styles are identical", which was never measured.
+    const noDigests = [bounds('body > h1', ''), bounds('body > p', '')];
+    expect(compareStyleHashes(noDigests, noDigests)).toEqual({
+      status: 'unavailable',
+      changed: [],
+    });
+  });
+
+  it('is unavailable — not a mismatch — when only one side carries digests', () => {
+    // An adapter that gains (or loses) style support against existing baselines.
+    // Every shared path would otherwise be named as style-changed.
+    const withDigests = [bounds('body > h1', 'aaaa1111'), bounds('body > p', 'bbbb2222')];
+    const noDigests = [bounds('body > h1', ''), bounds('body > p', '')];
+
+    expect(compareStyleHashes(noDigests, withDigests)).toEqual({
+      status: 'unavailable',
+      changed: [],
+    });
+    expect(compareStyleHashes(withDigests, noDigests)).toEqual({
+      status: 'unavailable',
+      changed: [],
+    });
+  });
+
+  it('compares the pairs that do carry digests and ignores the rest', () => {
+    const baseline = [bounds('body > h1', 'aaaa1111'), bounds('body > p', '')];
+    const candidate = [bounds('body > h1', 'cccc3333'), bounds('body > p', 'dddd4444')];
+    // body > p is uncomparable (empty on the baseline side), body > h1 changed.
+    expect(compareStyleHashes(baseline, candidate)).toEqual({
+      status: 'mismatch',
+      changed: ['body > h1'],
+    });
+  });
+
+  it('stays unavailable when either map is empty', () => {
+    const map = [bounds('body > h1', 'aaaa1111')];
+    expect(compareStyleHashes([], map)).toEqual({ status: 'unavailable', changed: [] });
+    expect(compareStyleHashes(map, [])).toEqual({ status: 'unavailable', changed: [] });
   });
 });

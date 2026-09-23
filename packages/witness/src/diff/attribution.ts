@@ -193,6 +193,22 @@ export interface StyleComparison {
  * and removals are the DOM diff's job, not the style fingerprint's.
  * Either side missing a map → 'unavailable' (the noise hint falls back
  * to its legacy DOM-only behavior, visibly labeled).
+ *
+ * A digest is only meaningful when BOTH sides actually carry one.
+ * `parseElementMap` deliberately tolerates an absent `styleHash` (it
+ * defaults to ''), because the Extension API asks adapters for bounds and
+ * a path — not styles — so a map with no digests is a supported input, and
+ * so is a hierarchy-derived map that has no computed styles to digest at all.
+ * Comparing those empty strings would be a claim about evidence that was
+ * never collected, in both directions:
+ *
+ *   - neither side has digests → every pair is ''==='' → a false 'match',
+ *     which the report renders as "computed styles are identical";
+ *   - one side has them and the other does not → every pair differs → a
+ *     false 'mismatch' naming every shared element as style-changed.
+ *
+ * So pairs are only compared when both digests are non-empty, and a run
+ * with no comparable pair is 'unavailable' rather than either verdict.
  */
 export function compareStyleHashes(
   baselineMap: ElementMapEntry[],
@@ -203,10 +219,16 @@ export function compareStyleHashes(
   }
   const baselineByPath = new Map(baselineMap.map((e) => [e.path, e.styleHash]));
   const changed: string[] = [];
+  let comparable = 0;
   for (const el of candidateMap) {
     const b = baselineByPath.get(el.path);
-    if (b !== undefined && b !== el.styleHash) changed.push(el.path);
+    if (b === undefined) continue;
+    // An absent digest on either side is missing evidence, not a difference.
+    if (b === '' || el.styleHash === '') continue;
+    comparable++;
+    if (b !== el.styleHash) changed.push(el.path);
   }
+  if (comparable === 0) return { status: 'unavailable', changed: [] };
   return changed.length > 0 ? { status: 'mismatch', changed } : { status: 'match', changed: [] };
 }
 

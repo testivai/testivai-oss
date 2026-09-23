@@ -24,6 +24,7 @@ Pixel-only visual testing drowns you in false positives — a font re-hint or an
 - **Auditable masks & region-level diffs** — exclude dynamic areas (selectors or coordinates) with the masked region hatched in the diff, and get "3 changed regions" with bounding boxes instead of a raw pixel percentage.
 - **Element attribution & exact shift detection** — the report names *which element* changed ("`div.card:nth-of-type(2)` shifted +8px vertically — content unchanged") and spots the injected-banner case ("everything below y=80 moved +24px"), derived from layout, not pixel guesswork. No local-first tool does this.
 - **First-class adapters** — Playwright (TS/JS **and Python**, Java experimental) and WebdriverIO, using each framework's native APIs; every language shares one set of baselines and one report.
+- **Mobile web, no extra package** — Playwright device emulation works through the same `witness()` call: one project per device profile, baselines keyed per device automatically, and the DOM and computed-style attribution survives emulation, so a change behind a `@media` query is caught on mobile and correctly passes on desktop. See the [mobile web guide](docs/guides/mobile-web.md).
 - **PR-native workflow** — a GitHub Action posts the diff and approves baselines from a `/testivai approve` comment.
 - **No lock-in** — MIT license, baselines live in your git, and `results.json` is a semver-governed public contract.
 

@@ -27,8 +27,8 @@ npm install -D @testivai/witness-playwright @playwright/test
 npx playwright install chromium
 ```
 
-:::info No CLI required
-Playwright uses a dedicated SDK, not the `@testivai/witness` CLI. Do not run `testivai run` with Playwright.
+:::info No `testivai run` wrapper
+Playwright uses a dedicated SDK — run your tests with `npx playwright test`, not `testivai run`. The `testivai` CLI is still what gates CI (`npx testivai report --fail-on-diff`); it ships as a dependency of the SDK.
 :::
 
 ---
@@ -73,10 +73,6 @@ export default defineConfig({
     ['@testivai/witness-playwright/reporter', {
       // Optional configuration
       debug: false, // Set to true for verbose logging
-      compression: {
-        compressUploads: true, // Enable compression for large payloads
-        compressionThreshold: 5 * 1024 * 1024, // 5MB threshold
-      }
     }]
   ],
   use: {
@@ -202,6 +198,39 @@ The standalone `testivai witness <url>` crawler and the experimental
 
 ---
 
+## Mobile web coverage
+
+Mobile web is device emulation, not a separate runner: list one Playwright
+project per device and the capture path is unchanged.
+
+```ts
+projects: [
+  { name: 'desktop-chrome', use: { ...devices['Desktop Chrome'] } },
+  { name: 'mobile-safari',  use: { ...devices['iPhone 13'] } },
+  { name: 'mobile-chrome',  use: { ...devices['Pixel 7'] } },
+],
+```
+
+One `testivai.witness(page, testInfo, 'pricing')` call then produces
+`pricing__desktop-chrome`, `pricing__mobile-safari` and
+`pricing__mobile-chrome` — the same `<name>__<project>` keying as
+cross-browser runs (the project name is lowercased and non-alphanumerics
+become `_`), each diffed against its own baseline. A change scoped to
+a `@media (max-width: 600px)` block is flagged on the mobile variants and
+passes on desktop; DOM diff, region→selector attribution and the style check
+all work under emulation.
+
+Two caveats, covered in full in the guide: captured resolution is not
+uniform across engines — the WebKit path applies `deviceScaleFactor` while
+the Chromium path captures CSS pixels, so Mobile Chrome baselines are
+lower-fidelity than the device (harmless for detection, since each variant
+only ever compares against its own baseline) — and there is no in-project
+viewport matrix; one project per device is the mechanism today.
+
+→ Full recipe: **[Mobile web](../guides/mobile-web.md)**
+
+---
+
 ## CI/CD
 
 GitHub Actions example:
@@ -248,7 +277,7 @@ The screenshot and a DOM snapshot are captured — the DOM snapshot powers the r
 
 ## How it works
 
-The Playwright SDK uses Playwright's native `page.screenshot()`, `page.evaluate()`, and browser session APIs directly — no external Chrome debugging port required. This makes it the most seamless integration for Playwright users.
+The Playwright SDK uses Playwright's native `page.screenshot()`, `page.evaluate()`, and browser session APIs directly — no external Chrome debugging port required, so the adapter runs inside the same browser context as your test.
 
 → **[See all captured layers](/how-it-works)**
 
