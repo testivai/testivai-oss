@@ -1,6 +1,6 @@
 {
   "name": "@testivai/witness-playwright",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Playwright adapter for TestivAI Witness — local-first visual regression with pixel + DOM comparison",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

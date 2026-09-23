@@ -1,6 +1,6 @@
 {
   "name": "@testivai/witness-webdriverio",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "WebdriverIO adapter for TestivAI Witness — local-first visual regression with pixel + DOM comparison",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
