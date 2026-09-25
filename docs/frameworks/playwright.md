@@ -103,7 +103,7 @@ the test run, compare once in the gate step. See the
 
 ## 4. Add Capture Calls
 
-Import `testivai` from the SDK and call `testivai.witness(page, testInfo, 'name')` in your tests.
+Import `witness` from the SDK and call `witness(page, testInfo, 'name')` in your tests.
 
 **Multiple Playwright projects?** Snapshots are keyed per project
 automatically: with projects `chromium-desktop` and `mobile-safari`, the
@@ -113,16 +113,16 @@ keep plain names. An optional fourth argument takes per-snapshot overrides, e.g.
 
 ```ts
 import { test } from '@playwright/test';
-import { testivai } from '@testivai/witness-playwright';
+import { witness } from '@testivai/witness-playwright';
 
 test('homepage looks correct', async ({ page }, testInfo) => {
   await page.goto('http://localhost:3000');
-  await testivai.witness(page, testInfo, 'homepage');
+  await witness(page, testInfo, 'homepage');
 });
 
 test('login page looks correct', async ({ page }, testInfo) => {
   await page.goto('http://localhost:3000/login');
-  await testivai.witness(page, testInfo, 'login-page');
+  await witness(page, testInfo, 'login-page');
 });
 ```
 
@@ -132,24 +132,24 @@ test('login page looks correct', async ({ page }, testInfo) => {
 
 ```ts
 import { test, expect } from '@playwright/test';
-import { testivai } from '@testivai/witness-playwright';
+import { witness } from '@testivai/witness-playwright';
 
 test.describe('Visual Regression', () => {
   test('homepage', async ({ page }, testInfo) => {
     await page.goto('/');
-    await testivai.witness(page, testInfo, 'homepage');
+    await witness(page, testInfo, 'homepage');
   });
 
   test('navigation state', async ({ page }, testInfo) => {
     await page.goto('/');
     await page.click('nav a[href="/about"]');
-    await testivai.witness(page, testInfo, 'about-page');
+    await witness(page, testInfo, 'about-page');
   });
 
   test('mobile viewport', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/');
-    await testivai.witness(page, testInfo, 'homepage-mobile');
+    await witness(page, testInfo, 'homepage-mobile');
   });
 });
 ```
@@ -211,7 +211,7 @@ projects: [
 ],
 ```
 
-One `testivai.witness(page, testInfo, 'pricing')` call then produces
+One `witness(page, testInfo, 'pricing')` call then produces
 `pricing__desktop-chrome`, `pricing__mobile-safari` and
 `pricing__mobile-chrome` — the same `<name>__<project>` keying as
 cross-browser runs (the project name is lowercased and non-alphanumerics

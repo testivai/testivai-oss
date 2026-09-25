@@ -8,7 +8,7 @@ Mobile web visual regression works **today**, with the Playwright adapter you
 already have. There is no mobile package to install, no new API, and no
 separate runner. Device emulation is a Playwright concern, so you add
 *projects* to `playwright.config.ts` and keep calling
-`testivai.witness(page, testInfo, 'name')` exactly as you do on desktop —
+`witness(page, testInfo, 'name')` exactly as you do on desktop —
 the call is unchanged, and every layer (pixel diff, DOM diff, element
 attribution, style check) works under emulation.
 
@@ -69,11 +69,11 @@ baselines:
 
 ```ts title="tests/pricing.spec.ts"
 import { test } from '@playwright/test';
-import { testivai } from '@testivai/witness-playwright';
+import { witness } from '@testivai/witness-playwright';
 
 test('pricing page', async ({ page }, testInfo) => {
   await page.goto('http://localhost:3000/pricing');
-  await testivai.witness(page, testInfo, 'pricing');
+  await witness(page, testInfo, 'pricing');
 });
 ```
 

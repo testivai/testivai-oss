@@ -36,7 +36,7 @@ Three shapes:
 Per-snapshot masks (merged with the global list):
 
 ```ts
-await testivai.witness(page, testInfo, 'pricing', {
+await witness(page, testInfo, 'pricing', {
   mask: ['.live-chat', { top: 24 }],
 });
 ```
