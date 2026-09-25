@@ -24,7 +24,7 @@
     "pack:dry": "pnpm -r --filter \"./packages/**\" exec npm pack --dry-run",
     "e2e": "pnpm --filter @testivai-oss/e2e run test",
     "changeset": "changeset",
-    "version-packages": "changeset version && pnpm install --lockfile-only",
+    "version-packages": "changeset version && node scripts/sync-mcp-server-json.js && pnpm install --lockfile-only",
     "release": "pnpm build && changeset publish",
     "lint": "biome lint"
   },
