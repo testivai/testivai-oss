@@ -23,8 +23,7 @@ function syncServerJson(pkgDir) {
   const pkgPath = path.join(pkgDir, 'package.json');
   const serverPath = path.join(pkgDir, 'server.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const raw = fs.readFileSync(serverPath, 'utf8');
-  const server = JSON.parse(raw);
+  const server = JSON.parse(fs.readFileSync(serverPath, 'utf8'));
 
   const entry = (server.packages || []).find((p) => p.identifier === pkg.name);
   if (!entry) {
