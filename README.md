@@ -133,11 +133,11 @@ export default defineConfig({
 ```ts
 // 4. Add a capture call — tests/example.spec.ts
 import { test } from '@playwright/test';
-import { testivai } from '@testivai/witness-playwright';
+import { witness } from '@testivai/witness-playwright';
 
 test('homepage looks correct', async ({ page }, testInfo) => {
   await page.goto('http://localhost:3000');
-  await testivai.witness(page, testInfo, 'homepage');
+  await witness(page, testInfo, 'homepage');
 });
 ```
 

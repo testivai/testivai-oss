@@ -12,13 +12,13 @@ Each skill is self-contained — read only the one you need.
 ```ts
 // tests/my-page.spec.ts
 import { test } from '@playwright/test';
-import { testivai } from '@testivai/witness-playwright';
+import { witness } from '@testivai/witness-playwright';
 
 test('my page looks correct', async ({ page }, testInfo) => {
   await page.goto('http://localhost:3000/my-page');
   // Optional: wait for animations, lazy images, etc.
   await page.waitForLoadState('networkidle');
-  await testivai.witness(page, testInfo, 'my-page');
+  await witness(page, testInfo, 'my-page');
 });
 ```
 
