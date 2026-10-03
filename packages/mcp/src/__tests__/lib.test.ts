@@ -57,6 +57,34 @@ describe('@testivai/mcp lib', () => {
       expect(verdict).toContain('0.40%');
     });
 
+    // noiseHint fires when the DOM is identical and no style mismatch was
+    // found. With styleCheck 'match' that means the DOM and the computed
+    // styles were both compared and both matched — the verdict says so.
+    it('says the DOM and computed styles both matched when the noise hint has a style match', () => {
+      const verdict = verdictFor({
+        name: 'x',
+        status: 'changed',
+        diffPercent: 0.4,
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      });
+      expect(verdict).toContain('likely render noise');
+      expect(verdict).toContain('DOM and computed styles both match');
+    });
+
+    // witness also sets noiseHint when no style digests were comparable
+    // (styleCheck 'unavailable'): styles were never compared, so the verdict
+    // must not claim they matched, and must say they were not compared.
+    it('does not claim styles matched when the style check was unavailable', () => {
+      const verdict = verdictFor({
+        name: 'x',
+        status: 'changed',
+        diffPercent: 0.4,
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+      });
+      expect(verdict).not.toMatch(/styles (both )?match/i);
+      expect(verdict).toContain('styles were not compared');
+    });
+
     it('labels DOM changes as real with the change summary', () => {
       const verdict = verdictFor({
         name: 'x',
@@ -310,6 +338,20 @@ describe('@testivai/mcp explainSnapshot', () => {
     expect(e.layers.dom.noiseHint).toBe(true);
     expect(e.guidance.join(' ')).toMatch(/render noise/i);
     expect(e.guidance.join(' ')).toMatch(/human decision/i);
+  });
+
+  // The verdict and the guidance ship in the same explanation, so they must
+  // agree: with no comparable style digests, neither may claim styles matched.
+  it('noise case without a style check: guidance does not claim the style digests match', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([{
+      name: 'home', status: 'changed', diffPercent: 0.4,
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+    }]);
+    const guidance = explainSnapshot(root, 'home').guidance.join(' ');
+    expect(guidance).toMatch(/render noise/i);
+    expect(guidance).not.toMatch(/digests match/i);
+    expect(guidance).toMatch(/styles were not compared/i);
   });
 
   it('style-mismatch case: flags a REAL stylesheet-only change with element names', () => {

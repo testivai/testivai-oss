@@ -23,8 +23,11 @@ export const TOOL_META = {
     title: 'Get visual test results',
     description:
       'Read the latest TestivAI visual regression results (visual-report/results.json). ' +
-      'Returns a per-snapshot verdict combining the pixel diff and the DOM signal: ' +
-      'DOM-identical diffs are likely render noise; DOM changes are real and need human review. ' +
+      'Returns a per-snapshot verdict combining the pixel diff with the DOM and computed-style signals. ' +
+      'A pixel diff is likely render noise when the DOM and the computed styles both match; ' +
+      'a style-only change (identical DOM, different computed styles) is a real change, not noise, ' +
+      'and so is any DOM change — both need human review. ' +
+      'When the styles could not be compared, the verdict says so. ' +
       'Run the test suite first (e.g. `npx playwright test`) if results are stale or missing.',
   },
   // `get_diff` is the canonical name; `get_snapshot_diff` is kept as an alias.
