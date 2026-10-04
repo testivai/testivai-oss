@@ -402,3 +402,123 @@ export function resolveApprovalPrompt(argv: string[], configValue: boolean | und
   }
   return configValue ?? true;
 }
+
+/** Snapshots listed together because their grouping signal is identical. */
+export interface ChangeGroup {
+  basis: 'style-only' | 'page-shift' | 'noise';
+  /** What every member has in common, phrased for the reader. */
+  label: string;
+  /** Snapshot names, sorted. Always two or more. */
+  members: string[];
+}
+
+type Signature = { basis: ChangeGroup['basis']; key: string; label: string };
+
+// Real changes before noise when groups are the same size.
+const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'noise'];
+
+/**
+ * The one grouping signal a changed snapshot carries, or null when it must
+ * not be grouped. Precedence: structural (never grouped) > style-only >
+ * page shift > noise. Every rule errs towards null: under-grouping is
+ * acceptable, over-grouping is a bug.
+ */
+function signatureOf(s: SnapshotResult): Signature | null {
+  // Only changed snapshots; auto-passed ones are status 'passed'.
+  if (s.status !== 'changed') return null;
+  // No DOM data means a structural change cannot be ruled out.
+  if (!s.dom || s.dom.changed) return null;
+
+  if (s.dom.styleCheck === 'mismatch') {
+    const changes = s.dom.styleChanges;
+    // witness lists at most 10 elements: beyond that the lists cannot be
+    // compared exactly, so a truncated signature is never grouped.
+    if (!changes || changes.elements.length === 0 || changes.count > changes.elements.length) return null;
+    const elements = [...changes.elements].sort();
+    const n = elements.length;
+    const shown = elements.slice(0, 3).join(', ') + (n > 3 ? ', …' : '');
+    return {
+      basis: 'style-only',
+      key: `style-only:${elements.join('|')}`,
+      label:
+        `style-only change that restyled the same ${n} element${n === 1 ? '' : 's'} with identical DOM (${shown}); ` +
+        'grouped on which elements changed style, not on the new style values',
+    };
+  }
+
+  if (s.pageShift) {
+    const { dy, belowY } = s.pageShift;
+    return {
+      basis: 'page-shift',
+      key: `page-shift:${dy}:${belowY}`,
+      label:
+        `the same page shift: everything at or below y=${belowY} moved ${dy > 0 ? 'down' : 'up'} ${Math.abs(dy)}px; ` +
+        'grouped on the displacement, not on its cause',
+    };
+  }
+
+  if (s.dom.noiseHint) {
+    return s.dom.styleCheck === 'match'
+      ? { basis: 'noise', key: 'noise:match', label: 'likely render noise: the DOM and computed styles both match' }
+      : {
+          basis: 'noise',
+          key: 'noise:not-compared',
+          label: 'likely render noise with identical DOM, but styles not compared (style check unavailable)',
+        };
+  }
+  return null;
+}
+
+/**
+ * Deterministic grouping of changed snapshots whose grouping signal is
+ * identical. Pure: no I/O, and the output does not depend on input order.
+ * Groups are ordered by size (largest first), then kind (style-only, page
+ * shift, noise), then signature; members by name. Only groups with two or
+ * more members are returned.
+ */
+export function groupChanges(snapshots: SnapshotResult[]): ChangeGroup[] {
+  const byKey = new Map<string, { signature: Signature; members: string[] }>();
+  for (const s of snapshots) {
+    const signature = signatureOf(s);
+    if (!signature) continue;
+    const entry = byKey.get(signature.key) ?? { signature, members: [] };
+    entry.members.push(s.name);
+    byKey.set(signature.key, entry);
+  }
+  return [...byKey.values()]
+    .filter((g) => g.members.length >= 2)
+    .sort(
+      (a, b) =>
+        b.members.length - a.members.length ||
+        BASIS_ORDER.indexOf(a.signature.basis) - BASIS_ORDER.indexOf(b.signature.basis) ||
+        (a.signature.key < b.signature.key ? -1 : a.signature.key > b.signature.key ? 1 : 0),
+    )
+    .map(({ signature, members }) => ({ basis: signature.basis, label: signature.label, members: [...members].sort() }));
+}
+
+/**
+ * The get_visual_results section listing the groups, placed before the
+ * per-snapshot lines (which stay unchanged). Empty when no group has two or
+ * more members.
+ */
+export function changeGroupLines(snapshots: SnapshotResult[]): string[] {
+  const groups = groupChanges(snapshots);
+  if (groups.length === 0) return [];
+  const truncated = snapshots
+    .filter((s) => {
+      const c = s.status === 'changed' && s.dom && !s.dom.changed && s.dom.styleCheck === 'mismatch' ? s.dom.styleChanges : undefined;
+      return c !== undefined && c.count > c.elements.length;
+    })
+    .map((s) => s.name)
+    .sort();
+  return [
+    'Grouped by identical signal (deterministic; members can still differ in ways the signal does not cover, so every snapshot keeps its own line below):',
+    ...groups.map((g) => `- ${g.members.join(', ')} (${g.members.length}): ${g.label}`),
+    ...(truncated.length > 0
+      ? [
+          `Not grouped: ${truncated.join(', ')} ${truncated.length === 1 ? 'has' : 'have'} more than 10 restyled elements, ` +
+            'so the element lists are truncated and cannot be compared exactly.',
+        ]
+      : []),
+  ];
+}

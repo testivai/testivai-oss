@@ -4,7 +4,7 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks } from './lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines } from './lib';
 import { toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
@@ -43,6 +43,7 @@ server.registerTool(
     const lines = [
       `Run: ${results.timestamp} — ${results.summary.total} snapshots: ${results.summary.passed} passed, ${results.summary.changed} changed, ${results.summary.newSnapshots} new.`,
       '',
+      ...withBlankAfter(changeGroupLines(results.snapshots)),
       ...results.snapshots.map((s) => `- ${s.name}: ${verdictFor(s)}`),
       '',
       ...withBlankAfter(reportLinks(paths, results)),

@@ -1,0 +1,862 @@
+{
+  "version": "2.3.0",
+  "timestamp": "2026-10-04T00:00:00.000Z",
+  "summary": {
+    "total": 7,
+    "passed": 0,
+    "changed": 7,
+    "newSnapshots": 0,
+    "missing": 0
+  },
+  "snapshots": [
+    {
+      "name": "about",
+      "status": "changed",
+      "diffPercent": 0.8650173611111112,
+      "diffCount": 7972,
+      "totalPixels": 921600,
+      "baselinePath": "images/about/baseline.png",
+      "currentPath": "images/about/current.png",
+      "diffPath": "images/about/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 141,
+          "diffPixels": 7768,
+          "diffPercent": 56.216529164857434,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 1,
+          "elements": [
+            "body > header"
+          ]
+        }
+      }
+    },
+    {
+      "name": "buttons",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/buttons/baseline.png",
+      "currentPath": "images/buttons/current.png",
+      "diffPath": "images/buttons/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    },
+    {
+      "name": "contact",
+      "status": "changed",
+      "diffPercent": 1.202365451388889,
+      "diffCount": 11081,
+      "totalPixels": 921600,
+      "baselinePath": "images/contact/baseline.png",
+      "currentPath": "images/contact/current.png",
+      "diffPath": "images/contact/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 141,
+          "diffPixels": 7768,
+          "diffPercent": 56.216529164857434,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 283,
+          "width": 145,
+          "height": 14,
+          "diffPixels": 761,
+          "diffPercent": 37.48768472906404,
+          "elements": [
+            {
+              "selector": "body > main > section.prose > p:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section.prose",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 359,
+          "width": 231,
+          "height": 12,
+          "diffPixels": 1161,
+          "diffPercent": 41.883116883116884,
+          "elements": [
+            {
+              "selector": "body > footer",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 33
+          }
+        },
+        {
+          "x": 525,
+          "y": 392,
+          "width": 231,
+          "height": 12,
+          "diffPixels": 1170,
+          "diffPercent": 42.2077922077922,
+          "elements": [
+            {
+              "selector": "body > footer",
+              "role": "shifted"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 33
+          }
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": true,
+        "summary": {
+          "added": 1,
+          "removed": 0,
+          "attributeChanges": 0,
+          "textChanges": 1
+        },
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 1,
+          "elements": [
+            "body > header"
+          ]
+        }
+      }
+    },
+    {
+      "name": "home",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/home/baseline.png",
+      "currentPath": "images/home/current.png",
+      "diffPath": "images/home/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    },
+    {
+      "name": "pricing",
+      "status": "changed",
+      "diffPercent": 1.2537977430555556,
+      "diffCount": 11555,
+      "totalPixels": 921600,
+      "baselinePath": "images/pricing/baseline.png",
+      "currentPath": "images/pricing/current.png",
+      "diffPath": "images/pricing/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 141,
+          "diffPixels": 7768,
+          "diffPercent": 56.216529164857434,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 291,
+          "width": 15,
+          "height": 12,
+          "diffPixels": 55,
+          "diffPercent": 30.555555555555557,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(1) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 377,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 76,
+          "diffPercent": 26.38888888888889,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.plans",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 481,
+          "width": 103,
+          "height": 38,
+          "diffPixels": 3408,
+          "diffPercent": 87.07204905467553,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 4,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(1) > div.price",
+            "body > main > section:nth-of-type(1) > div.plans > div.plan:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)"
+          ]
+        }
+      }
+    },
+    {
+      "name": "products",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/products/baseline.png",
+      "currentPath": "images/products/current.png",
+      "diffPath": "images/products/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    },
+    {
+      "name": "team",
+      "status": "changed",
+      "diffPercent": 1.0966796875,
+      "diffCount": 10107,
+      "totalPixels": 921600,
+      "baselinePath": "images/team/baseline.png",
+      "currentPath": "images/team/current.png",
+      "diffPath": "images/team/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 141,
+          "diffPixels": 7768,
+          "diffPercent": 56.216529164857434,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 248,
+          "y": 283,
+          "width": 68,
+          "height": 13,
+          "diffPixels": 478,
+          "diffPercent": 54.07239819004525,
+          "elements": [
+            {
+              "selector": "body > main > section > div.person:nth-of-type(1) > div.role",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.person:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 248,
+          "y": 336,
+          "width": 39,
+          "height": 31,
+          "diffPixels": 332,
+          "diffPercent": 27.46071133167907,
+          "elements": [
+            {
+              "selector": "body > main > section > div.person:nth-of-type(2) > div.role",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.person:nth-of-type(2) > h3",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.person:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 467,
+          "width": 231,
+          "height": 14,
+          "diffPixels": 1189,
+          "diffPercent": 36.76561533704391,
+          "elements": [
+            {
+              "selector": "body > footer",
+              "role": "shifted"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 2
+          }
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 3,
+          "elements": [
+            "body > header",
+            "body > main > section > div.person:nth-of-type(1) > div.role",
+            "body > main > section > div.person:nth-of-type(2) > div.role"
+          ]
+        }
+      }
+    }
+  ],
+  "missingBaselines": []
+}

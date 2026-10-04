@@ -79,7 +79,7 @@ claude mcp add testivai -- npx -y @testivai/mcp
 
 | Tool | Returns |
 |---|---|
-| `get_visual_results` | Per-snapshot verdicts phrased for agent decision-making |
+| `get_visual_results` | Per-snapshot verdicts phrased for agent decision-making, opened by groups of snapshots that share an identical signal ([what is grouped](../mcp.md#what-the-server-groups)) |
 | `get_report` | The raw `results.json` payload (structured: status, diff %, DOM signal, region→selector) |
 | `explain_snapshot` | Layered evidence for one snapshot: pixel regions, element attribution (shifted vs changed selectors, whole-page shift detection), DOM/style signal, and interpretation guidance — everything a model needs to explain *why* a diff happened |
 | `get_diff` (alias `get_snapshot_diff`) | Baseline, current, and diff PNGs for one snapshot |
