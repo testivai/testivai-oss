@@ -120,11 +120,13 @@ per-snapshot calls) — the first occurrence wins.
 | Dynamic text (timestamps, emails, counters, "ago" strings) | `ignoreSelectors` with `mask` | Blanks the text while preserving the surrounding layout |
 | Data-dependent table/list heights that vary across runs | `ignoreSelectors` with `collapse` | Removes the element from flow so the rest of the page stays aligned |
 | Image/avatar/ad content changing inside a stable container | `ignoreSelectors` with `mask` | Hides the variable content, keeps the container box |
-| Cross-machine anti-aliasing or font-rendering differences | Tune `threshold` or enable `noiseAutoPass` | The DOM noise hint already flags these ("pixels differ but DOM unchanged"); let tolerance auto-pass them |
+| Cross-machine anti-aliasing or font-rendering differences | Tune `threshold` or enable `noiseAutoPass` | The DOM noise hint already flags these ("pixels differ but DOM and styles unchanged"); let tolerance auto-pass them |
 
 :::tip DOM noise hint
-When the pixel diff is non-zero but the DOM is structurally identical, the
-report labels the snapshot with a **noise hint**. This usually means font
+When the pixel diff is non-zero but the DOM is structurally identical and no
+computed-style change was found, the report labels the snapshot with a
+**noise hint**. (A style-only change, with identical DOM and different computed
+styles, is labelled as a real change instead.) The noise hint usually means font
 rendering, sub-pixel anti-aliasing, or GPU-level differences — not a real
 visual regression. Use `noiseAutoPass` to let these auto-pass up to a
 `noiseMaxDiffPercent` ceiling.

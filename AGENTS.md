@@ -79,7 +79,7 @@ pnpm release          # publish to npm (CI only — requires NPM_TOKEN)
 
 ```
 User test
-  → testivai.witness(page, testInfo, 'name')
+  → witness(page, testInfo, 'name')
   → @testivai/witness-playwright  captures screenshot + DOM snapshot
   → @testivai/witness BaselineStore
       first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, metadata.json}
@@ -122,8 +122,16 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `src/snapshot.ts` | `testivai.witness()` entry point |
+| `src/snapshot.ts` | `witness()` entry point (`testivai.witness` and `snapshot` are kept as aliases) |
 | `src/reporter.ts` | Playwright reporter — reads config, calls compare, generates report |
+
+### @testivai/mcp (`packages/mcp/`)
+
+| File | Responsibility |
+|---|---|
+| `src/server.ts` | Registers the tools and the `review-visual-changes` prompt; starts the stdio server on import |
+| `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool) |
+| `src/lib.ts` | `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore) |
 
 ### GitHub Action reporter (`action/`)
 
@@ -133,7 +141,7 @@ CI — GitHub Actions
 | `src/comment.ts` | Builds PR comment markdown |
 | `src/status.ts` | Determines pass/fail commit status |
 | `src/types.ts` | Shared TypeScript interfaces |
-| `dist/index.js` | Bundled output (ncc) — **must be committed after every src change** |
+| `dist/index.js` | Bundled output (esbuild) — **must be committed after every src change** |
 
 ### GitHub Action approver (`approve/`)
 

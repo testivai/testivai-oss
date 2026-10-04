@@ -11,7 +11,7 @@ packages/
   playwright/  @testivai/witness-playwright  — Playwright reporter + capture adapter
   webdriverio/ @testivai/witness-webdriverio — WebdriverIO service + capture
   selenium/    @testivai/witness-selenium    — Selenium WebDriver capture adapter
-  mcp/         @testivai/mcp                 — MCP server: results + diff images for AI agents (read-only; no approve tool by design)
+  mcp/         @testivai/mcp                 — MCP server: results + diff images for AI agents (approve_snapshot/approve_all act only when a human confirms)
 
 action/        testivai/testivai-oss@v1      — GitHub Action: post PR comment + commit status
 approve/       testivai/testivai-oss/approve@v1 — GitHub Action: /testivai approve command handler
@@ -44,7 +44,7 @@ pnpm release          # publish to npm (run by CI release workflow only)
 
 ```
 User writes test
-  → calls testivai.witness(page, testInfo, 'my-snapshot')
+  → calls witness(page, testInfo, 'my-snapshot')
   → @testivai/witness-playwright captures screenshot via Playwright native API
   → @testivai/witness BaselineStore:
       first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, metadata.json}
@@ -76,9 +76,14 @@ CI (GitHub Actions):
 - `src/report/template.ts`   — HTML template for the report
 
 ### @testivai/witness-playwright (`packages/playwright/`)
-- `src/snapshot.ts`          — `testivai.witness()` entry point (stabilizes page, applies ignoreSelectors, captures)
+- `src/snapshot.ts`          — `witness()` entry point (stabilizes page, applies ignoreSelectors, captures); `testivai.witness` and `snapshot` are kept as aliases
 - `src/config/stabilize.ts`  — capture stabilization CSS + resolution (per-call > project > config.json > default true)
 - `src/reporter.ts`          — Playwright reporter (reads config, calls compare, generates report)
+
+### @testivai/mcp (`packages/mcp/`)
+- `src/server.ts`            — registers the tools and the `review-visual-changes` prompt; starts the stdio server on import
+- `src/tool-meta.ts`         — every tool's title and description (what the model reads before calling a tool)
+- `src/lib.ts`               — `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore)
 
 ### GitHub Action reporter (`action/`)
 - `src/index.ts`             — main entry: reads results.json, bundles pending-baselines, uploads artifact, posts PR comment + commit status
