@@ -185,3 +185,56 @@ describe('approval prompt setting (built server over stdio)', () => {
     ]);
   }, 30_000);
 });
+
+// get_visual_results with real results.json (fixtures/README.md): the groups
+// section comes first, and every per-snapshot line is exactly what it was.
+describe('change groups in get_visual_results (built server over stdio)', () => {
+  const { verdictFor } = require('../lib') as typeof import('../lib');
+  let root: string;
+  let client: Client;
+
+  beforeAll(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-groups-'));
+    client = await connectBuiltServer(root);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const run = async (fixture: string) => {
+    const results = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', fixture), 'utf8'));
+    fs.mkdirSync(path.join(root, 'visual-report'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'visual-report', 'results.json'), JSON.stringify(results));
+    const result = await client.callTool({ name: 'get_visual_results', arguments: {} });
+    const text = (result.content as Array<{ type: string; text?: string }>).map((c) => c.text ?? '').join('\n');
+    return { results, lines: text.split('\n') };
+  };
+
+  it('lists the group before the per-snapshot lines, which are unchanged', async () => {
+    const { results, lines } = await run('example-brand-synthetic-pages.results.json');
+    const verdictLines = results.snapshots.map((s: import('../lib').SnapshotResult) => `- ${s.name}: ${verdictFor(s)}`);
+
+    const header = lines.findIndex((l) => l.startsWith('Grouped by identical signal'));
+    const firstVerdict = lines.indexOf(verdictLines[0]);
+    expect(header).toBeGreaterThan(-1);
+    expect(firstVerdict).toBeGreaterThan(header);
+    expect(lines[header + 1]).toMatch(/^- buttons, home, products \(3\): style-only change that restyled the same 6 elements/);
+    expect(lines.slice(firstVerdict, firstVerdict + verdictLines.length)).toEqual(verdictLines);
+  });
+
+  it('prints no groups section when nothing shares a signal', async () => {
+    const results = {
+      version: '2.3.0',
+      timestamp: 't',
+      summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
+      snapshots: [{ name: 'solo', status: 'changed', diffPercent: 1, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } }],
+    };
+    fs.writeFileSync(path.join(root, 'visual-report', 'results.json'), JSON.stringify(results));
+    const result = await client.callTool({ name: 'get_visual_results', arguments: {} });
+    const text = (result.content as Array<{ type: string; text?: string }>).map((c) => c.text ?? '').join('\n');
+    expect(text).not.toMatch(/Grouped by identical signal/);
+    expect(text).toContain(`- solo: ${verdictFor(results.snapshots[0] as import('../lib').SnapshotResult)}`);
+  });
+});

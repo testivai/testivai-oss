@@ -9,7 +9,7 @@ whether it's real or just render noise.
 
 | Tool | What it does |
 |---|---|
-| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed / likely render noise (the DOM and computed styles both match) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary), then the paths to open the HTML report and each diff image |
+| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed / likely render noise (the DOM and computed styles both match) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary). Snapshots that share an identical signal (style-only change on the same elements, the same page shift, the same kind of noise) are grouped first; it ends with the paths to open the HTML report and each diff image |
 | `explain_snapshot` | Layered evidence for one snapshot: pixel regions, element attribution (which selectors shifted vs changed, whole-page shift), the DOM/style signal, and interpretation guidance |
 | `get_report` | The raw `results.json` payload, for agents that parse structured data |
 | `get_diff` (alias `get_snapshot_diff`) | Returns the baseline, current, and diff **images** for one snapshot, downscaled to fit model context, so the agent can see the change |

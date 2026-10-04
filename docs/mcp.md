@@ -105,7 +105,7 @@ diff image, and each new snapshot's capture.
 
 | Tool | Returns |
 |---|---|
-| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture |
+| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture |
 | `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance |
 | `get_report` | The raw `results.json` payload |
 | `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context |
@@ -210,9 +210,32 @@ report.
 | | |
 |---|---|
 | **Intent** | The tool says *six elements restyled, DOM identical, here are the selectors*. A model that can see your diff says *you changed the brand token; it reached the header, the primary buttons and every card price*. It connects the change to the edit you just made. |
-| **Triage** | Thirty changed snapshots is a reading task. A model can group them — *these twenty-eight are the same token change, these two are something else* — and put the two in front of you first. |
+| **Triage** | Thirty changed snapshots is a reading task. The server already groups what is decidable ([below](#what-the-server-groups)); a model goes further — *these twenty-eight are the same token change, these two are something else* — by connecting different restyled elements on different pages to one edit, and puts the two in front of you first. |
 | **Explanation** | Turning the evidence into a sentence a reviewer understands, in a PR comment or in your editor. |
 | **Self-correction** | An agent that just edited the UI can check whether it changed anything it didn't intend, and fix it before you ever see it. |
+
+### What the server groups
+
+`get_visual_results` opens with a **Grouped by identical signal** section when
+at least two changed snapshots share one of these signals, chosen in this
+order (a snapshot joins at most one group):
+
+| Signal | Grouped when | What it does not tell you |
+|---|---|---|
+| Style-only change | identical DOM and **exactly the same set of restyled elements** | whether the new style values are the same: the grouping is on which elements changed style |
+| Page shift | the same displacement: identical `dy` and `belowY` | whether the same content caused it |
+| Render noise | the noise hint, split by whether the computed styles were compared (`styleCheck: "match"`) or not | anything the DOM and style signals don't cover |
+
+It never groups structural DOM changes, snapshots without DOM data, or
+style-only changes with more than 10 restyled elements (witness lists only
+the first 10, so those lists can't be compared exactly; the section names
+them instead). Passed, auto-passed and new snapshots are left out. Every
+snapshot keeps its own verdict line below the groups, unchanged.
+
+This under-groups on purpose: one token change usually restyles a different
+set of elements on each page, so pages that differ in structure land in
+different groups, or none. Connecting those to the one edit that caused them
+is the model's job.
 
 **What the model does not do is decide whether something changed.** That's
 already settled before it's involved. This matters for trust: a hallucinating

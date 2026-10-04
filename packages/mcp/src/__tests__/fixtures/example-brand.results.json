@@ -1,0 +1,449 @@
+{
+  "version": "2.3.0",
+  "timestamp": "2026-10-04T00:00:00.000Z",
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "changed": 3,
+    "newSnapshots": 0,
+    "missing": 0
+  },
+  "snapshots": [
+    {
+      "name": "buttons",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/buttons/baseline.png",
+      "currentPath": "images/buttons/current.png",
+      "diffPath": "images/buttons/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    },
+    {
+      "name": "home",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/home/baseline.png",
+      "currentPath": "images/home/current.png",
+      "diffPath": "images/home/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    },
+    {
+      "name": "products",
+      "status": "changed",
+      "diffPercent": 1.1241918103448276,
+      "diffCount": 12519,
+      "totalPixels": 1113600,
+      "baselinePath": "images/products/baseline.png",
+      "currentPath": "images/products/current.png",
+      "diffPath": "images/products/diff.png",
+      "regions": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 98,
+          "height": 165,
+          "diffPixels": 8101,
+          "diffPercent": 50.09894867037724,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 234,
+          "y": 437,
+          "width": 116,
+          "height": 38,
+          "diffPixels": 3835,
+          "diffPercent": 87.00090744101632,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > div.row",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 66,
+          "diffPercent": 22,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 704,
+          "width": 25,
+          "height": 12,
+          "diffPixels": 102,
+          "diffPercent": 34,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 724,
+          "width": 24,
+          "height": 12,
+          "diffPixels": 90,
+          "diffPercent": 31.25,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-04T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 6,
+          "elements": [
+            "body > header",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
+            "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(4)",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+            "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > div.price"
+          ]
+        }
+      }
+    }
+  ],
+  "missingBaselines": []
+}
