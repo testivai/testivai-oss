@@ -177,6 +177,7 @@ below apply unchanged.
 | `shareUploadCommand` | `string` | — | Storage-agnostic upload hook for `report --share`: shell command with `{file}` placeholder; last stdout line is the shared URL (`aws s3 cp …`, `gsutil`, `rclone`, `curl`) |
 | `volatileAttributes` | `string[]` | `[]` | Attribute names whose *values* the DOM diff ignores (presence still counts) — for per-run URLs in `src`/`srcset` that otherwise poison the noise hint. `blob:` URLs are always normalized |
 | `baselinesDir` | `string` | `.testivai/baselines` | Where baselines live. Supports a `{platform}` token (`darwin`/`linux`/`win32`) for per-OS baselines |
+| `mcpApprovalPrompt` | `boolean` | `true` | Read by [`@testivai/mcp`](../mcp.md#turning-the-approval-prompt-off): the approve tools ask a person on every call (Claude Code shows its permission prompt even in auto-approving modes). `false` lets them follow the client's own permission settings. The server's `--approval-prompt` / `--no-approval-prompt` flag overrides it |
 
 ### Standalone mode (`testivai witness <url>`)
 

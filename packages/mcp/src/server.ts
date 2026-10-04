@@ -3,14 +3,21 @@ import * as fs from 'fs';
 import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults } from './lib';
-import { TOOL_META } from './tool-meta';
+import { loadLocalConfig } from '@testivai/witness/config';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt } from './lib';
+import { toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
 
 // Project root: --root <path> flag or cwd (MCP clients set cwd to the workspace).
 const rootFlag = process.argv.indexOf('--root');
 const projectRoot = rootFlag !== -1 && process.argv[rootFlag + 1] ? process.argv[rootFlag + 1] : process.cwd();
+
+// Approve tools force a per-call permission prompt unless the user turned it
+// off: --approval-prompt / --no-approval-prompt, then mcpApprovalPrompt in
+// .testivai/config.json, then on.
+const approvalPrompt = resolveApprovalPrompt(process.argv.slice(2), loadLocalConfig(projectRoot).mcpApprovalPrompt);
+const TOOL_META = toolMetaFor({ approvalPrompt });
 
 const server = new McpServer({ name: 'testivai', version: packageJson.version });
 

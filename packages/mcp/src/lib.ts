@@ -370,3 +370,16 @@ export function downscalePng(
 
   return { data: PNG.sync.write(out), width: w, height: h, originalWidth: ow, originalHeight: oh };
 }
+
+/**
+ * Whether the approve tools should force a per-call permission prompt.
+ * Precedence: --approval-prompt / --no-approval-prompt (last one wins), then
+ * `mcpApprovalPrompt` from .testivai/config.json, then the default (true).
+ */
+export function resolveApprovalPrompt(argv: string[], configValue: boolean | undefined): boolean {
+  for (let i = argv.length - 1; i >= 0; i--) {
+    if (argv[i] === '--approval-prompt') return true;
+    if (argv[i] === '--no-approval-prompt') return false;
+  }
+  return configValue ?? true;
+}

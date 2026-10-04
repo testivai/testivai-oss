@@ -33,6 +33,18 @@ describe('validateLocalConfig', () => {
     expect(result.invalidKeys).toEqual([]);
   });
 
+  // Read by @testivai/mcp: false stops the approve tools from forcing a
+  // permission prompt on every call (they follow the client's own settings).
+  it('accepts mcpApprovalPrompt as a boolean', () => {
+    expect(validateLocalConfig({ mcpApprovalPrompt: false })).toEqual({ warnings: [], invalidKeys: [] });
+  });
+
+  it('flags a non-boolean mcpApprovalPrompt so the default (prompt) applies', () => {
+    const result = validateLocalConfig({ mcpApprovalPrompt: 'off' });
+    expect(result.invalidKeys).toEqual(['mcpApprovalPrompt']);
+    expect(result.warnings[0]).toContain('"mcpApprovalPrompt" should be a boolean');
+  });
+
   it('suggests the closest known key for a typo', () => {
     const result = validateLocalConfig({ thresold: 0.2 });
     expect(result.warnings).toHaveLength(1);

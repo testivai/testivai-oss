@@ -117,6 +117,14 @@ export interface LocalConfig {
   maxPages?: number;
   /** Standalone mode: capture viewport. Default: 1280x800. */
   viewport?: { width: number; height: number };
+  /**
+   * Read by @testivai/mcp. When true (the default), the approve_snapshot and
+   * approve_all tools tell MCP clients to ask a person on every call (Claude
+   * Code shows its permission prompt even in auto-approving modes). Set false
+   * to let them follow the client's own permission settings instead. The
+   * server's --approval-prompt / --no-approval-prompt flag overrides this.
+   */
+  mcpApprovalPrompt?: boolean;
 }
 
 const DEFAULT_CONFIG: LocalConfig = {

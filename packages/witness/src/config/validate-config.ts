@@ -33,6 +33,7 @@ const KNOWN_FIELDS: Record<string, 'number' | 'boolean' | 'string' | 'array' | '
   pages: 'array',
   maxPages: 'number',
   viewport: 'object',
+  mcpApprovalPrompt: 'boolean',
 };
 
 /**

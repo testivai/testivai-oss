@@ -68,3 +68,23 @@ describe('approval tools require a person to confirm every call', () => {
     expect(forced).toEqual([]);
   });
 });
+
+describe('toolMetaFor (approval prompt setting)', () => {
+  const { toolMetaFor } = require('../tool-meta') as typeof import('../tool-meta');
+
+  it('marks the approve tools by default (approvalPrompt: true)', () => {
+    expect(toolMetaFor({ approvalPrompt: true })).toEqual(TOOL_META);
+  });
+
+  it('drops the marker from every tool when the prompt is turned off, and changes nothing else', () => {
+    const off = toolMetaFor({ approvalPrompt: false }) as Record<string, ToolMeta>;
+    expect(Object.keys(off)).toEqual(Object.keys(TOOL_META));
+    for (const [name, meta] of Object.entries(off)) {
+      expect(meta._meta?.[REQUIRES_USER]).toBeUndefined();
+      expect({ title: meta.title, description: meta.description }).toEqual({
+        title: metaOf(name).title,
+        description: metaOf(name).description,
+      });
+    }
+  });
+});

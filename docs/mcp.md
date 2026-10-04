@@ -75,6 +75,25 @@ rules skip it; in `dontAsk` mode it denies the call. An approval therefore
 always comes from you answering the prompt, never from the model alone. Other
 MCP clients ignore the marker and apply their own tool-approval settings.
 
+### Turning the approval prompt off
+
+If you'd rather not confirm every approval, turn the forced prompt off. The
+approve tools then follow your normal Claude Code permission settings: you can
+allow them with a permission rule (`mcp__testivai__approve_snapshot`,
+`mcp__testivai__approve_all`), answer "don't ask again", or run in an
+auto-approving mode. Two ways, and the flag wins when both are set:
+
+- **Per user:** pass `--no-approval-prompt` to the server, e.g.
+  `claude mcp add testivai -- npx -y @testivai/mcp --no-approval-prompt`.
+  `--approval-prompt` turns it back on.
+- **Per project:** set `"mcpApprovalPrompt": false` in `.testivai/config.json`.
+  It applies to everyone who uses the repository, so commit it deliberately.
+
+The server reads both when it starts; restart it (or the Claude Code session)
+after changing them. The tool descriptions still tell the model to approve
+only when you confirm, but with the prompt off nothing in the client enforces
+that.
+
 **Seeing the images.** `get_diff` returns the baseline, current and diff PNGs
 to Claude, which looks at them inline; Claude Code also saves the original
 bytes in the session's `tool-results` directory under `~/.claude/projects/`.

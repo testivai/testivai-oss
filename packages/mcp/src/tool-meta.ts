@@ -72,3 +72,13 @@ export const TOOL_META = {
       'interpretation guidance. Use this to explain WHY a diff happened — pair with get_diff for the images.',
   },
 } satisfies Record<string, ToolMeta>;
+
+/** The tool metadata for this server run, given the approval-prompt setting. */
+export type ToolName = keyof typeof TOOL_META;
+
+export function toolMetaFor({ approvalPrompt }: { approvalPrompt: boolean }): Record<ToolName, ToolMeta> {
+  if (approvalPrompt) return TOOL_META;
+  const { _meta: _snapshot, ...approveSnapshot } = TOOL_META.approve_snapshot;
+  const { _meta: _all, ...approveAll } = TOOL_META.approve_all;
+  return { ...TOOL_META, approve_snapshot: approveSnapshot, approve_all: approveAll };
+}

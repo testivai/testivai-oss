@@ -58,6 +58,7 @@ Optional tolerance and capture settings (all have safe defaults):
 | `diffRegions` | `{minSize: 10, mergeDistance: 12}` | Diff clustering tunables: noise floor + merge gap ([details](./comparison.md)) |
 | `shiftTolerance` | unset | Pass diffs that are pure vertical shifts up to N pixels — content moved, nothing changed |
 | `volatileAttributes` | `[]` | Attributes whose *value* is ignored by the DOM diff (presence still counts) |
+| `mcpApprovalPrompt` | `true` | [`@testivai/mcp`](./mcp.md#turning-the-approval-prompt-off): the approve tools ask a person on every call. `false` lets them follow your client's own permission settings |
 | `baselinesDir` | `.testivai/baselines` | Where baselines live; supports a `{platform}` token for per-OS baselines |
 | `failOnDiff` | `false` | Exit non-zero on changes without passing `--fail-on-diff` |
 | `failOnMissing` | `true` | Exit 3 when a committed baseline receives no capture (silent coverage loss) |
