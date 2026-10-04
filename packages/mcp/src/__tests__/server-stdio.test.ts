@@ -138,3 +138,50 @@ describe('built server over stdio', () => {
     expect(text).toMatch(/human confirms[^.;]*approve_snapshot/i);
   });
 });
+
+// The per-call approval prompt is on by default; a user can turn it off with
+// the server flag or with mcpApprovalPrompt in .testivai/config.json, and the
+// flag wins. Off means the approve tools follow the client's own permission
+// settings (allow rules, "don't ask again", auto modes).
+describe('approval prompt setting (built server over stdio)', () => {
+  const roots: string[] = [];
+  const clients: Client[] = [];
+
+  afterEach(async () => {
+    await Promise.all(clients.splice(0).map((c) => c.close()));
+    for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
+  });
+
+  const start = async (config: Record<string, unknown> | null, args: string[] = []) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-prompt-'));
+    roots.push(root);
+    if (config) {
+      fs.mkdirSync(path.join(root, '.testivai'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify(config));
+    }
+    const client = await connectBuiltServer(root, args);
+    clients.push(client);
+    return client;
+  };
+
+  const marked = async (client: Client) =>
+    (await client.listTools()).tools
+      .filter((t) => t._meta?.['anthropic/requiresUserInteraction'] === true)
+      .map((t) => t.name)
+      .sort();
+
+  it('--no-approval-prompt: no tool forces the prompt', async () => {
+    expect(await marked(await start(null, ['--no-approval-prompt']))).toEqual([]);
+  }, 30_000);
+
+  it('mcpApprovalPrompt: false in config.json: no tool forces the prompt', async () => {
+    expect(await marked(await start({ mcpApprovalPrompt: false }))).toEqual([]);
+  }, 30_000);
+
+  it('--approval-prompt wins over mcpApprovalPrompt: false', async () => {
+    expect(await marked(await start({ mcpApprovalPrompt: false }, ['--approval-prompt']))).toEqual([
+      'approve_all',
+      'approve_snapshot',
+    ]);
+  }, 30_000);
+});

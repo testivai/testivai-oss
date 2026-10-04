@@ -124,7 +124,7 @@ The approve action (`approve/action.yml`) is a composite action — no build ste
                                          noiseMaxDiffPercent, stabilize, shiftTolerance,
                                          volatileAttributes, ignoreSelectors, mask,
                                          diffRegions, failOnDiff, failOnMissing,
-                                         shareUploadCommand
+                                         shareUploadCommand, mcpApprovalPrompt
   baselines/
     <snapshot-name>/
       screenshot.png                   — committed reference screenshot

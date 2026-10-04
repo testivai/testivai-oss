@@ -171,6 +171,8 @@ carry `anthropic/requiresUserInteraction` in `tools/list`, so Claude Code
 option; allow rules don't skip it, and `dontAsk` mode denies the call. The
 approval is you answering that prompt. See
 [Review and approve in Claude Code](../mcp.md#review-and-approve-in-claude-code).
+You can turn the forced prompt off with `--no-approval-prompt` or
+`"mcpApprovalPrompt": false` ([details](../mcp.md#turning-the-approval-prompt-off)).
 
 Other clients ignore that marker, so there these are guardrails, not a lock.
 If you wire approvals into an autonomous loop or into CI, you own the

@@ -30,6 +30,14 @@ the baseline. Both tool descriptions, the `review-visual-changes` prompt, and
 every `get_visual_results` response say so. After approving, commit
 `.testivai/baselines/`.
 
+In Claude Code the client enforces this: both approve tools are marked
+`anthropic/requiresUserInteraction`, so Claude Code asks you on every approve
+call, even in auto-approving permission modes. To turn that off, start the
+server with `--no-approval-prompt` or set `"mcpApprovalPrompt": false` in
+`.testivai/config.json` (the flag wins); the approve tools then follow your
+client's own permission settings. Walkthrough:
+[Review and approve in Claude Code](https://github.com/testivai/testivai-oss/blob/main/docs/mcp.md#review-and-approve-in-claude-code).
+
 The other approval paths stay available: `npx testivai approve <name>` locally,
 or a `/testivai approve <name>` comment on the pull request.
 

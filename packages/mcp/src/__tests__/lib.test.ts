@@ -288,6 +288,35 @@ describe('@testivai/mcp lib', () => {
   });
 });
 
+// The approve tools force a per-call permission prompt unless the user turns
+// it off: the server flag wins, then .testivai/config.json, then the default.
+describe('resolveApprovalPrompt', () => {
+  const { resolveApprovalPrompt } = require('../lib');
+
+  it('defaults to prompting', () => {
+    expect(resolveApprovalPrompt([], undefined)).toBe(true);
+  });
+
+  it('follows mcpApprovalPrompt from config.json when no flag is given', () => {
+    expect(resolveApprovalPrompt([], false)).toBe(false);
+    expect(resolveApprovalPrompt([], true)).toBe(true);
+  });
+
+  it('--no-approval-prompt turns it off, even over a config of true', () => {
+    expect(resolveApprovalPrompt(['--no-approval-prompt'], undefined)).toBe(false);
+    expect(resolveApprovalPrompt(['--root', '/p', '--no-approval-prompt'], true)).toBe(false);
+  });
+
+  it('--approval-prompt turns it on, even over a config of false', () => {
+    expect(resolveApprovalPrompt(['--approval-prompt'], false)).toBe(true);
+  });
+
+  it('the last flag wins when both are given', () => {
+    expect(resolveApprovalPrompt(['--approval-prompt', '--no-approval-prompt'], undefined)).toBe(false);
+    expect(resolveApprovalPrompt(['--no-approval-prompt', '--approval-prompt'], undefined)).toBe(true);
+  });
+});
+
 describe('@testivai/mcp approve helpers', () => {
   let root: string;
 
