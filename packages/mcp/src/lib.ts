@@ -81,8 +81,16 @@ export function verdictFor(snapshot: SnapshotResult): string {
   if (snapshot.status === 'passed') return 'passed — no visual change';
   if (snapshot.status === 'new') return 'new snapshot — no baseline yet; a human should review and approve it';
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
+  // noiseHint means the DOM is identical and no style mismatch was found. Only
+  // styleCheck 'match' proves the styles were compared; 'unavailable' (no
+  // comparable digests) and results from before the style check also carry
+  // the hint, so the verdict must not claim the styles matched there.
   if (snapshot.dom?.noiseHint) {
-    return `changed (${pct}) but DOM is structurally identical — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
+    const evidence =
+      snapshot.dom.styleCheck === 'match'
+        ? 'the DOM and computed styles both match'
+        : 'DOM is structurally identical; styles were not compared (style check unavailable), so a style-only change is not ruled out';
+    return `changed (${pct}) but ${evidence} — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
   }
   if (snapshot.dom?.changed) {
     const s = snapshot.dom.summary;
@@ -226,7 +234,11 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
     guidance.push('No baseline exists yet — this is a first capture, not a regression. A human should review and approve it.');
   }
   if (snapshot.dom?.noiseHint) {
-    guidance.push('Pixels differ but the DOM is structurally identical and style digests match — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
+    const evidence =
+      snapshot.dom.styleCheck === 'match'
+        ? 'the DOM is structurally identical and style digests match'
+        : 'the DOM is structurally identical; styles were not compared (no comparable style digests), so a style-only change is not ruled out';
+    guidance.push(`Pixels differ but ${evidence} — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.`);
   }
   if (snapshot.dom?.styleCheck === 'mismatch') {
     const els = snapshot.dom.styleChanges?.elements?.slice(0, 5).join(', ');

@@ -4,6 +4,7 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults } from './lib';
+import { TOOL_META } from './tool-meta';
 
 const packageJson = require('../package.json');
 
@@ -16,12 +17,7 @@ const server = new McpServer({ name: 'testivai', version: packageJson.version })
 server.registerTool(
   'get_visual_results',
   {
-    title: 'Get visual test results',
-    description:
-      'Read the latest TestivAI visual regression results (visual-report/results.json). ' +
-      'Returns a per-snapshot verdict combining the pixel diff and the DOM signal: ' +
-      'DOM-identical diffs are likely render noise; DOM changes are real and need human review. ' +
-      'Run the test suite first (e.g. `npx playwright test`) if results are stale or missing.',
+    ...TOOL_META.get_visual_results,
     inputSchema: {},
   },
   async () => {
@@ -81,30 +77,21 @@ const snapshotDiffHandler = async ({ name }: { name: string }) => {
   return { content };
 };
 
-const diffToolMeta = {
-  title: 'View snapshot diff images',
-  description:
-    'Return the baseline, current, and diff images for one changed snapshot so you can see what changed visually. ' +
-    'Use get_report / get_visual_results first to find snapshot names.',
-  inputSchema: { name: z.string().describe('Snapshot name from the results') },
-};
+const diffInputSchema = { name: z.string().describe('Snapshot name from the results') };
 
 // registerTool is called through an untyped alias: zod@3.25 + TS 6 blow the
 // type-depth limit (TS2589) when inferring the schema generics. Runtime
 // validation of the input schema is unaffected.
 // `get_diff` is the canonical name; `get_snapshot_diff` is kept as an alias.
-(server.registerTool as Function)('get_diff', diffToolMeta, snapshotDiffHandler);
-(server.registerTool as Function)('get_snapshot_diff', diffToolMeta, snapshotDiffHandler);
+(server.registerTool as Function)('get_diff', { ...TOOL_META.get_diff, inputSchema: diffInputSchema }, snapshotDiffHandler);
+(server.registerTool as Function)('get_snapshot_diff', { ...TOOL_META.get_snapshot_diff, inputSchema: diffInputSchema }, snapshotDiffHandler);
 
 // get_report — the raw results.json payload (the public schema) for agents
 // that want to parse structured data rather than the human summary.
 server.registerTool(
   'get_report',
   {
-    title: 'Get the raw visual report (results.json)',
-    description:
-      'Return the machine-readable results.json payload verbatim (summary + per-snapshot status, diff %, ' +
-      'DOM signal, and region→selector attribution). Parse this instead of scraping CLI output.',
+    ...TOOL_META.get_report,
     inputSchema: {},
   },
   async () => {
@@ -122,10 +109,7 @@ server.registerTool(
 (server.registerTool as Function)(
   'approve_snapshot',
   {
-    title: 'Approve one snapshot as the new baseline',
-    description:
-      'Promote .testivai/temp/<name>/ to the committed baseline (same as `testivai approve <name>`). ' +
-      'Only approve changes a reviewer has confirmed are intended; then commit .testivai/baselines/.',
+    ...TOOL_META.approve_snapshot,
     inputSchema: { name: z.string().describe('Snapshot name to approve') },
   },
   async ({ name }: { name: string }) => {
@@ -137,10 +121,7 @@ server.registerTool(
 server.registerTool(
   'approve_all',
   {
-    title: 'Approve all pending snapshots as baselines',
-    description:
-      'Promote every pending capture under .testivai/temp/ to committed baselines (same as `testivai approve --all`). ' +
-      'Only run this after a reviewer has confirmed the changes; then commit .testivai/baselines/.',
+    ...TOOL_META.approve_all,
     inputSchema: {},
   },
   async () => {
@@ -152,8 +133,7 @@ server.registerTool(
 server.registerTool(
   'list_baselines',
   {
-    title: 'List committed baselines',
-    description: 'List the snapshot baselines committed under .testivai/baselines/.',
+    ...TOOL_META.list_baselines,
     inputSchema: {},
   },
   async () => {
@@ -175,11 +155,7 @@ server.registerTool(
 (server.registerTool as Function)(
   'explain_snapshot',
   {
-    title: 'Explain what changed in one snapshot',
-    description:
-      'Layered evidence for one snapshot: pixel regions with bounding boxes, element attribution ' +
-      '(which selectors shifted vs changed, whole-page shift detection), the DOM/style signal, and ' +
-      'interpretation guidance. Use this to explain WHY a diff happened — pair with get_diff for the images.',
+    ...TOOL_META.explain_snapshot,
     inputSchema: { name: z.string().describe('Snapshot name from the results') },
   },
   async ({ name }: { name: string }) => {
