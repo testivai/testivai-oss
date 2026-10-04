@@ -9,9 +9,9 @@
 
 This is the home of TestivAI. It contains everything you need to capture, diff, and report visual regressions **fully locally** — MIT-licensed, no account, no server.
 
-> **[See a live report →](https://www.budisugianto.com/testivai-example/)** — a real TestivAI OSS report rendered in your browser, straight from CI. No install, no signup.
+> **[See a live report →](https://testivai.github.io/testivai-example/)** — a real TestivAI OSS report rendered in your browser, straight from CI. No install, no signup.
 
-[![Real TestivAI report — style-only-change verdict, selector-attributed regions, heatmap diff](./docs/assets/oss-report.png)](https://www.budisugianto.com/testivai-example/)
+[![Real TestivAI report — style-only-change verdict, selector-attributed regions, heatmap diff](./docs/assets/oss-report.png)](https://testivai.github.io/testivai-example/)
 
 ## Why TestivAI?
 
@@ -255,7 +255,7 @@ Changed Snapshots
 
 ## Real-World Example
 
-A complete, minimal consumer project lives at [`testivai-example`](https://github.com/mcbuddy/testivai-example): a static page, three `witness()` calls, the PR `/testivai approve` flow, and a [live report on Pages](https://www.budisugianto.com/testivai-example/) — all against the published packages.
+A complete, minimal consumer project lives at [`testivai-example`](https://github.com/testivai/testivai-example): a static page, three `witness()` calls, the PR `/testivai approve` flow, and a [live report on Pages](https://testivai.github.io/testivai-example/) — all against the published packages.
 
 ## Repository Layout
 

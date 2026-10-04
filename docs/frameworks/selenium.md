@@ -121,7 +121,7 @@ Python adapter is ~200 lines if you want a template.
 
 ## Working examples
 
-The [example repo](https://github.com/mcbuddy/testivai-example) is a
+The [example repo](https://github.com/testivai/testivai-example) is a
 complete, minimal consumer project — a static page, three `witness()` calls,
 the PR `/testivai approve` flow, and a
-[live report](https://www.budisugianto.com/testivai-example/) published from CI.
+[live report](https://testivai.github.io/testivai-example/) published from CI.
