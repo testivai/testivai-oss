@@ -155,6 +155,52 @@ describe('@testivai/mcp lib', () => {
     });
   });
 
+  // get_visual_results ends with these so a person can open the images from
+  // the conversation (the client may not render images to them itself).
+  describe('reportLinks', () => {
+    const { reportLinks } = require('../lib');
+    const touch = (rel: string) => {
+      const file = path.join(root, 'visual-report', rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'x');
+      return file;
+    };
+    const results = (snapshots: unknown[]) => ({
+      version: '2.3.0', timestamp: 't', summary: { total: snapshots.length, passed: 0, changed: 0, newSnapshots: 0 }, snapshots,
+    });
+
+    it('lists the HTML report, each changed diff image and each new capture as absolute paths', () => {
+      const report = touch('index.html');
+      const diff = touch('images/home/diff.png');
+      const current = touch('images/pricing/current.png');
+      const lines = reportLinks(resolvePaths(root), results([
+        { name: 'home', status: 'changed', diffPath: 'images/home/diff.png' },
+        { name: 'pricing', status: 'new', currentPath: 'images/pricing/current.png' },
+        { name: 'about', status: 'passed', diffPath: 'images/about/diff.png' },
+      ]));
+      expect(lines).toEqual([
+        'Open on this machine:',
+        `- report: ${report}`,
+        `- home (diff): ${diff}`,
+        `- pricing (new capture): ${current}`,
+      ]);
+      expect(lines.slice(1).every((l: string) => path.isAbsolute(l.split(': ').pop()!))).toBe(true);
+    });
+
+    it('skips images that are missing or outside the report dir', () => {
+      fs.writeFileSync(path.join(root, 'secret.png'), 'x');
+      const lines = reportLinks(resolvePaths(root), results([
+        { name: 'gone', status: 'changed', diffPath: 'images/gone/diff.png' },
+        { name: 'escape', status: 'changed', diffPath: '../secret.png' },
+      ]));
+      expect(lines).toEqual([]);
+    });
+
+    it('returns nothing when there is nothing to open', () => {
+      expect(reportLinks(resolvePaths(root), results([{ name: 'a', status: 'passed' }]))).toEqual([]);
+    });
+  });
+
   it('lists baseline directories sorted', () => {
     for (const name of ['b-page', 'a-page']) {
       fs.mkdirSync(path.join(root, '.testivai', 'baselines', name), { recursive: true });

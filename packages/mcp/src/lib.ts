@@ -173,6 +173,25 @@ export function describeMissingResults(root: string): string {
   return `No results found at ${where}. Run the visual tests first (e.g. npx playwright test).`;
 }
 
+/**
+ * Absolute paths a person can open to see the images behind the verdicts:
+ * the HTML report, each changed snapshot's diff image, and each new
+ * snapshot's capture. Only files that exist inside the report dir are listed.
+ */
+export function reportLinks(paths: ProjectPaths, results: ResultsFile): string[] {
+  const links: string[] = [];
+  const report = resolveImage(paths, 'index.html');
+  if (report) links.push(`- report: ${report}`);
+  for (const s of results.snapshots) {
+    const image =
+      s.status === 'changed' && s.diffPath ? { label: 'diff', file: resolveImage(paths, s.diffPath) }
+      : s.status === 'new' && s.currentPath ? { label: 'new capture', file: resolveImage(paths, s.currentPath) }
+      : null;
+    if (image?.file) links.push(`- ${s.name} (${image.label}): ${image.file}`);
+  }
+  return links.length > 0 ? ['Open on this machine:', ...links] : [];
+}
+
 export function resolveImage(paths: ProjectPaths, relativePath: string): string | null {
   const abs = path.resolve(paths.reportDir, relativePath);
   if (!abs.startsWith(path.resolve(paths.reportDir) + path.sep)) return null; // no traversal

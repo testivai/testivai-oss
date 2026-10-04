@@ -71,6 +71,46 @@ describe('built server over stdio', () => {
   // The footer is what the agent reads right after the verdicts: it must still
   // forbid approving on its own, and offer the in-conversation path for when
   // the human confirms (the client then asks them to allow the call).
+  // A person reading the conversation may not see images the client gives the
+  // model, so the output ends with paths they can open. The verdict lines are
+  // untouched; the paths come after them, before the closing instruction.
+  it('get_visual_results lists the report and diff image paths after the verdicts', async () => {
+    const report = path.join(root, 'visual-report');
+    fs.mkdirSync(path.join(report, 'images', 'card'), { recursive: true });
+    fs.writeFileSync(path.join(report, 'index.html'), '<html></html>');
+    fs.writeFileSync(path.join(report, 'images', 'card', 'diff.png'), 'x');
+    fs.writeFileSync(
+      path.join(report, 'results.json'),
+      JSON.stringify({
+        version: '2.3.0',
+        timestamp: 't',
+        summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
+        snapshots: [
+          {
+            name: 'card',
+            status: 'changed',
+            diffPercent: 2,
+            diffPath: 'images/card/diff.png',
+            dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } },
+          },
+        ],
+      }),
+    );
+
+    const lines = textOf(await client.callTool({ name: 'get_visual_results', arguments: {} })).split('\n');
+
+    const verdict = lines.indexOf(
+      '- card: changed (2.00% pixels differ) and the DOM changed (1 added, 0 removed, 0 attribute changes) — a real structural change; confirm it is intended before approving',
+    );
+    const header = lines.indexOf('Open on this machine:');
+    const closing = lines.findIndex((l) => l.startsWith('Baseline approval is a human decision'));
+    expect(verdict).toBeGreaterThan(-1);
+    expect(header).toBeGreaterThan(verdict);
+    expect(closing).toBeGreaterThan(header);
+    expect(lines).toContain(`- report: ${path.join(report, 'index.html')}`);
+    expect(lines).toContain(`- card (diff): ${path.join(report, 'images', 'card', 'diff.png')}`);
+  });
+
   it('get_visual_results offers in-conversation approval once the human confirms', async () => {
     const report = path.join(root, 'visual-report');
     fs.mkdirSync(report, { recursive: true });
