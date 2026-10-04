@@ -5,7 +5,7 @@ Real `results.json` files used by the change-grouping tests. Only
 was edited. Image paths are report-relative, as witness writes them.
 
 Both were produced on 2026-10-04 from
-[`mcbuddy/testivai-example`](https://github.com/mcbuddy/testivai-example) with
+[`testivai/testivai-example`](https://github.com/testivai/testivai-example) with
 `@testivai/witness` 2.0.2 and `@testivai/witness-playwright` 2.0.2 packed from
 this repository (`pnpm pack`, as in the CI consumer-install job), Playwright
 1.63 and Chromium 141: capture baselines, change the `--brand` custom property
