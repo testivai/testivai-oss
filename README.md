@@ -17,7 +17,7 @@ This is the home of TestivAI. It contains everything you need to capture, diff, 
 
 Pixel-only visual testing drowns you in false positives — a font re-hint or an anti-aliasing shift across machines lights up as a "change," and you spend your time re-approving noise.
 
-**TestivAI pairs every screenshot with a snapshot of the page DOM.** When pixels differ but the DOM is structurally identical, the report flags the diff as **likely render noise** instead of crying wolf. When the DOM actually changed, you see exactly what (`2 added, 1 removed`). That single signal is the difference between a flaky test wall and a report you trust.
+**TestivAI pairs every screenshot with a snapshot of the page DOM.** When pixels differ but the DOM and the computed styles are identical, the report flags the diff as **likely render noise** instead of crying wolf. When only the styles changed, it says so: a style-only change is real. When the DOM actually changed, you see exactly what (`2 added, 1 removed`). That single signal is the difference between a flaky test wall and a report you trust.
 
 - **Fully local, no account** — captures, diffs, and a self-contained HTML report all stay on your machine.
 - **DOM + style-aware noise hint** — separates real changes from render jitter, and catches the stylesheet-only case: identical DOM with changed computed styles reads as "Styles changed on `button.cta`", never as noise.

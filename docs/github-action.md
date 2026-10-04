@@ -134,7 +134,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 </details>
 ```
 
-The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline, the comment surfaces "likely render noise" so reviewers can dismiss false positives faster. When the DOM also differs, it shows added / removed / attribute-change counts.
+The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline and no computed-style change was found, the comment surfaces "likely render noise" so reviewers can dismiss false positives faster. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, it shows added / removed / attribute-change counts.
 
 ### Commit status
 

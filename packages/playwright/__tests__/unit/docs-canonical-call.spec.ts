@@ -27,6 +27,9 @@ function listFiles(dir: string, ext: RegExp): string[] {
 const DOC_FILES = [
   path.join(REPO_ROOT, 'README.md'),
   path.join(REPO_ROOT, 'SKILLS.md'),
+  // Agent guides: coding agents copy their call shapes into the code they write.
+  path.join(REPO_ROOT, 'CLAUDE.md'),
+  path.join(REPO_ROOT, 'AGENTS.md'),
   path.join(REPO_ROOT, 'packages/playwright/README.md'),
   ...listFiles(path.join(REPO_ROOT, 'docs'), /\.md$/),
   ...listFiles(path.join(REPO_ROOT, 'examples/playwright-local/tests'), /\.[cm]?[jt]s$/),

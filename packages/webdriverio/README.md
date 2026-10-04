@@ -97,7 +97,9 @@ Approve writes the temp capture over the baseline and backs the previous baselin
 
 ## DOM noise hint
 
-When pixels differ but the page DOM is structurally identical, the report flags the change as "likely render noise" (anti-aliasing, font hinting, sub-pixel layout). When the DOM is also different, the report shows added / removed / attribute-change counts so you can decide whether the change is intentional. Same signal as the Playwright adapter — both write `dom.html` alongside the screenshot.
+When pixels differ but the page DOM is structurally identical, the report flags the change as "likely render noise" (anti-aliasing, font hinting, sub-pixel layout). When the DOM is also different, the report shows added / removed / attribute-change counts so you can decide whether the change is intentional. Like the Playwright adapter, it writes `dom.html` alongside the screenshot.
+
+Unlike the Playwright adapter, this adapter does not capture an element map yet, so the computed-style check reports `styleCheck: "unavailable"`: a stylesheet-only change (identical DOM, different styles) cannot be told apart from render noise here, and element attribution and page-shift detection are not available.
 
 DOM capture happens automatically. To skip it for a single snapshot:
 

@@ -52,7 +52,7 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 - **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
-The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison: when pixels differ but the DOM is structurally identical, the comment flags the change as likely render noise. When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
+The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison: when pixels differ but the DOM is structurally identical and no computed-style change was found, the comment flags the change as likely render noise. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
 
 ## Example output
 

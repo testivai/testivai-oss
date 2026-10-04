@@ -166,7 +166,7 @@ already settled before it's involved. This matters for trust: a hallucinating
 model can produce a bad *explanation*, but it cannot invent a regression or hide
 one, because it isn't in the detection path.
 
-It also cannot approve. See [the approval rule](#the-approval-rule).
+Nor does it decide what gets approved: it carries out an approval only when a human asks for one. See [the approval rule](#the-approval-rule).
 
 ## The approval rule
 

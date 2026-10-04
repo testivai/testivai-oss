@@ -55,7 +55,7 @@ Do **not** run this for changes to `action/`, `approve/`, `docs/`, or `examples/
 cd action
 npm install          # if deps changed
 # ... make your changes to src/ ...
-npm run build        # rebuilds dist/index.js via ncc
+npm run build        # rebuilds dist/index.js via esbuild
 cd ..
 git add action/dist/index.js action/src/
 git commit -m "feat(action): ..."
@@ -200,14 +200,18 @@ Post a comment on the PR:
    ```json
    "dom": { "changed": false, "noiseHint": true }
    ```
-   - `noiseHint: true` + `changed: false` → DOM is identical, diff is render noise
-     (font hinting, anti-aliasing, sub-pixel rendering). Safe to approve.
+   - `noiseHint: true` + `changed: false` → DOM is identical and no style change
+     was found; the diff is likely render noise (font hinting, anti-aliasing,
+     sub-pixel rendering). With `styleCheck: "unavailable"` the styles were not
+     compared, so glance at the diff before approving.
+   - `styleCheck: "mismatch"` → style-only change (identical DOM, different
+     computed styles). Real, not noise; `styleChanges` lists the elements.
    - `changed: true` → real DOM change. Check `dom.summary` for what added/removed.
 
 3. **Raise the threshold** if the diff is render noise across many snapshots:
    ```json
    // .testivai/config.json
-   { "threshold": 0.2 }   // default is 0.1 (0–100 scale)
+   { "threshold": 0.2 }   // per-pixel colour sensitivity, 0–1; default is 0.1
    ```
 
 4. **Isolate the snapshot** for faster iteration:
