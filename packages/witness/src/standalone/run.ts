@@ -159,8 +159,39 @@ async function revealPage(client: any): Promise<void> {
   }
 }
 
-/** Full-page screenshot via layout metrics (same technique as the Playwright adapter's CDP path). */
-async function captureFullPage(client: any): Promise<Buffer> {
+/**
+ * Resolves once the page has rendered two animation frames, i.e. a frame
+ * produced after every style and layout change made so far has been painted.
+ * The timeout bounds the wait for a page that renders no frames at all.
+ */
+const FRESH_FRAME_SCRIPT = `new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(false), 1000);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    clearTimeout(timer);
+    resolve(true);
+  }));
+})`;
+
+/**
+ * Wait for a freshly rendered frame before capturing. Without it,
+ * Page.captureScreenshot could return a stale frame: the page measured
+ * correctly, but the pixels showed styles resolved against an earlier
+ * viewport (a collapsed 100vh hero, narrow-viewport media rules), so
+ * identical pages flipped between two renders from run to run. A forced
+ * layout alone does not prevent this; a rendered frame does.
+ */
+async function waitForFreshFrame(client: any): Promise<void> {
+  try {
+    await client.Runtime.evaluate({ expression: FRESH_FRAME_SCRIPT, awaitPromise: true, returnByValue: true });
+  } catch {
+    // best-effort: the capture still proceeds if the page navigated or the wait failed
+  }
+}
+
+/** Full-page screenshot via layout metrics (same technique as the Playwright adapter's CDP path). Exported for testing. */
+export async function captureFullPage(client: any): Promise<Buffer> {
+  await waitForFreshFrame(client);
+
   // Freshly-launched Chrome can report zero-size content before its first
   // real layout — poll briefly until metrics are usable.
   let width = 0;
