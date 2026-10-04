@@ -22,6 +22,10 @@ already pay for does the reasoning, and the quality scales with it.
 claude mcp add testivai -- npx -y @testivai/mcp
 ```
 
+Add `--scope project` to write it to `.mcp.json` at the project root instead,
+so everyone who opens the repository in Claude Code gets the same server:
+`claude mcp add --scope project testivai -- npx -y @testivai/mcp`.
+
 **Any other MCP client** — Cursor, Copilot, Zed, or your own — point it at the
 same command:
 
@@ -47,6 +51,34 @@ shard 3/8. 1 capture(s) are in .testivai/temp/, but no comparison ran here — a
 shard sees only its slice of the suite. The report is produced by the job that
 merges every shard.
 ```
+
+## Review and approve in Claude Code
+
+With the server added, a visual review happens in the conversation:
+
+1. Run your visual tests (`npx playwright test`), or ask Claude to.
+2. Type `/testivai:review-visual-changes` (`/mcp__testivai__review-visual-changes`
+   also works), or just ask *"what changed visually?"*. Claude reads the
+   verdicts, calls `explain_snapshot` for each change, looks at the diff images
+   with `get_diff` when the evidence is ambiguous, and recommends approve,
+   investigate, or ignore-as-noise for each snapshot.
+3. To accept a change, say so: *"approve home"*. Claude calls
+   `approve_snapshot`, and Claude Code shows its permission prompt for that
+   call. Answer **Yes** to approve it, or **No** to keep the current baseline.
+4. Commit `.testivai/baselines/`.
+
+The prompt in step 3 appears on **every** approve call. Both approve tools are
+marked with `anthropic/requiresUserInteraction` in `tools/list`, so Claude Code
+(v2.1.214 or later) asks every time, even in `acceptEdits`, `auto` and
+`bypassPermissions` modes, offers no "don't ask again", and does not let allow
+rules skip it; in `dontAsk` mode it denies the call. An approval therefore
+always comes from you answering the prompt, never from the model alone. Other
+MCP clients ignore the marker and apply their own tool-approval settings.
+
+**Seeing the images.** `get_diff` returns the baseline, current and diff PNGs
+to Claude, which looks at them inline; Claude Code also saves the original
+bytes in the session's `tool-results` directory under `~/.claude/projects/`.
+For a side-by-side view yourself, open `visual-report/index.html`.
 
 ## Tools
 
@@ -172,7 +204,9 @@ Nor does it decide what gets approved: it carries out an approval only when a hu
 
 `approve_snapshot` and `approve_all` exist so that a human can say "approve it"
 in conversation and have the agent carry it out. They are **not** for an agent
-deciding on its own.
+deciding on its own. In Claude Code the client enforces this: it asks you to
+confirm every approve call (see
+[Review and approve in Claude Code](#review-and-approve-in-claude-code)).
 
 Approving a baseline rewrites the definition of "correct," so an agent that
 approves its own work can launder a regression into the new baseline. The

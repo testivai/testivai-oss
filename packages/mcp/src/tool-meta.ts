@@ -9,7 +9,14 @@
 export interface ToolMeta {
   title: string;
   description: string;
+  /** Client hints advertised in tools/list alongside the description. */
+  _meta?: Record<string, unknown>;
 }
+
+// Baseline approval must come from a person. Claude Code honours this key by
+// showing the tool's permission prompt on every call, even in auto-approving
+// permission modes; other clients ignore it.
+const requiresUserInteraction = { 'anthropic/requiresUserInteraction': true };
 
 const diffImages: ToolMeta = {
   title: 'View snapshot diff images',
@@ -44,12 +51,14 @@ export const TOOL_META = {
     description:
       'Promote .testivai/temp/<name>/ to the committed baseline (same as `testivai approve <name>`). ' +
       'Only approve changes a reviewer has confirmed are intended; then commit .testivai/baselines/.',
+    _meta: requiresUserInteraction,
   },
   approve_all: {
     title: 'Approve all pending snapshots as baselines',
     description:
       'Promote every pending capture under .testivai/temp/ to committed baselines (same as `testivai approve --all`). ' +
       'Only run this after a reviewer has confirmed the changes; then commit .testivai/baselines/.',
+    _meta: requiresUserInteraction,
   },
   list_baselines: {
     title: 'List committed baselines',

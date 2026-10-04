@@ -157,15 +157,24 @@ actually reads:
 - the `review-visual-changes` prompt ends with an explicit *never call
   `approve_snapshot`/`approve_all` yourself unless the human has explicitly
   confirmed* instruction,
-- every `get_visual_results` response ends with the same line —
-  *do not approve autonomously*,
+- every `get_visual_results` response ends with the same line: *do not
+  approve on your own*; when the human confirms a change in the conversation,
+  call `approve_snapshot`,
 - the human-shaped paths stay first-class: `npx testivai approve` locally, or
   a `/testivai approve` comment on the PR (verified against repo write
   access).
 
-These are guardrails, not a lock. If you wire approvals into an autonomous
-loop or into CI, you own the consequences — the design pushes the other way
-on purpose.
+In Claude Code the rule is also enforced by the client. Both approve tools
+carry `anthropic/requiresUserInteraction` in `tools/list`, so Claude Code
+(v2.1.214 or later) shows its permission prompt on every approve call, even in
+`acceptEdits`, `auto` and `bypassPermissions` modes, with no "don't ask again"
+option; allow rules don't skip it, and `dontAsk` mode denies the call. The
+approval is you answering that prompt. See
+[Review and approve in Claude Code](../mcp.md#review-and-approve-in-claude-code).
+
+Other clients ignore that marker, so there these are guardrails, not a lock.
+If you wire approvals into an autonomous loop or into CI, you own the
+consequences — the design pushes the other way on purpose.
 
 ## Recommended config for agent workflows
 
