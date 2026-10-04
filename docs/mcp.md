@@ -78,13 +78,15 @@ MCP clients ignore the marker and apply their own tool-approval settings.
 **Seeing the images.** `get_diff` returns the baseline, current and diff PNGs
 to Claude, which looks at them inline; Claude Code also saves the original
 bytes in the session's `tool-results` directory under `~/.claude/projects/`.
-For a side-by-side view yourself, open `visual-report/index.html`.
+For yourself, `get_visual_results` ends with the absolute paths to open: the
+HTML report (side-by-side baseline, current and diff), each changed snapshot's
+diff image, and each new snapshot's capture.
 
 ## Tools
 
 | Tool | Returns |
 |---|---|
-| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions |
+| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture |
 | `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance |
 | `get_report` | The raw `results.json` payload |
 | `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context |

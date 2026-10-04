@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults } from './lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, reportLinks } from './lib';
 import { TOOL_META } from './tool-meta';
 
 const packageJson = require('../package.json');
@@ -38,6 +38,7 @@ server.registerTool(
       '',
       ...results.snapshots.map((s) => `- ${s.name}: ${verdictFor(s)}`),
       '',
+      ...withBlankAfter(reportLinks(paths, results)),
       'Baseline approval is a human decision: do not approve on your own. When the human confirms a change in this conversation, ' +
         'call approve_snapshot with its name (approve_all only after they have reviewed every change); ' +
         'otherwise suggest `npx testivai approve <name>` locally or `/testivai approve <name>` on the PR.',
@@ -45,6 +46,11 @@ server.registerTool(
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
 );
+
+// A section of lines followed by a blank separator, or nothing when empty.
+function withBlankAfter(section: string[]): string[] {
+  return section.length > 0 ? [...section, ''] : [];
+}
 
 // Shared handler for the diff-image tools (registered under two names).
 const snapshotDiffHandler = async ({ name }: { name: string }) => {
