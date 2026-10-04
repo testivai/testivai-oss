@@ -1,4 +1,4 @@
-import { TOOL_META } from '../tool-meta';
+import { TOOL_META, type ToolMeta } from '../tool-meta';
 
 /**
  * The model reads a tool's description before it calls the tool, so the
@@ -42,5 +42,29 @@ describe('get_visual_results description', () => {
   // the verdict then says the styles were not compared, and so must this.
   it('says the verdict flags diffs whose styles could not be compared', () => {
     expect(clauses(description).some((c) => /styles (could not be|were not) compared/i.test(c))).toBe(true);
+  });
+});
+
+/**
+ * Approving a baseline rewrites what "correct" means, so it must come from a
+ * person. `anthropic/requiresUserInteraction` makes Claude Code show the
+ * tool's permission prompt on every call, even in auto-approving permission
+ * modes, so the approval happens in the user's terminal or UI. Clients that
+ * don't know the key ignore it.
+ */
+const REQUIRES_USER = 'anthropic/requiresUserInteraction';
+const APPROVE_TOOLS = ['approve_snapshot', 'approve_all'];
+const metaOf = (name: string): ToolMeta => (TOOL_META as Record<string, ToolMeta>)[name];
+
+describe('approval tools require a person to confirm every call', () => {
+  it.each(APPROVE_TOOLS)('%s is marked as requiring user interaction', (name) => {
+    expect(metaOf(name)._meta?.[REQUIRES_USER]).toBe(true);
+  });
+
+  it('no read-only tool forces a prompt', () => {
+    const forced = Object.keys(TOOL_META).filter(
+      (name) => !APPROVE_TOOLS.includes(name) && metaOf(name)._meta?.[REQUIRES_USER] !== undefined,
+    );
+    expect(forced).toEqual([]);
   });
 });

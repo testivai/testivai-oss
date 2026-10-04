@@ -38,7 +38,9 @@ server.registerTool(
       '',
       ...results.snapshots.map((s) => `- ${s.name}: ${verdictFor(s)}`),
       '',
-      'Baseline approval is a human decision: suggest `/testivai approve <name>` on the PR (or `npx testivai approve` locally); do not approve autonomously.',
+      'Baseline approval is a human decision: do not approve on your own. When the human confirms a change in this conversation, ' +
+        'call approve_snapshot with its name (approve_all only after they have reviewed every change); ' +
+        'otherwise suggest `npx testivai approve <name>` locally or `/testivai approve <name>` on the PR.',
     ];
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
