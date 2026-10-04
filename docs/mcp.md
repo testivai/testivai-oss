@@ -120,7 +120,7 @@ ambiguous → a per-snapshot recommendation.
 
 Real output, not a mock. The scenario: a designer changes one CSS custom
 property — `--brand` from `#0e7490` to `#1f6feb` — in the
-[example project](https://github.com/mcbuddy/testivai-example). No markup
+[example project](https://github.com/testivai/testivai-example). No markup
 changes at all.
 
 The one-line verdict:
