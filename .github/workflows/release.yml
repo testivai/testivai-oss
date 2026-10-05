@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history so changesets/action can write CHANGELOGs that
           # link to the right PR/commit refs.
@@ -58,7 +58,7 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -78,7 +78,7 @@ jobs:
 
       - name: Create release PR or publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           # `pnpm release` runs `changeset publish`, which:
           #   - finds the package versions on disk that are AHEAD of npm
@@ -138,7 +138,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 
