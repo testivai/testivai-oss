@@ -18,7 +18,7 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "build": "pnpm -r --filter \"./packages/**\" run build",
-    "test": "pnpm -r --filter \"./packages/**\" run test",
+    "test": "pnpm -r --filter \"./packages/**\" --filter testivai-action run test",
     "test:unit": "pnpm -r --filter \"./packages/**\" run test:unit",
     "clean": "pnpm -r --filter \"./packages/**\" run clean",
     "pack:dry": "pnpm -r --filter \"./packages/**\" exec npm pack --dry-run",

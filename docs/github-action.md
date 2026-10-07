@@ -120,7 +120,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 <details>
 <summary>checkout-page — 0.5% different</summary>
 
-> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting).
+> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
 
 /testivai approve checkout-page
 </details>

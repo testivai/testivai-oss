@@ -52,7 +52,7 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 - **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
-The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison: when pixels differ but the DOM is structurally identical and no computed-style change was found, the comment flags the change as likely render noise. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
+The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison: when pixels differ but the DOM is structurally identical and no computed-style change was found, the comment flags the change as likely render noise. It adds "Styles verified unchanged" only when the computed styles were compared; without that (the style check was unavailable), a stylesheet-only change is not ruled out. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
 
 ## Example output
 
@@ -65,9 +65,9 @@ The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` 
 <details>
 <summary>checkout-page — 0.5% different</summary>
 
-> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting).
+> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
 
-npx testivai approve "checkout-page"
+/testivai approve checkout-page
 </details>
 
 <details>
@@ -75,7 +75,7 @@ npx testivai approve "checkout-page"
 
 > DOM changed — 2 added, 1 attribute change.
 
-npx testivai approve "nav-redesign"
+/testivai approve nav-redesign
 </details>
 ```
 
