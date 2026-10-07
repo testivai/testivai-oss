@@ -57,10 +57,10 @@ export interface LaunchedChrome {
   kill: () => void;
 }
 
-/** Wait until the DevTools endpoint answers, up to timeoutMs. */
-async function waitForDevtools(port: number, timeoutMs: number): Promise<boolean> {
+/** Wait until the DevTools endpoint answers, up to timeoutMs, or until stop() says to give up. */
+async function waitForDevtools(port: number, timeoutMs: number, stop: () => boolean): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline && !stop()) {
     const ok = await new Promise<boolean>((resolve) => {
       const req = http.get({ host: '127.0.0.1', port, path: '/json/version', timeout: 1000 }, (res) => {
         res.resume();
@@ -119,6 +119,20 @@ export function chromeLaunchArgs(port: number, userDataDir: string): string[] {
   return args;
 }
 
+const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
+/** How much of Chrome's stderr to keep for error messages. */
+const STDERR_TAIL_CHARS = 4_000;
+
+/**
+ * How long to wait for Chrome's DevTools endpoint. A cold CI runner can take
+ * longer than a laptop; a Chrome that crashes is detected on exit instead of
+ * waiting this out. Override with TESTIVAI_CHROME_STARTUP_TIMEOUT_MS.
+ */
+export function chromeStartupTimeoutMs(): number {
+  const raw = Number(process.env.TESTIVAI_CHROME_STARTUP_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_STARTUP_TIMEOUT_MS;
+}
+
 /**
  * Launch a throwaway headless Chrome with remote debugging enabled.
  * Uses a temp profile so the user's browser state is never touched.
@@ -129,7 +143,24 @@ export async function launchChrome(executable: string, port: number): Promise<La
   const args = chromeLaunchArgs(port, userDataDir);
 
   logger.debug(`Launching Chrome: ${executable}`);
-  const child: ChildProcess = spawn(executable, args, { stdio: 'ignore' });
+  const child: ChildProcess = spawn(executable, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  // Keep the tail of stderr for error messages, and keep draining it for the
+  // life of the process so a chatty Chrome never blocks on a full pipe.
+  let stderr = '';
+  child.stderr?.on('data', (chunk: Buffer) => {
+    stderr = (stderr + chunk.toString()).slice(-STDERR_TAIL_CHARS);
+  });
+
+  // A Chrome that exits (or never spawns) will not open the endpoint: stop
+  // waiting and say why, instead of reporting a timeout.
+  let ended: string | null = null;
+  child.once('exit', (code, signal) => {
+    ended ??= code !== null ? `code ${code}` : `signal ${signal}`;
+  });
+  child.once('error', (err) => {
+    ended ??= err.message;
+  });
 
   const kill = (): void => {
     try {
@@ -144,18 +175,22 @@ export async function launchChrome(executable: string, port: number): Promise<La
     }
   };
 
-  const ready = await waitForDevtools(port, 12_000);
+  const timeoutMs = chromeStartupTimeoutMs();
+  const ready = await waitForDevtools(port, timeoutMs, () => ended !== null);
   if (!ready) {
     kill();
     const sandboxHint = needsNoSandbox()
       ? ''
       : ' If this is a container, Chrome may be refusing to start because its ' +
         'sandbox is unavailable — set TESTIVAI_CHROME_NO_SANDBOX=1.';
-    throw new Error(
-      `Chrome did not open its debugging endpoint on port ${port} within 12s. ` +
-        `Set TESTIVAI_CHROME_PATH to a working Chrome/Chromium binary if the auto-detected one is broken.` +
-        sandboxHint,
-    );
+    const pathHint = ' Set TESTIVAI_CHROME_PATH to a working Chrome/Chromium binary if the auto-detected one is broken.';
+    const stderrTail = stderr.trim() ? `\nChrome stderr (last ${STDERR_TAIL_CHARS} characters at most):\n${stderr.trim()}` : '';
+    const what =
+      ended !== null
+        ? `Chrome exited before opening its debugging endpoint (${ended}).`
+        : `Chrome did not open its debugging endpoint on port ${port} within ${timeoutMs / 1000}s. ` +
+          'Set TESTIVAI_CHROME_STARTUP_TIMEOUT_MS to wait longer.';
+    throw new Error(what + pathHint + sandboxHint + stderrTail);
   }
 
   return { port, kill };
