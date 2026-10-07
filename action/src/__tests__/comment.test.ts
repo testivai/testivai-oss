@@ -244,6 +244,45 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
     expect(comment).not.toContain('DOM unchanged');
   });
 
+  // An identical DOM alone cannot tell render noise from a stylesheet-only
+  // change; only a compared style check rules that out. The notes are the
+  // witness HTML report's, so both surfaces say the same thing.
+  const noiseComment = (styleCheck?: 'match' | 'unavailable') =>
+    buildComment({
+      ...base,
+      snapshots: [{
+        name: 'n', status: 'changed', diffPercent: 0.4,
+        dom: { changed: false, noiseHint: true, summary: null, ...(styleCheck ? { styleCheck } : {}) },
+      }],
+    } as any);
+  const lineStarting = (comment: string, prefix: string) => comment.split('\n').find(l => l.startsWith(prefix));
+
+  it('noise hint says the styles were verified when the style check matched', () => {
+    expect(lineStarting(noiseComment('match'), '> **DOM unchanged**')).toBe(
+      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.',
+    );
+  });
+
+  it('noise hint says the styles were not compared when the style check was unavailable', () => {
+    expect(lineStarting(noiseComment('unavailable'), '> **DOM unchanged**')).toBe(
+      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). (Style check unavailable — no comparable style digests on both sides.)',
+    );
+  });
+
+  it('noise hint from an older results.json (no styleCheck) is unchanged', () => {
+    expect(lineStarting(noiseComment(), '> **DOM unchanged**')).toBe(
+      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting).',
+    );
+  });
+
+  it('footer says an identical DOM rules out a style-only change only when the styles were verified', () => {
+    const footer = lineStarting(noiseComment('match'), '> Pixel-exact comparison');
+    expect(footer).toContain(
+      'An identical DOM points to render noise, and rules out a stylesheet-only change only when the hint also says "Styles verified unchanged".',
+    );
+    expect(footer).toContain('[`@testivai/mcp`]');
+  });
+
   it('pageShift renders the look-above guidance', () => {
     const comment = buildComment({
       ...base,
