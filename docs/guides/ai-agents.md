@@ -205,5 +205,6 @@ consequences — the design pushes the other way on purpose.
 | Everything reports `changed` ~30%+, `noiseHint: true` | Web fonts raced the capture; re-run (the capture waits up to 10s for fonts). If persistent, ignore the affected region |
 | A page reports text changes you didn't make | Dynamic content (counters, timestamps) — add it to `ignoreSelectors` |
 | `No Chrome/Chromium found` (witness `<url>`) | Install Chrome, or `npx playwright install chromium` and set `TESTIVAI_CHROME_PATH` to the binary |
-| `Chrome did not open its debugging endpoint` in a container | Chrome cannot use its sandbox there. Running as root this is handled automatically; otherwise set `TESTIVAI_CHROME_NO_SANDBOX=1` |
+| `Chrome exited before opening its debugging endpoint` | Read the Chrome stderr quoted in the error. In a container Chrome usually cannot use its sandbox: running as root this is handled automatically; otherwise set `TESTIVAI_CHROME_NO_SANDBOX=1` |
+| `Chrome did not open its debugging endpoint … within 30s` | Chrome is still starting (slow runner): raise `TESTIVAI_CHROME_STARTUP_TIMEOUT_MS` |
 | MCP images too heavy for context | `get_diff` already downscales anything wider/taller than 1024 px before returning it (the caption reports the original dimensions). If it's still too much, use `explain_snapshot` / `get_visual_results` for text-only evidence and open the report for pixel detail |
