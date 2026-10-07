@@ -95,29 +95,37 @@ npx testivai approve --all
 
 Approve writes the temp capture over the baseline and backs the previous baseline up to `.testivai/baselines/<name>/.previous/`. `npx testivai approve --undo "homepage"` reverts.
 
-## DOM noise hint
+## DOM noise hint and style check
 
-When pixels differ but the page DOM is structurally identical, the report flags the change as "likely render noise" (anti-aliasing, font hinting, sub-pixel layout). When the DOM is also different, the report shows added / removed / attribute-change counts so you can decide whether the change is intentional. Like the Playwright adapter, it writes `dom.html` alongside the screenshot.
+Alongside the screenshot the adapter writes `dom.html` and `elements.json`, the element map: each element's box and a digest of its computed styles, collected by the same function the Playwright and Selenium adapters use.
 
-Unlike the Playwright adapter, this adapter does not capture an element map yet, so the computed-style check reports `styleCheck: "unavailable"`: a stylesheet-only change (identical DOM, different styles) cannot be told apart from render noise here, and element attribution and page-shift detection are not available.
+- When pixels differ but the DOM is structurally identical and no computed style changed, the report flags the change as "likely render noise" (anti-aliasing, font hinting, sub-pixel layout).
+- When the DOM is identical but computed styles differ, it reports a style-only change, which is real, and names the restyled elements.
+- When the DOM also differs, it shows added / removed / attribute-change counts so you can decide whether the change is intentional.
 
-DOM capture happens automatically. To skip it for a single snapshot:
+The element map also powers region attribution (which selectors a diff region covers) and page-shift detection.
+
+WebDriver's screenshot is the **viewport**, not the full page, so the element map keeps only the elements inside the captured viewport, in screenshot coordinates. Size the browser window to what you want compared, and capture at the same scroll position each run.
+
+Both captures happen automatically and are best-effort: if either fails, the pixel diff still runs. To skip them for a single snapshot:
 
 ```ts
-await testivai.witness(browser, 'no-dom', { skipDom: true });
+await testivai.witness(browser, 'no-dom', { skipDom: true, skipElementMap: true });
 ```
 
 ## API
 
 ### `testivai.witness(browser, name, options?)`
 
-Captures a screenshot + DOM and writes them as a temp snapshot.
+Captures a viewport screenshot, the DOM and the element map, and writes them as a temp snapshot.
 
 | Param | Type | Description |
 |---|---|---|
 | `browser` | WebdriverIO browser | Must expose `takeScreenshot()` and (for DOM) `execute()`. |
 | `name` | string | Snapshot name. Becomes `.testivai/temp/<name>/` and the key in the report. |
 | `options.skipDom` | boolean | Skip DOM capture for this snapshot. |
+| `options.skipElementMap` | boolean | Skip the element map for this snapshot (no style check, region attribution or page-shift detection). |
+| `options.maxElements` | number | Cap on elements collected for the element map. Default: 3000. |
 | `options.ignoreSelectors` | string[] | Elements hidden (`visibility: hidden`) for this capture; merged with the global `ignoreSelectors` from `.testivai/config.json`. |
 | `options.stabilize` | boolean | Override capture stabilization (animations frozen, caret hidden, fonts awaited). Default: `true` (or the global `stabilize` setting). |
 

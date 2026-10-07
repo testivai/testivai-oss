@@ -33,6 +33,14 @@ export interface WitnessOptions {
    */
   skipDom?: boolean;
   /**
+   * Skip the element map (each element's box and a digest of its computed
+   * styles). Without it the report falls back to the pixel and DOM layers:
+   * no style check, region attribution or page-shift detection.
+   */
+  skipElementMap?: boolean;
+  /** Cap on elements collected for the element map. Default: 3000. */
+  maxElements?: number;
+  /**
    * CSS selectors for elements to hide (`visibility: hidden`) for the
    * duration of the capture, so dynamic content (timestamps, ads, live
    * widgets) never contributes to the pixel diff. Merged with the global

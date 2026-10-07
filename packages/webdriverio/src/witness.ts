@@ -6,9 +6,9 @@
  *   import { testivai } from '@testivai/witness-webdriverio';
  *   await testivai.witness(browser, 'homepage');
  *
- * Captures a full-page screenshot via `browser.takeScreenshot()` and the
- * page DOM via `browser.execute(() => document.documentElement.outerHTML)`,
- * then writes both into `.testivai/temp/<name>/` using the same
+ * Captures the viewport screenshot via `browser.takeScreenshot()` (WebDriver's
+ * Take Screenshot is viewport-sized), the page DOM, and the element map via
+ * `browser.execute(...)`, then writes them into `.testivai/temp/<name>/` using the same
  * BaselineStore layout as @testivai/witness-playwright. The TestivaiService
  * (registered in wdio.conf.ts) runs `compareAll` + `generateReport` after
  * all tests finish.
@@ -19,7 +19,10 @@
  * API instead of fighting Chrome-launch coordination.
  */
 
-import { BaselineStore, loadLocalConfig } from '@testivai/witness';
+import * as fs from 'fs';
+import * as path from 'path';
+import { BaselineStore, DEFAULT_MAX_ELEMENTS, loadLocalConfig, type CollectedElement } from '@testivai/witness';
+import { elementMapScript, isPageElementMap, toViewportElementMap } from './element-map';
 import type { WitnessBrowser, WitnessOptions } from './types';
 
 /** id of the style element injected for the duration of a capture */
@@ -172,7 +175,36 @@ export async function witness(
     }
   }
 
-  // 3. Write to .testivai/temp/<name>/
+  // 3. Capture the element map (best-effort — same contract as the DOM).
+  //    It powers the style check, region attribution and page-shift
+  //    detection on the compare side. The screenshot is the viewport, so the
+  //    map keeps only the elements inside it, in screenshot coordinates.
+  let elementMap: CollectedElement[] | undefined;
+  if (!options.skipElementMap && typeof browser.execute === 'function') {
+    try {
+      const result = await browser.execute<unknown>(
+        elementMapScript(options.maxElements ?? DEFAULT_MAX_ELEMENTS, ignoreSelectors),
+      );
+      if (isPageElementMap(result)) {
+        const inView = toViewportElementMap(result);
+        if (inView.length > 0) elementMap = inView;
+      }
+    } catch {
+      // Suppressed by design, exactly like DOM capture: without a map the
+      // report falls back to the pixel and DOM layers instead of failing.
+    }
+  }
+
+  // 4. Write to .testivai/temp/<name>/
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
+  if (elementMap) {
+    try {
+      const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
+      fs.mkdirSync(tempDir, { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'elements.json'), JSON.stringify(elementMap));
+    } catch {
+      // A map we cannot persist is not worth failing a capture over.
+    }
+  }
 }
