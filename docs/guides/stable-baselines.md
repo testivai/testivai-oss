@@ -141,10 +141,12 @@ truth for local-mode settings. Every field is optional and falls back to a safe
 default — and so is the file itself: with no `config.json` at all, the defaults
 below apply unchanged.
 
-### General
+The file is checked when it loads, and problems print as warnings rather than
+failing the run:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+- An unknown key is ignored, with a "did you mean" suggestion for a likely typo.
+- A value of the wrong JSON type falls back to that field's default.
+- `mode` from earlier versions is retired: it is ignored, with a notice to remove it.
 
 ### Diff tolerance
 
