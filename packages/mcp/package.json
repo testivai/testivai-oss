@@ -50,7 +50,7 @@
     "@types/pngjs": "^6.0.5",
     "jest": "^30.5.1",
     "ts-jest": "^29.4.12",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "mcpName": "ai.testiv/mcp"
 }
