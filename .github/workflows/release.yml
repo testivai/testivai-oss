@@ -100,14 +100,26 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
 
+      # Runs even when an earlier step failed, so it must check the release
+      # step's outcome first: a failed publish reports published=false and no
+      # version PR, which otherwise reads exactly like "nothing to release".
       - name: Summary
         if: always()
+        env:
+          OUTCOME: ${{ steps.changesets.outcome }}
+          PUBLISHED: ${{ steps.changesets.outputs.published }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          VERSION_PR: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: |
-          if [ "${{ steps.changesets.outputs.published }}" = "true" ]; then
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "::warning::The release step did not run because an earlier step failed. Nothing was published."
+          elif [ "$OUTCOME" != "success" ]; then
+            echo "::error::The release step ended with '$OUTCOME'. Packages may have been published in part or not at all: check its log and the npm registry before re-running."
+          elif [ "$PUBLISHED" = "true" ]; then
             echo "::notice::Published packages:"
-            echo '${{ steps.changesets.outputs.publishedPackages }}'
-          elif [ -n "${{ steps.changesets.outputs.pullRequestNumber }}" ]; then
-            echo "::notice::Version PR open: #${{ steps.changesets.outputs.pullRequestNumber }}"
+            echo "$PUBLISHED_PACKAGES"
+          elif [ -n "$VERSION_PR" ]; then
+            echo "::notice::Version PR open: #$VERSION_PR"
           else
             echo "::notice::No pending changesets, nothing to release."
           fi
