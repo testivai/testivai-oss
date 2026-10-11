@@ -6,6 +6,11 @@ The repo follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conven
 
 ## Unreleased
 
+### Fixed
+- `docs/guides/docker.md` and `docs/guides/headless.md` — replaced the "Coming Soon" placeholders, which were published on testiv.ai/docs, with real guides: one Docker image for capture and approval, the official Playwright image, Chromium for `testivai witness <url>`, the root/sandbox variables, and keeping headless capture conditions identical.
+- `docs/maintenance.md` — dropped the version and release counts, which had gone stale; the releases page is the live record.
+- This file: `docs/oss-vs-cloud.md` and `docs/frameworks/cloud-only-frameworks.md`, listed under Added below, were removed with the cloud lane in #82. The Action is `testivai/testivai-oss@v1` since the repository moved to the testivai org (#133); entries below that say `mcbuddy/testivai-oss@v1` describe it before the move.
+
 ### Added
 - `docs/oss-vs-cloud.md` — capability matrix; explicit boundary between the OSS lane (pixel + DOM) and the cloud lane (CSS + layout + AI counselor + dashboard + history).
 - `docs/github-action.md` — full reference for `mcbuddy/testivai-oss@v1`, including PR comment shape and DOM noise hint output.

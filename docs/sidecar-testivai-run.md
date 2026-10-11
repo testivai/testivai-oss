@@ -17,7 +17,7 @@ The `testivai run` sidecar is experimental in this iteration. Use it as a fallba
 2. Polls Chrome's remote debugging port (`--remote-debugging-port=9222`) until it appears
 3. Attaches over CDP and injects a `window.testivaiWitness()` global into every page
 4. When your tests call `window.testivaiWitness('name')` (via a small per-framework helper), the sidecar captures a screenshot + DOM and writes them to `.testivai/temp/<name>/`
-5. After the test process exits, the sidecar finalizes (in local mode: runs `compareAll` + `generateReport`)
+5. After the test process exits, the sidecar finalizes: it runs `compareAll` and `generateReport`
 
 It's the universal fallback for frameworks where TestivAI doesn't ship a dedicated adapter package.
 
