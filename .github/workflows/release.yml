@@ -57,12 +57,20 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
+      # No registry-url: that writes an .npmrc expecting NODE_AUTH_TOKEN, and
+      # publishing no longer uses a token (see "Create release PR or publish").
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '22'
           cache: 'pnpm'
+
+      # npm trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      # `pnpm publish` hands the tarball to this npm.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -93,11 +101,16 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # changesets/action reads NPM_TOKEN; setup-node reads NODE_AUTH_TOKEN.
-          # Both must be set so the action doesn't fall back to OIDC trusted
-          # publishing (which requires npm to have it configured per-package).
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # npm trusted publishing (OIDC), like release-python.yml and
+          # release-ruby.yml: no NPM_TOKEN, so changesets/action uses the
+          # workflow's id-token, and npm attaches provenance automatically.
+          # A token stopped working on 2026-10-05: every package failed with
+          # EOTP (npm asked for a one-time password), and that release was
+          # then published by hand, without provenance.
+          #
+          # Each package needs a trusted publisher on npmjs.com (package →
+          # Settings → Trusted publishing: testivai/testivai-oss,
+          # workflow release.yml) or its publish fails here.
           NPM_CONFIG_PROVENANCE: 'true'
 
       # Runs even when an earlier step failed, so it must check the release
@@ -154,7 +167,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Every published version is really on the registry
+      - name: Every published version is on the registry, with provenance
         env:
           PUBLISHED: ${{ needs.release.outputs.publishedPackages }}
         run: |
@@ -163,8 +176,10 @@ jobs:
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             (async () => {
               const missing = [];
+              const unattested = [];
               for (const { name, version } of pkgs) {
                 let found = false;
+                let attested = false;
                 // Allow for propagation, but do not wait forever.
                 for (let attempt = 0; attempt < 10 && !found; attempt++) {
                   if (attempt) await sleep(15000);
@@ -172,14 +187,23 @@ jobs:
                   const res = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
                   const doc = await res.json();
                   found = Boolean(doc.versions && doc.versions[version]);
+                  attested = Boolean(found && doc.versions[version].dist && doc.versions[version].dist.attestations);
                 }
-                console.log(`${found ? "ok      " : "MISSING "} ${name}@${version}`);
+                console.log(`${!found ? "MISSING " : attested ? "ok      " : "NO-PROV "} ${name}@${version}`);
                 if (!found) missing.push(`${name}@${version}`);
+                else if (!attested) unattested.push(`${name}@${version}`);
               }
               if (missing.length) {
                 console.log(`::error::Reported as published but absent from npm: ${missing.join(", ")}. Re-run this workflow; changeset publish only sends what npm is missing.`);
-                process.exit(1);
               }
+              // `npm audit signatures` verifies the attestations a package has;
+              // it does not require one. A release published without provenance
+              // (2.1.0 and its adapters, published by hand after the CI publish
+              // failed with EOTP) needs this explicit check.
+              if (unattested.length) {
+                console.log(`::error::Published without a provenance attestation: ${unattested.join(", ")}. Publish from this workflow (npm trusted publishing), not from a local machine.`);
+              }
+              if (missing.length || unattested.length) process.exit(1);
             })();
           '
 
