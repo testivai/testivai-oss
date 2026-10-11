@@ -1,5 +1,5 @@
 ---
-title: Python (playwright-python)
+title: Python (Playwright / Selenium)
 ---
 
 # Python adapter — `testivai` on PyPI

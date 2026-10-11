@@ -1,5 +1,5 @@
 ---
-title: Java (playwright-java)
+title: Java (experimental)
 ---
 
 # Java adapter — `ai.testiv:testivai` (experimental)

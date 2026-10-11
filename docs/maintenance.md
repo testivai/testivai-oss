@@ -28,8 +28,6 @@ The honest evidence, rather than a promise:
 | | |
 |---|---|
 | First release | 20 March 2026 |
-| `@testivai/witness` versions published | 18 |
-| GitHub releases across all packages | 70+ |
 | Published registries | npm (5 packages), PyPI, RubyGems |
 
 Current versions and every release note are on the
