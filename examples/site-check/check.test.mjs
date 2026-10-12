@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseConfig } from './check.mjs';
+import { parseConfig, renderSummary } from './check.mjs';
 
 const ok = (env) => {
   const { config, error } = parseConfig(env);
@@ -21,8 +21,8 @@ test('missing or empty URLS is bad input', () => {
 });
 
 test('a URL that is not http(s) is bad input', () => {
-  assert.match(parseConfig({ URLS: 'example.com' }).error, /example\.com/);
-  assert.match(parseConfig({ URLS: 'ftp://example.com/' }).error, /ftp:/);
+  assert.match(parseConfig({ URLS: 'example.com' }).error, /^"example\.com" is not a URL\./);
+  assert.match(parseConfig({ URLS: 'ftp://example.com/' }).error, /^"ftp:\/\/example\.com\/" uses ftp:/);
 });
 
 test('defaults', () => {
@@ -94,4 +94,15 @@ test('PROXY_SERVER sets the browser proxy', () => {
     server: 'http://proxy:3128',
   });
   assert.equal('proxy' in ok({ URLS: 'https://a.example/' }).launch, false);
+});
+
+test('summary table cells escape backslashes as well as pipes', () => {
+  // A backslash before a pipe in a URL must not end its table cell early.
+  const md = renderSummary({
+    ok: true,
+    checkedAt: '2026-10-12T00:00:00.000Z',
+    pages: [{ url: 'https://a.example/x\\|y', ok: true, status: 200, textChars: 30, failures: [], warnings: [] }],
+  });
+  const row = md.split('\n').find((line) => line.startsWith('| https://'));
+  assert.equal(row, '| https://a.example/x\\\\\\|y | OK | 200 | 30 |');
 });

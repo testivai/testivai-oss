@@ -228,8 +228,9 @@ async function checkPage(browser, url, index, config) {
   return result;
 }
 
+// Escapes a value for a Markdown table cell: backslashes first, then pipes.
 function cell(text) {
-  return String(text).replace(/\|/g, '\\|');
+  return String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 }
 
 export function renderSummary({ ok, checkedAt, pages, error, stage }) {
