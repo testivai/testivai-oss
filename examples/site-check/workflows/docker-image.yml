@@ -1,0 +1,73 @@
+# Builds the site-check Docker image, proves it with
+# site-check/scripts/docker-smoke.sh, and pushes it to GitHub Container
+# Registry. Pull requests run the same build and smoke test but never push.
+# Code and docs: site-check/README.md ("Docker").
+name: Docker image
+
+on:
+  push:
+    branches: [main]
+    # Path filters are not applied to tag pushes, so every v* tag builds.
+    tags: ['v*']
+    paths:
+      - 'site-check/**'
+      - '.github/workflows/docker-image.yml'
+  pull_request:
+    paths:
+      - 'site-check/**'
+      - '.github/workflows/docker-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Push only from the default branch and from v* tags, never from pull
+      # requests or a manual run on another branch.
+      PUSH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The runner's own Docker engine as the builder: the smoke test's images
+      # stay in the local image store, and the build below reuses their cached
+      # layers, so what is pushed is what the smoke test checked.
+      - uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+
+      - uses: docker/login-action@v4
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test (builds the image, runs the proof inside it, checks it from outside)
+        run: site-check/scripts/docker-smoke.sh
+
+      - name: Read the playwright-core version
+        id: version
+        run: echo "playwright=$(jq -r '.dependencies["playwright-core"]' site-check/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/site-check
+          tags: |
+            type=raw,value=${{ steps.version.outputs.playwright }}
+            type=ref,event=tag
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: site-check
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

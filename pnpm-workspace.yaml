@@ -2,4 +2,6 @@ packages:
   - 'packages/*'
   - 'action'
   - 'examples/*'
+  # A standalone npm project to copy into your own repo, not a workspace package.
+  - '!examples/site-check'
   - 'e2e'

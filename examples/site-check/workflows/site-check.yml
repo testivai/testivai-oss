@@ -1,0 +1,129 @@
+# Hourly site check: fails when a page is up (HTTP 200) but broken.
+# Code and docs: site-check/README.md
+name: Site check
+
+on:
+  schedule:
+    # Minute 17, not :00: the top of the hour is the most delayed minute.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'URLs to check this run only (space or comma separated). Empty uses the SITE_CHECK_URLS variable.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: site-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: site-check
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site-check/package-lock.json
+
+      - run: npm ci --omit=dev
+
+      # Uses the Google Chrome preinstalled on the runner; nothing is downloaded.
+      - name: Check the site
+        id: check
+        continue-on-error: true
+        env:
+          URLS: ${{ inputs.urls || vars.SITE_CHECK_URLS }}
+          EXPECT_TEXT: ${{ vars.SITE_CHECK_EXPECT_TEXT }}
+          CHROME_CHANNEL: chrome
+          OUT_DIR: out
+        run: node check.mjs
+
+      - name: Upload screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-check-${{ github.run_id }}
+          path: site-check/out/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # One issue per outage: opened on the first failure, commented while it
+      # stays broken, closed on the first success.
+      - name: Open, update or close the incident issue
+        id: incident
+        if: always()
+        uses: actions/github-script@v9
+        env:
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+        with:
+          script: |
+            const { readFileSync } = require('node:fs');
+            const dir = `${process.env.GITHUB_WORKSPACE}/site-check`;
+            const { syncIncident, octokitClient } = await import(`${dir}/incident.mjs`);
+
+            let summary;
+            try {
+              summary = readFileSync(`${dir}/out/summary.md`, 'utf8');
+            } catch {
+              summary = 'The check wrote no summary (it may not have run). See the run log.\n';
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `${summary}\n[Workflow run ${context.runId}](${runUrl}): screenshots and results.json are in its artifacts.\n`;
+
+            const result = await syncIncident({
+              client: octokitClient(github, context),
+              failed: process.env.CHECK_OUTCOME !== 'success',
+              title: 'Site check failing',
+              body,
+              assignees: [],
+            });
+            core.info(`Incident: ${result.action}${result.issue ? ` (#${result.issue})` : ''}`);
+            core.setOutput('action', result.action);
+
+      - name: Read the summary for the email
+        id: summary
+        if: always() && vars.SITE_CHECK_MAIL_TO != '' && (steps.incident.outputs.action == 'opened' || steps.incident.outputs.action == 'closed')
+        run: |
+          delimiter="EOF_$(openssl rand -hex 8)"
+          {
+            echo "text<<$delimiter"
+            cat out/summary.md 2>/dev/null || echo 'The check wrote no summary (it may not have run). See the run log.'
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        if: always() && vars.SITE_CHECK_MAIL_TO != '' && (steps.incident.outputs.action == 'opened' || steps.incident.outputs.action == 'closed')
+        uses: dawidd6/action-send-mail@v22
+        with:
+          server_address: ${{ vars.SITE_CHECK_MAIL_SERVER || 'smtp.gmail.com' }}
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Site check <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ vars.SITE_CHECK_MAIL_TO }}
+          subject: ${{ steps.incident.outputs.action == 'opened' && 'Site check FAILED' || 'Site check recovered' }}
+          body: |
+            ${{ steps.summary.outputs.text }}
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          attachments: site-check/out/*.png
+
+      # Makes the run itself red, which is what triggers GitHub's own
+      # failure email to whoever created or last edited the cron line.
+      - name: Fail the run if the site check failed
+        if: steps.check.outcome != 'success'
+        run: exit 1
