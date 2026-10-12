@@ -105,7 +105,7 @@
     "@types/ws": "^8.0.0",
     "jest": "^30.5.1",
     "ts-jest": "^29.4.12",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=18.0.0"
