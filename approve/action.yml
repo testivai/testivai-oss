@@ -12,9 +12,14 @@ branding:
 inputs:
   github-token:
     description: >
-      GitHub token. Must have contents:write (to commit baselines) and
-      pull-requests:write (to post reply comments). Use secrets.GITHUB_TOKEN
-      — no additional secrets needed.
+      GitHub token. Needs contents:write (to commit baselines),
+      pull-requests:write (to post reply comments) and actions:read (to find
+      the visual run and download its report artifact); a workflow with an
+      explicit permissions block must list all three. secrets.GITHUB_TOKEN
+      works, but GitHub starts no workflow run for a push made with it, so CI
+      does not re-run on the approve commit. Pass a fine-grained personal
+      access token or GitHub App token with the same permissions to have it
+      re-run.
     required: true
     default: ${{ github.token }}
 
@@ -288,7 +293,7 @@ runs:
               list,
               skipNote,
               ``,
-              `CI will re-run automatically to confirm everything passes.`,
+              `CI runs again on this commit when the approve step pushes with a personal access token or GitHub App token. With the default \`GITHUB_TOKEN\`, GitHub starts no run for this push: push another commit to re-run CI.`,
             ].join('\n');
           }
 

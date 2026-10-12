@@ -179,9 +179,11 @@ Post a comment on the PR:
 2. Downloads the `testivai-visual-report` artifact from the latest CI run
 3. Copies approved screenshots into `.testivai/baselines/`
 4. Commits them to your PR branch
-5. Posts a confirmation comment; CI re-runs automatically
+5. Posts a confirmation comment
 
-**Requires:** the workflow has `contents: write` permission and the `approve-baselines` job.
+**Requires:** the `approve-baselines` job, with `contents: write`, `pull-requests: write` and `actions: read`.
+
+CI runs again on the approve commit only if the approve step pushes with a token other than `GITHUB_TOKEN` (GitHub starts no workflow run for a `GITHUB_TOKEN` push). With `GITHUB_TOKEN`, push another commit to re-run CI.
 
 ---
 

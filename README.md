@@ -179,6 +179,7 @@ permissions:
   contents: write           # approve action commits updated baselines to the branch
   pull-requests: write      # post PR diff comment
   statuses: write           # set pass/fail indicator on the PR
+  actions: read             # approve action finds the CI run and downloads its report artifact
 
 jobs:
 
@@ -234,7 +235,9 @@ After CI posts the diff report on your PR, review the `testivai-visual-report` a
 2. Downloads the `testivai-visual-report` artifact from the latest CI run on your branch
 3. Copies approved screenshots into `.testivai/baselines/` and commits them to your PR branch
 4. Posts a confirmation comment listing what was approved
-5. CI re-runs automatically — approved snapshots now pass
+5. CI runs again on the new commit — approved snapshots now pass
+
+Step 5 needs a token other than `GITHUB_TOKEN`: GitHub starts no workflow run for a push made with `GITHUB_TOKEN`. Give the approve step a fine-grained personal access token (`github-token: ${{ secrets.TESTIVAI_APPROVE_TOKEN || secrets.GITHUB_TOKEN }}`), or push another commit after approving. See [Approve with a token that re-runs CI](docs/github-action.md#approve-with-a-token-that-re-runs-ci).
 
 ### What the PR comment looks like
 
