@@ -61,7 +61,8 @@ CI (GitHub Actions):
   → testivai/testivai-oss/approve@v1  verifies commenter write access
                                       downloads artifact, copies pending-baselines → .testivai/baselines/
                                       commits updated baselines back to PR branch
-                                      CI re-runs → passes
+                                      pushed with a PAT/App token → CI runs again → passes
+                                      (GitHub starts no run for a GITHUB_TOKEN push)
 ```
 
 ## Key files per package

@@ -100,7 +100,8 @@ CI — GitHub Actions
       downloads artifact
       copies pending-baselines/<name>/ → .testivai/baselines/<name>/
       commits updated baselines to PR branch
-      CI re-runs → passes
+      pushed with a PAT/App token → CI runs again → passes
+      (GitHub starts no run for a GITHUB_TOKEN push)
 ```
 
 ---
