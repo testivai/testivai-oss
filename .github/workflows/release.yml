@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history so changesets/action can write CHANGELOGs that
           # link to the right PR/commit refs.
@@ -60,7 +60,7 @@ jobs:
       # No registry-url: that writes an .npmrc expecting NODE_AUTH_TOKEN, and
       # publishing no longer uses a token (see "Create release PR or publish").
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -86,7 +86,7 @@ jobs:
 
       - name: Create release PR or publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           # `pnpm release` runs `changeset publish`, which:
           #   - finds the package versions on disk that are AHEAD of npm
@@ -163,7 +163,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 
