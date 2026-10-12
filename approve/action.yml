@@ -126,6 +126,7 @@ runs:
         ARTIFACT_NAME:  ${{ inputs.artifact-name }}
         WORKFLOW_FILE:  ${{ inputs.workflow }}
         PR_BRANCH:      ${{ fromJson(steps.auth.outputs.result).branch }}
+        ARTIFACT_DIR:   ${{ runner.temp }}/testivai-artifact
       run: |
         set -euo pipefail
 
@@ -164,15 +165,15 @@ runs:
         fi
 
         echo "Downloading artifact '$ARTIFACT_NAME' from run $RUN_ID..."
-        mkdir -p /tmp/testivai-artifact
+        mkdir -p "$ARTIFACT_DIR"
 
         gh run download "$RUN_ID" \
           --repo "$GITHUB_REPOSITORY" \
           --name "$ARTIFACT_NAME" \
-          --dir  /tmp/testivai-artifact
+          --dir  "$ARTIFACT_DIR"
 
         echo "Artifact downloaded. Contents:"
-        find /tmp/testivai-artifact -type f | sort | head -40
+        find "$ARTIFACT_DIR" -type f | sort | head -40
 
     # ── Step 4: Copy pending baselines into .testivai/baselines/ ───────────
     - name: Apply baseline approvals
@@ -182,10 +183,11 @@ runs:
       env:
         TARGET:        ${{ fromJson(steps.auth.outputs.result).target }}
         BASELINES_DIR: ${{ inputs.baselines-dir }}
+        ARTIFACT_DIR:  ${{ runner.temp }}/testivai-artifact
       run: |
         set -euo pipefail
 
-        PENDING_DIR="/tmp/testivai-artifact/pending-baselines"
+        PENDING_DIR="$ARTIFACT_DIR/pending-baselines"
 
         if [ ! -d "$PENDING_DIR" ]; then
           echo "::error::No pending-baselines found in the artifact."
@@ -198,7 +200,7 @@ runs:
 
         # Resolve snapshot names to approve
         if [ "$TARGET" = "--all" ]; then
-          NAMES=$(ls "$PENDING_DIR")
+          NAMES=$(find "$PENDING_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
         else
           NAMES="$TARGET"
         fi
@@ -206,11 +208,21 @@ runs:
         APPROVED_LIST=""
         SKIPPED_LIST=""
 
+        set -f   # a name like '*' must not glob against the checkout
         for name in $NAMES; do
           SRC="$PENDING_DIR/$name"
           DST="$BASELINES_DIR/$name"
 
-          if [ ! -d "$SRC" ]; then
+          # Names come from the PR comment and from the artifact's directory
+          # names, which the PR's own CI run wrote. Approve only a real
+          # directory directly inside pending-baselines, so no name reaches
+          # outside it or outside the baselines dir.
+          case "$name" in
+            .|..|*/*) known=false ;;
+            *) if [ -d "$SRC" ] && [ ! -L "$SRC" ]; then known=true; else known=false; fi ;;
+          esac
+
+          if [ "$known" != true ]; then
             echo "::warning::Snapshot '$name' not found in pending baselines — skipping."
             SKIPPED_LIST="$SKIPPED_LIST $name"
             continue
@@ -221,6 +233,7 @@ runs:
           echo "  ✓ approved: $name"
           APPROVED_LIST="$APPROVED_LIST $name"
         done
+        set +f
 
         # Trim leading spaces
         APPROVED_LIST="${APPROVED_LIST# }"
@@ -263,13 +276,20 @@ runs:
     - name: Post confirmation comment
       if: ${{ fromJson(steps.auth.outputs.result).skip != true }}
       uses: actions/github-script@v7
+      # Values arrive through env, never spliced into the script: snapshot
+      # names come from the PR comment and from the PR's own CI artifact.
+      env:
+        APPROVED: ${{ steps.apply.outputs.approved }}
+        SKIPPED:  ${{ steps.apply.outputs.skipped }}
+        COUNT:    ${{ steps.apply.outputs.count }}
+        ACTOR:    ${{ fromJson(steps.auth.outputs.result).actor }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const approved = '${{ steps.apply.outputs.approved }}'.trim().split(/\s+/).filter(Boolean);
-          const skipped  = '${{ steps.apply.outputs.skipped  }}'.trim().split(/\s+/).filter(Boolean);
-          const count    = parseInt('${{ steps.apply.outputs.count }}') || 0;
-          const actor    = '${{ fromJson(steps.auth.outputs.result).actor }}';
+          const approved = (process.env.APPROVED ?? '').trim().split(/\s+/).filter(Boolean);
+          const skipped  = (process.env.SKIPPED ?? '').trim().split(/\s+/).filter(Boolean);
+          const count    = parseInt(process.env.COUNT ?? '', 10) || 0;
+          const actor    = process.env.ACTOR ?? '';
 
           let body = '';
 
