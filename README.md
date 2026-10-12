@@ -77,6 +77,7 @@ Live versions are shown by the badges at the top of this README.
 Plus:
 - [`action/`](./action) — GitHub Action for PR-based visual approvals
 - [`examples/`](./examples) — minimal real-world example projects
+  - [`examples/site-check/`](./examples/site-check) — an hourly GitHub Actions check that fails when a page is up but broken (stylesheet, script or font missing, JavaScript error, blank page), with one issue per outage. testiv.ai runs it on itself.
 - [`docs/`](./docs) — public documentation
 - [`e2e/`](./e2e) — OSS smoke E2E test suite
 

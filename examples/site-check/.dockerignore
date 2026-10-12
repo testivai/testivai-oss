@@ -1,0 +1,12 @@
+# Never sent to the build. demo/ and the test files stay in the context: the
+# test stage copies them explicitly, and the final stage only copies
+# package*.json and check.mjs, so they cannot reach the image you run.
+node_modules
+out
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+scripts
