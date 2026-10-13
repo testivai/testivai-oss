@@ -13,10 +13,14 @@
  * WHY NOT A SETTLE LOOP
  * ---------------------
  * Playwright's built-in screenshots repeatedly until two consecutive images
- * match. That costs a capture per attempt. TestivAI already absorbs render
- * jitter through the DOM/style layer (identical DOM + identical styles reads as
- * noise, not a change), so the only gap left is content that had not *loaded*
- * yet — which is a load question, not a pixel question.
+ * match. That costs a capture per attempt. TestivAI already labels render
+ * jitter through the DOM/style layer (identical DOM + identical computed styles
+ * is labeled likely render noise; the diff is still reported, and auto-passes
+ * only when a pass criterion is configured: noiseAutoPass, a
+ * maxDiffPercent / maxDiffPixels tolerance, or shiftTolerance when every
+ * region is a verified small shift), so the only gap left is
+ * content that had not *loaded* yet — which is a load question, not a pixel
+ * question.
  *
  * WHAT THIS DOES
  * --------------

@@ -87,7 +87,13 @@ export interface PassCriteria {
   maxDiffPercent?: number;
   /** Pass when changed-pixel count is at or below this. Unset = ignored. */
   maxDiffPixels?: number;
-  /** Auto-pass DOM-identical diffs (the noise hint) up to noiseMaxDiffPercent. Default false. */
+  /**
+   * Auto-pass likely render noise up to noiseMaxDiffPercent: only when the
+   * DOM is identical (dom.noiseHint) AND the computed styles were compared
+   * and match (dom.styleCheck 'match'). A diff whose styles were not
+   * compared ('unavailable' or missing) or changed ('mismatch') stays
+   * 'changed' for a human. Default false.
+   */
   noiseAutoPass?: boolean;
   /** Upper bound (diff %, 0-100) for noiseAutoPass. Default 1. */
   noiseMaxDiffPercent?: number;
@@ -191,8 +197,11 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
       // Style fingerprint: a stylesheet-only change has an identical DOM
       // but different computed styles — pixels + identical DOM used to
       // read as "likely render noise" (a documented false negative).
-      // The hint now requires the style digests to match; a mismatch is
-      // surfaced as an explicit, attributed "styles changed" signal.
+      // A mismatch clears the hint and is surfaced as an explicit,
+      // attributed "styles changed" signal. Without comparable digests
+      // (styleCheck 'unavailable') the hint stays set, but a
+      // stylesheet-only change is not ruled out: the report labels that
+      // case "styles not compared" and noiseAutoPass never passes it.
       if (domSignal) {
         const styleComparison = compareStyleHashes(baselineElements, candidateElements);
         domSignal.styleCheck = styleComparison.status;
@@ -255,7 +264,15 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
     return;
   }
 
-  if (noiseAutoPass && result.dom?.noiseHint && result.diffPercent <= noiseMaxDiffPercent) {
+  // Likely render noise: identical DOM AND computed styles compared and
+  // equal. 'unavailable' (or a missing styleCheck from older results) means
+  // a stylesheet-only change is not ruled out, so it stays for a human.
+  if (
+    noiseAutoPass &&
+    result.dom?.noiseHint === true &&
+    result.dom.styleCheck === 'match' &&
+    result.diffPercent <= noiseMaxDiffPercent
+  ) {
     result.status = 'passed';
     result.autoPassed = 'noise';
     return;
@@ -296,7 +313,9 @@ function computeDomSignal(
   return {
     changed: result.domChanged,
     summary: result.summary,
-    // The whole point: pixels differ, DOM does not → likely render noise.
+    // Provisional: pixels differ, DOM does not. compareAll() clears this on
+    // a style mismatch; with styleCheck 'unavailable' a stylesheet-only
+    // change is not ruled out, so on its own this is not "likely noise".
     noiseHint: !result.domChanged,
   };
 }

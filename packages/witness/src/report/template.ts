@@ -144,6 +144,8 @@ export function renderHtml(data: ReportData): string {
     .analysis-mcp code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; }
     .verdict { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5; font-weight: 550; margin-bottom: 8px; }
     .verdict.v-noise { background: var(--info-bg); color: var(--info); border: 1px solid var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+    /* Identical DOM, styles not compared: unknown, so a warning look (dashed = not verified), never the info-blue noise style */
+    .verdict.v-unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
     .verdict.v-style { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-structural { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
@@ -151,9 +153,10 @@ export function renderHtml(data: ReportData): string {
     .verdict.v-pass { background: var(--passed-bg); color: var(--passed); border: 1px solid color-mix(in srgb, var(--passed) 30%, transparent); }
     .verdict code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
 
-    /* DOM noise hint */
+    /* DOM / style signal */
     .dom-hint { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
     .dom-hint.noise { background: var(--info-bg); color: var(--info); }
+    .dom-hint.unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
     .dom-hint.changed { background: var(--surface); border: 1px solid var(--border-soft); color: var(--text); }
     .dom-hint.style-changed { background: var(--new-bg); color: var(--new); }
     .dom-hint.style-changed code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 11px; }
@@ -270,11 +273,12 @@ export function renderHtml(data: ReportData): string {
 
     <div class="oss-notice">
       <h4>Pixel-exact mode</h4>
-      <p>Dynamic content (images, fonts, animations) may cause false positives. The <strong>DOM unchanged</strong> hint identifies likely render noise.</p>
+      <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise; when styles were not compared, a stylesheet-only change is not ruled out.</p>
       <p>To reduce noise:<br>
-        • Raise <code>threshold</code> in <code>.testivai/config.json</code><br>
-        • Add <code>ignoreSelectors</code> for dynamic elements<br>
-        • Use <code>mode: "collapse"</code> for variable-height regions
+        • Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
+        • For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>
+        • Raise <code>threshold</code>, or set <code>maxDiffPercent</code> / <code>maxDiffPixels</code> / <code>shiftTolerance</code> in <code>.testivai/config.json</code>
       </p>
     </div>
   </aside>
@@ -431,7 +435,7 @@ function renderStats(snapshot: SnapshotResult): string {
   const parts: string[] = [];
   if (snapshot.status === 'changed' || snapshot.autoPassed) {
     parts.push(
-      `Diff: ${snapshot.diffPercent.toFixed(2)}% (${snapshot.diffCount} pixels)${snapshot.autoPassed ? ` — auto-passed: ${snapshot.autoPassed === 'noise' ? 'DOM unchanged, within noise tolerance' : snapshot.autoPassed === 'shift' ? 'pure element shifts within layout tolerance' : 'within configured diff tolerance'}` : ''}`,
+      `Diff: ${snapshot.diffPercent.toFixed(2)}% (${snapshot.diffCount} pixels)${snapshot.autoPassed ? ` — auto-passed: ${autoPassNote(snapshot)}` : ''}`,
     );
   }
   if (snapshot.baselineApprovedAt) {
@@ -442,6 +446,19 @@ function renderStats(snapshot: SnapshotResult): string {
   }
   if (parts.length === 0) return '';
   return `<div class="snapshot-stats">${parts.join(' · ')}</div>`;
+}
+
+/** Why an auto-passed snapshot passed, in the words of its criterion. */
+function autoPassNote(snapshot: SnapshotResult): string {
+  if (snapshot.autoPassed === 'noise') {
+    // noiseAutoPass requires styleCheck 'match'; results written before
+    // that rule could carry a 'noise' pass whose styles were never compared.
+    return snapshot.dom?.styleCheck === 'match'
+      ? 'DOM and computed styles unchanged, within noise tolerance'
+      : 'DOM unchanged, styles not compared, within noise tolerance';
+  }
+  if (snapshot.autoPassed === 'shift') return 'pure element shifts within layout tolerance';
+  return 'within configured diff tolerance';
 }
 
 /**
@@ -468,8 +485,14 @@ function renderAnalysis(snapshot: SnapshotResult): string {
 
 /**
  * Verdict headline: one plain-language line synthesizing the layers, in
- * priority order — style-only change (real) > page shift (injected content)
- * > structural DOM change > render noise > new snapshot > auto-pass.
+ * priority order — new snapshot > style-only change (real) > page shift
+ * (injected content) > structural DOM change > identical DOM > auto-pass.
+ *
+ * Identical DOM is only "likely render noise" when the computed styles were
+ * compared and match (styleCheck 'match'). With styleCheck 'unavailable' (or
+ * missing, in older results) styles were not compared, so a stylesheet-only
+ * change is not ruled out: that case gets its own warning, never the noise
+ * wording.
  */
 function renderVerdict(snapshot: SnapshotResult): string {
   if (snapshot.status === 'passed' && !snapshot.autoPassed) return '';
@@ -478,7 +501,9 @@ function renderVerdict(snapshot: SnapshotResult): string {
     return `<div class="verdict v-new"><span>First capture — no baseline yet. Review the image, then approve to make it the baseline.</span></div>`;
   }
 
-  if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.styleChanges) {
+  // Style-only only when the DOM is unchanged: a class or style attribute
+  // change restyles elements too, and that is a structural change below.
+  if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.styleChanges && !snapshot.dom.changed) {
     const n = snapshot.dom.styleChanges.count;
     const first = snapshot.dom.styleChanges.elements[0];
     const el = first ? `<code>${escapeHtml(first.split(' > ').slice(-1)[0])}</code>` : '';
@@ -501,7 +526,10 @@ function renderVerdict(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.dom?.noiseHint) {
-    return `<div class="verdict v-noise"><span>Likely render noise — pixels differ but the DOM${snapshot.dom.styleCheck === 'match' ? ' and computed styles are' : ' is'} identical (anti-aliasing, font hinting). Worth a glance, not a block.</span></div>`;
+    if (snapshot.dom.styleCheck === 'match') {
+      return `<div class="verdict v-noise"><span>Likely render noise — pixels differ but the DOM and computed styles are identical (anti-aliasing, font hinting). Worth a glance, not a block.</span></div>`;
+    }
+    return `<div class="verdict v-unverified"><span>Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is identical, but computed styles were not compared (no comparable style digests on both sides), so a stylesheet-only change is not ruled out. Compare the images before approving.</span></div>`;
   }
 
   if (snapshot.autoPassed) {
@@ -512,13 +540,19 @@ function renderVerdict(snapshot: SnapshotResult): string {
 }
 
 /**
- * Render the DOM noise-hint badge for a snapshot.
+ * Render the DOM / style signal badge for a snapshot.
  *
- * Two states (DOM hint is only meaningful for `changed` snapshots that
- * have DOM data captured on both sides):
- *   - noiseHint: pixels differ but DOM is unchanged → "likely render noise"
- *   - changed:   pixels and DOM both differ → show counts so the reviewer
- *                can decide whether the change is intentional
+ * Four states (the DOM signal is only computed for `changed` snapshots
+ * that have DOM data captured on both sides):
+ *   - style-changed: DOM identical, computed styles differ (styleCheck
+ *                    'mismatch') → a real change, never noise
+ *   - noise:         DOM identical, computed styles compared and identical
+ *                    (styleCheck 'match') → "likely render noise", not proof
+ *   - unverified:    DOM identical, styles not compared (styleCheck
+ *                    'unavailable', or missing in older results) → could be
+ *                    render noise or a stylesheet-only change
+ *   - changed:       pixels and DOM both differ → show counts so the
+ *                    reviewer can decide whether the change is intentional
  *
  * Returns empty string when no DOM data was captured (the adapter didn't
  * record `dom.html`); we don't want to confuse the user with "no signal".
@@ -528,30 +562,37 @@ function renderDomHint(snapshot: SnapshotResult): string {
 
   // Style fingerprint verdict: identical DOM but changed computed styles
   // is a REAL change (the stylesheet-only case) — never noise.
-  if (snapshot.dom.styleCheck === 'mismatch' && snapshot.dom.styleChanges) {
-    const els = snapshot.dom.styleChanges.elements
-      .slice(0, 3)
-      .map((p) => `<code>${escapeHtml(p.split(' > ').slice(-1)[0])}</code>`)
-      .join(', ');
-    const n = snapshot.dom.styleChanges.count;
+  const styleChanges = snapshot.dom.styleCheck === 'mismatch' ? snapshot.dom.styleChanges : undefined;
+  const restyled = styleChanges
+    ? `${styleChanges.elements
+        .slice(0, 3)
+        .map((p) => `<code>${escapeHtml(p.split(' > ').slice(-1)[0])}</code>`)
+        .join(', ')}${styleChanges.count > 3 ? ', …' : ''}`
+    : '';
+  if (styleChanges && !snapshot.dom.changed) {
+    const els = restyled;
+    const n = styleChanges.count;
     return `
       <div class="dom-hint style-changed" title="DOM structure is identical but computed styles differ — a stylesheet-level change, not render noise.">
         <span class="label">Styles changed</span>
-        <span class="summary">— ${n} element${n === 1 ? '' : 's'} restyled with identical DOM: ${els}${n > 3 ? ', …' : ''}.</span>
+        <span class="summary">— ${n} element${n === 1 ? '' : 's'} restyled with identical DOM: ${els}.</span>
       </div>`;
   }
 
   if (snapshot.dom.noiseHint) {
-    const styleNote =
-      snapshot.dom.styleCheck === 'match'
-        ? ' Styles verified unchanged.'
-        : snapshot.dom.styleCheck === 'unavailable'
-          ? ' (Style check unavailable — no comparable style digests on both sides.)'
-          : '';
-    return `
-      <div class="dom-hint noise" title="DOM tree is identical between baseline and candidate; the pixel diff is likely render noise.">
+    if (snapshot.dom.styleCheck === 'match') {
+      return `
+      <div class="dom-hint noise" title="DOM tree and computed styles are identical between baseline and candidate; the pixel diff is likely render noise.">
         <span class="label">DOM unchanged</span>
-        <span class="summary">— pixel diff is likely render noise (anti-aliasing, font hinting).${styleNote}</span>
+        <span class="summary">— pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.</span>
+      </div>`;
+    }
+    // 'unavailable', or no styleCheck at all (results from before the style
+    // check): the DOM alone cannot tell render noise from a stylesheet change.
+    return `
+      <div class="dom-hint unverified" title="DOM tree is identical between baseline and candidate, but computed styles were not compared, so a stylesheet-only change is not ruled out.">
+        <span class="label">DOM unchanged, styles not compared</span>
+        <span class="summary">— could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.</span>
       </div>`;
   }
 
@@ -562,10 +603,15 @@ function renderDomHint(snapshot: SnapshotResult): string {
   if (s.removed > 0) parts.push(`${s.removed} removed`);
   if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute change${s.attributeChanges === 1 ? '' : 's'}`);
   if (s.textChanges) parts.push(`${s.textChanges} text change${s.textChanges === 1 ? '' : 's'}`);
+  // A DOM change can restyle elements too (a class or style attribute):
+  // name them, without calling the DOM identical.
+  const alsoRestyled = styleChanges
+    ? ` Computed styles also changed on ${styleChanges.count} element${styleChanges.count === 1 ? '' : 's'}: ${restyled}.`
+    : '';
   return `
     <div class="dom-hint changed" title="Structural DOM changes detected alongside the pixel diff.">
       <span class="label">DOM changed</span>
-      <span class="summary">— ${escapeHtml(parts.join(', ') || 'structural difference')}.</span>
+      <span class="summary">— ${escapeHtml(parts.join(', ') || 'structural difference')}.${alsoRestyled}</span>
     </div>`;
 }
 

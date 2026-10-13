@@ -18,8 +18,10 @@ waiting to appear.
 
 It exists because visual regression tools kept failing the same way: a diff says
 *0.4% of pixels changed* and you're left squinting at two screenshots trying to
-work out whether it matters. Pairing every screenshot with the DOM and computed
-styles turns that into an answer.
+work out whether it matters. Pairing the screenshot with the DOM and, from most
+adapters, each element's computed styles turns that into a reading you can act
+on: a structural change, a style-only change, likely render noise, or styles not
+compared.
 
 ## Release cadence
 

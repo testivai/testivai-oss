@@ -80,12 +80,13 @@ pnpm release          # publish to npm (CI only — requires NPM_TOKEN)
 ```
 User test
   → witness(page, testInfo, 'name')
-  → @testivai/witness-playwright  captures screenshot + DOM snapshot
+  → @testivai/witness-playwright  captures screenshot + DOM snapshot + element map
   → @testivai/witness BaselineStore
-      first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, metadata.json}
+      first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, elements.json, metadata.json}
       later runs → writes .testivai/temp/<name>/...
                    pixel-diffs baseline vs temp
                    DOM-diffs baseline.dom.html vs temp.dom.html
+                   compares element maps: style check, attribution, page shift
   → reporter writes visual-report/results.json + visual-report/index.html
 
 CI — GitHub Actions
@@ -161,11 +162,13 @@ CI — GitHub Actions
     <name>/
       screenshot.png             committed reference screenshot
       dom.html                   committed DOM snapshot
+      elements.json              element map (boxes + computed-style digests); optional
       metadata.json              { name, timestamp, viewport, ... }
   temp/                          gitignored — current run artifacts
     <name>/
       screenshot.png
       dom.html
+      elements.json
       metadata.json
 ```
 
@@ -179,7 +182,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 {
   "version": "2.3.0",
   "timestamp": "<ISO>",
-  "summary": { "total": 3, "passed": 0, "changed": 3, "newSnapshots": 0, "missing": 1 },
+  "summary": { "total": 2, "passed": 1, "changed": 1, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
   "snapshots": [
     {
@@ -192,21 +195,39 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
       "baselineApprovedAt": "<ISO>",
       "dom": {
         "changed":   false,
-        "noiseHint": true,
+        "noiseHint": false,
         "summary":   null,
         "styleCheck":   "mismatch",
-        "styleChanges": []
+        "styleChanges": { "count": 1, "elements": [".hero > h1"] }
       },
       "regions":   [{ "x": 10, "y": 20, "width": 100, "height": 40,
+                      "classification": "change",
+                      "elements": [{ "selector": ".hero > h1", "role": "changed" }] },
+                    { "x": 0, "y": 120, "width": 1280, "height": 640,
                       "classification": "shift", "shift": { "dx": 0, "dy": -1 },
-                      "elements": [{ "selector": ".hero > h1", "role": "shifted" }] }],
+                      "elements": [{ "selector": "main", "role": "shifted" }] }],
       "pageShift": { "dy": -1, "belowY": 120, "count": 4 },
-      "masks": [], "maskWarnings": [],
+      "masks": [], "maskWarnings": []
+    },
+    {
+      "name": "footer",
+      "status": "passed",
+      "diffPercent": 0.3,
+      "diffPath":  "images/footer/diff.png",
+      "dom": { "changed": false, "noiseHint": true, "summary": null, "styleCheck": "match" },
       "autoPassed": "noise"
     }
   ]
 }
 ```
+
+When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
+`"match"` → likely render noise (not proof); `"mismatch"` → a real style-only change
+(`noiseHint` is then false); `"unavailable"`, or absent in older results → styles not
+compared, so a stylesheet-only change is not ruled out: never word it as noise.
+`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case (`noiseHint`
+true AND `styleCheck: "match"`, within `noiseMaxDiffPercent`), and `autoPassed` always
+comes with `status: "passed"`.
 
 Breaking changes to this schema require a major version bump on `@testivai/witness`.
 

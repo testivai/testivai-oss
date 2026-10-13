@@ -60,8 +60,10 @@ With the server added, a visual review happens in the conversation:
 2. Type `/testivai:review-visual-changes` (`/mcp__testivai__review-visual-changes`
    also works), or just ask *"what changed visually?"*. Claude reads the
    verdicts, calls `explain_snapshot` for each change, looks at the diff images
-   with `get_diff` when the evidence is ambiguous, and recommends approve,
-   investigate, or ignore-as-noise for each snapshot.
+   with `get_diff` when the evidence is ambiguous (always when the styles were
+   not compared), and recommends approve, investigate, or likely noise for
+   each snapshot. "Likely noise" is only for an identical DOM whose computed
+   styles were compared and match.
 3. To accept a change, say so: *"approve home"*. Claude calls
    `approve_snapshot`, and Claude Code shows its permission prompt for that
    call. Answer **Yes** to approve it, or **No** to keep the current baseline.
@@ -224,7 +226,8 @@ order (a snapshot joins at most one group):
 |---|---|---|
 | Style-only change | identical DOM and **exactly the same set of restyled elements** | whether the new style values are the same: the grouping is on which elements changed style |
 | Page shift | the same displacement: identical `dy` and `belowY` | whether the same content caused it |
-| Render noise | the noise hint, split by whether the computed styles were compared (`styleCheck: "match"`) or not | anything the DOM and style signals don't cover |
+| Styles not compared | identical DOM, styles not compared (`styleCheck: "unavailable"`, or no style check in older results; the two are grouped apart). Labelled *render noise or a stylesheet-only change, not ruled out*, never labelled noise | which of the two it is: compare the images |
+| Likely render noise | identical DOM and the computed styles compared and identical (`styleCheck: "match"`) | anything the DOM and style signals don't cover |
 
 It never groups structural DOM changes, snapshots without DOM data, or
 style-only changes with more than 10 restyled elements (witness lists only
@@ -273,7 +276,8 @@ If your agent isn't MCP-capable, paste into `AGENTS.md` / `CLAUDE.md` /
 After changing UI code, run the visual tests, then read visual-report/results.json:
 - status "changed" + dom.changed true → real structural change; compare against intent
 - status "changed" + dom.styleCheck "mismatch" → style-only change; real, not noise
-- status "changed" + dom.noiseHint true → likely render noise; mention, don't block
+- status "changed" + dom.noiseHint true + dom.styleCheck "match" → likely render noise; mention, don't block
+- status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
 - status "new" → no baseline yet; tell the human
 Never run `testivai approve` yourself — approval is a human decision.
 ```

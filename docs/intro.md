@@ -50,13 +50,13 @@ Optional tolerance and capture settings (all have safe defaults):
 |---|---|---|
 | `maxDiffPercent` | `0` | Diffs at or below this percentage report as **passed** — your team's tolerance dial |
 | `maxDiffPixels` | unset | Absolute variant: pass when changed-pixel count is at or below this |
-| `noiseAutoPass` | `false` | Auto-pass diffs whose DOM is structurally identical (the noise hint), up to `noiseMaxDiffPercent` |
+| `noiseAutoPass` | `false` | Auto-pass likely render noise, up to `noiseMaxDiffPercent`: only diffs whose DOM is structurally identical (`dom.noiseHint`) **and** whose computed styles were compared and match (`dom.styleCheck: "match"`). It never passes a diff whose styles were not compared (`"unavailable"`) or changed (`"mismatch"`). **Changed in this release:** `@testivai/witness` 2.1.1 and earlier also passed diffs whose styles were not compared |
 | `noiseMaxDiffPercent` | `1` | Upper bound (diff %) for `noiseAutoPass` |
 | `stabilize` | `true` | Freeze animations/transitions, hide the caret, and wait for web fonts before every capture |
 | `ignoreSelectors` | `[]` | Elements hidden (`visibility: hidden`) during capture — timestamps, ads, live widgets |
 | `mask` | `[]` | Areas excluded from the pixel diff and hatched in the report — selectors or geometric regions ([details](./comparison.md)) |
-| `diffRegions` | `{minSize: 10, mergeDistance: 12}` | Diff clustering tunables: noise floor + merge gap ([details](./comparison.md)) |
-| `shiftTolerance` | unset | Pass diffs that are pure vertical shifts up to N pixels — content moved, nothing changed |
+| `diffRegions` | `{minSize: 10, mergeDistance: 12}` | Diff clustering tunables: smallest listed region + merge gap ([details](./comparison.md)) |
+| `shiftTolerance` | unset | Pass diffs where every changed region is a pure element shift of at most N px per axis — content moved, nothing changed (needs element maps on both sides) |
 | `volatileAttributes` | `[]` | Attributes whose *value* is ignored by the DOM diff (presence still counts) |
 | `mcpApprovalPrompt` | `true` | [`@testivai/mcp`](./mcp.md#turning-the-approval-prompt-off): the approve tools ask a person on every call. `false` lets them follow your client's own permission settings |
 | `baselinesDir` | `.testivai/baselines` | Where baselines live; supports a `{platform}` token for per-OS baselines |
@@ -69,7 +69,7 @@ Crawler-only fields, used by `testivai witness <url>`: `pages`, `maxPages` (defa
 The full list with types lives in `LocalConfig` — see
 [`packages/witness/src/config/local-config.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/witness/src/config/local-config.ts).
 
-Auto-passed snapshots keep their diff image and are labeled in the report and in `results.json` (`autoPassed: "threshold" | "noise" | "shift"`), so tolerance never hides information — it just stops demanding review for changes you've declared acceptable.
+Nothing auto-passes until you set one of these criteria. Auto-passed snapshots keep their diff image and are labeled in the report and in `results.json` (`autoPassed: "threshold" | "noise" | "shift"`), so tolerance never hides information — it just stops demanding review for changes you've declared acceptable.
 
 ### 3. Add the reporter
 

@@ -10,9 +10,12 @@
  *
  *   "When pixels differ, is the underlying DOM also different?"
  *
- * If pixels differ but DOM is unchanged, the difference is almost certainly
- * render noise (font rendering, anti-aliasing, sub-pixel layout). The HTML
- * report uses this as a noise hint.
+ * If pixels differ but the DOM is unchanged, the cause is either render
+ * noise (font rendering, anti-aliasing, sub-pixel layout) or a
+ * stylesheet-only change, which this differ cannot see (style bodies are
+ * opaque). The report pairs it with the computed-style check: only an
+ * unchanged DOM with styleCheck 'match' reads as likely render noise; with
+ * 'unavailable' a stylesheet-only change is not ruled out.
  *
  * Approach (zero-dep, ~120 LOC of tokenizer):
  *   1. Stream-tokenize each HTML into a flat list of open events
@@ -30,8 +33,11 @@
  *     normally produce identical token lists.
  *   - Visible text nodes ARE tokenized (normalized whitespace) — a text
  *     edit is the most common real UI change and must never read as
- *     "structurally identical". Script/style bodies stay opaque. What
- *     pixels are for — we don't want to flag every dynamic timestamp.
+ *     "structurally identical". Script/style bodies stay opaque, so a
+ *     stylesheet-only change is invisible here (the computed-style check
+ *     covers that). Dynamic text such as a timestamp DOES count as a text
+ *     change; exclude it with ignoreSelectors (the adapters strip those
+ *     elements from dom.html). A pixel mask does not hide it from this diff.
  *   - Comments and processing instructions are ignored.
  *
  * Self-closing void elements per HTML spec are handled.

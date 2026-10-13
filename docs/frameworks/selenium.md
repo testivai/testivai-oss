@@ -107,7 +107,8 @@ framework you use, the other's dependency is never loaded.
   multi-browser runs keep separate baselines.
 - `stabilize` — animation freeze + caret hide + font wait (default on, the
   top flake killers).
-- `skipDom` — pixel diff only, no noise hint.
+- `skipDom` — no DOM snapshot: no DOM diff, noise hint or style check (the
+  element map still drives region attribution).
 
 ## C#, Ruby, and everything else
 
@@ -117,7 +118,9 @@ debug port), or write the two files of the
 [on-disk contract](../extension-api.md) directly:
 `.testivai/temp/<name>/screenshot.png` (+ optional `dom.html`), then shell
 out to `testivai report`. That contract is the entire adapter API — the
-Python adapter is ~200 lines if you want a template.
+Python adapter is ~200 lines if you want a template. Without the optional
+element map (`elements.json`), computed styles are not compared, so an
+identical-DOM diff reads *styles not compared* rather than likely noise.
 
 ## Working examples
 

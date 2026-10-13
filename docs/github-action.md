@@ -126,6 +126,14 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 </details>
 
 <details>
+<summary>landing — 0.3% different</summary>
+
+> **DOM unchanged, styles not compared** — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.
+
+/testivai approve landing
+</details>
+
+<details>
 <summary>nav-redesign — 8.5% different</summary>
 
 > DOM changed — 2 added, 1 attribute change.
@@ -134,7 +142,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 </details>
 ```
 
-The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline and no computed-style change was found, the comment surfaces "likely render noise" so reviewers can dismiss false positives faster. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, it shows added / removed / attribute-change counts.
+The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline and the computed styles were compared and match, the comment says "likely render noise" (likely, not proven) so reviewers can triage it faster. When only the computed styles changed, it flags a style-only change, which is real. When the DOM is identical but the styles were not compared (no comparable style digests on both sides, as with `testivai witness <url>` captures), it says **DOM unchanged, styles not compared**: render noise and a stylesheet-only change are both still possible, so compare the images before approving. When the DOM also differs, it shows added / removed / attribute-change counts.
 
 ### Commit status
 

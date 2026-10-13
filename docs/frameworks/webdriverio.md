@@ -86,7 +86,7 @@ describe('Homepage', () => {
 });
 ```
 
-The capture function calls `browser.takeScreenshot()` (full-page screenshot via the WebDriver protocol) and `browser.execute(() => document.documentElement.outerHTML)` (page DOM for the noise-hint signal).
+The capture function calls `browser.takeScreenshot()` (a viewport screenshot via the WebDriver protocol), then calls `browser.execute()` for the page DOM (the DOM diff and noise hint) and for the element map (each element's box and computed-style digest, which powers the style check, region attribution and page-shift detection).
 
 ---
 
@@ -123,13 +123,15 @@ Approved snapshots overwrite the baseline; the previous baseline is backed up to
 
 ## Pixel + DOM comparison
 
-Each snapshot stores both the screenshot and the page DOM. When the report compares them:
+Each snapshot stores the screenshot, the page DOM and an element map (computed-style digests). When the report compares them:
 
 - **Pixels match** → `passed`
-- **Pixels differ, DOM matches** → `changed` with a "DOM unchanged — likely render noise" hint
+- **Pixels differ, DOM and computed styles match** → `changed` with a "DOM unchanged — likely render noise. Styles verified unchanged." hint
+- **Pixels differ, DOM matches, computed styles differ** → `changed` with "Styles changed" and the restyled elements: a real style-only change, never noise
+- **Pixels differ, DOM matches, styles not compared** (no element map on one side, e.g. `skipElementMap` or a baseline captured without one) → `changed` with "DOM unchanged, styles not compared": could be render noise or a stylesheet-only change, so compare the images
 - **Pixels differ, DOM differs** → `changed` with a count of added / removed / attribute changes
 
-The same hint appears in PR comments via the TestivAI GitHub Action.
+None of these auto-passes unless you configure a pass criterion (`maxDiffPercent`, `maxDiffPixels`, `noiseAutoPass`, `shiftTolerance`); `noiseAutoPass` only ever passes the "styles verified unchanged" case. The same hints appear in PR comments via the TestivAI GitHub Action.
 
 To skip DOM capture for a single snapshot (rare — useful only when DOM serialization is slow on a particular page):
 

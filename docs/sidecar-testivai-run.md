@@ -16,7 +16,7 @@ The `testivai run` sidecar is experimental in this iteration. Use it as a fallba
 1. Spawns your test command (`cypress run`, `wdio`, `pytest`, etc.) as a child process
 2. Polls Chrome's remote debugging port (`--remote-debugging-port=9222`) until it appears
 3. Attaches over CDP and injects a `window.testivaiWitness()` global into every page
-4. When your tests call `window.testivaiWitness('name')` (via a small per-framework helper), the sidecar captures a screenshot + DOM and writes them to `.testivai/temp/<name>/`
+4. When your tests call `window.testivaiWitness('name')` (via a small per-framework helper), the sidecar captures a screenshot over CDP. It captures no DOM snapshot and no element map, so these snapshots could get at most a pixel diff: no DOM diff, noise hint, style check or selector attribution. Known gap: the current sidecar keeps these screenshots in memory and does not write them to `.testivai/temp/<name>/`, so the report it generates covers only captures already on disk
 5. After the test process exits, the sidecar finalizes: it runs `compareAll` and `generateReport`
 
 It's the universal fallback for frameworks where TestivAI doesn't ship a dedicated adapter package.
@@ -42,7 +42,7 @@ The sidecar polls port 9222 for up to 60 seconds waiting for Chrome to appear. I
 
 ### 3. Multiple Chrome targets
 
-A single Chrome process can have many tabs and iframes. The sidecar has to pick the right one. Cypress historically runs your tests inside an iframe inside a Cypress harness page — choose the wrong target and you capture the wrong DOM.
+A single Chrome process can have many tabs and iframes. The sidecar has to pick the right one. Cypress historically runs your tests inside an iframe inside a Cypress harness page — choose the wrong target and you capture the wrong page.
 
 ## When to use it anyway
 

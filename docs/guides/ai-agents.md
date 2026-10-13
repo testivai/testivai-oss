@@ -22,7 +22,8 @@ Why this works well for agents, structurally:
   judgment. Same answer every run, no tokens spent on unchanged pages.
 - **Machine-readable** — every run writes `visual-report/results.json`
   (semver-governed schema) with per-snapshot diff percentages, DOM change
-  summaries (including `textChanges`), and noise hints.
+  summaries (including `textChanges`), computed-style checks, and noise
+  hints.
 
 There are three integration levels. Use the highest one your setup supports.
 
@@ -44,8 +45,17 @@ Then read `visual-report/results.json` and act on each snapshot:
   `dom.summary` (added/removed elements, attribute changes, text changes)
   against what you intended. If you did not intend it, fix your code and
   re-run. If intended, report it to the human.
-- `status: "changed"` with `dom.noiseHint: true` → likely render noise
-  (font hinting, anti-aliasing); mention it, don't block.
+- `status: "changed"` with `dom.styleCheck: "mismatch"` → a style-only
+  change; real, not noise. Compare `dom.styleChanges` (the restyled
+  elements) against what you intended.
+- `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck:
+  "match"` → likely render noise (font hinting, anti-aliasing); mention it,
+  don't block.
+- `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck`
+  `"unavailable"` or missing (always the case for `testivai witness <url>`)
+  → styles not compared: could be render noise or a stylesheet-only change.
+  Do not call it noise; look at the diff image and check it against your
+  edit before reporting it.
 - `status: "new"` → new page/snapshot; tell the human baselines need
   approving.
 - Never run `testivai approve` yourself — baseline approval is a human
@@ -87,7 +97,7 @@ claude mcp add testivai -- npx -y @testivai/mcp
 | `approve_snapshot` | Promote one confirmed snapshot to its committed baseline |
 | `approve_all` | Promote every pending snapshot (only after review) |
 
-The server also ships a prompt, **`review-visual-changes`**, that walks the agent through a full review: summary → `explain_snapshot` per change → diff images when ambiguous → a per-snapshot recommendation (approve / investigate / ignore-as-noise). Your model does the reasoning; the server supplies the evidence — so the quality of the narrative scales with the model you already use, no hosted analysis service required.
+The server also ships a prompt, **`review-visual-changes`**, that walks the agent through a full review: summary → `explain_snapshot` per change → diff images when ambiguous (always when the styles were not compared) → a per-snapshot recommendation (approve once the human confirms / investigate / likely noise, the last only when the DOM and computed styles both match). Your model does the reasoning; the server supplies the evidence — so the quality of the narrative scales with the model you already use, no hosted analysis service required.
 
 The server reads the project from its working directory (`--root <path>` to
 override) and honors `reportDir` from `.testivai/config.json`. The approve
@@ -105,7 +115,10 @@ npx testivai witness http://localhost:3000
 ```
 
 captures every page (crawled, or `--pages "/,/pricing"`), diffs against
-baselines, and writes the same report + `results.json`. See the
+baselines, and writes the same report + `results.json`. It captures the
+screenshot and the DOM but no element map, so computed styles are not
+compared (`dom.styleCheck: "unavailable"`): an identical-DOM diff there is
+*styles not compared*, never likely noise. See the
 [vibe-coded apps guide](./vibe-coded-apps.md) for the CI workflow.
 
 ---
@@ -183,17 +196,21 @@ consequences — the design pushes the other way on purpose.
 ```jsonc
 // .testivai/config.json
 {
-  "stabilize": true,          // default — freezes the flake sources
-  "noiseAutoPass": true,      // DOM-identical micro-diffs stop demanding attention
+  "stabilize": true,          // default — freezes animations, hides the caret, awaits fonts
+  "noiseAutoPass": true,      // micro-diffs with identical DOM AND matching computed styles stop demanding attention
   "noiseMaxDiffPercent": 1,
   "ignoreSelectors": [".live-feed", "[data-clock]"]  // your dynamic regions
 }
 ```
 
-- `noiseAutoPass` keeps agent loops quiet: cross-run render jitter passes
-  (labeled `autoPassed: "noise"` in results.json — never hidden). Text and
-  structural changes always surface: the DOM diff tokenizes visible text
-  precisely so wording edits can't slip through this gate.
+- `noiseAutoPass` keeps agent loops quiet: a diff passes as noise only when
+  the DOM is identical and the computed styles were compared and match
+  (labeled `autoPassed: "noise"` in results.json — never hidden). It never
+  passes text, structural or style-only changes: the DOM diff tokenizes
+  visible text precisely so wording edits can't slip through this gate, and
+  a style mismatch is never noise. It never passes a diff whose styles were
+  not compared either, so with `testivai witness <url>` (no element map)
+  this setting passes nothing.
 - `ignoreSelectors` excludes dynamic elements from **both** the pixels and
   the DOM/text signal.
 

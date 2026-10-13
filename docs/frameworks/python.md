@@ -62,7 +62,7 @@ witness(page, "homepage")
 run_report()          # or fail_on_diff=True for CI gating
 ```
 
-## Capture semantics (identical to the JS adapters)
+## Capture semantics
 
 - **Stabilized by default**: animations/transitions complete instantly at
   their final state, caret hidden, web fonts awaited (bounded 10s). Override
@@ -72,6 +72,16 @@ run_report()          # or fail_on_diff=True for CI gating
   are excluded from both the pixel diff and the DOM/text signal.
 - **`variant="firefox"`** → snapshot `homepage__firefox`; parallel
   browsers/viewports never overwrite each other's baselines.
+
+These match the JS adapters. One difference: the playwright-python
+`witness()` writes `screenshot.png` and `dom.html` but no element map
+(`elements.json`). Its snapshots therefore get no style check
+(`styleCheck: "unavailable"`), no selector attribution and no page-shift
+detection. When pixels differ and the DOM is identical, the report says
+*styles not compared* — could be render noise or a stylesheet-only change —
+rather than likely noise, and `noiseAutoPass` never passes it. The Selenium
+path (`testivai.selenium`) records the element map and gets the full
+analysis.
 
 ## Configuration
 

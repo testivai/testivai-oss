@@ -88,16 +88,22 @@ export interface LocalConfig {
    */
   maxDiffPixels?: number;
   /**
-   * Auto-pass render noise: when true, a snapshot whose pixels differ but
-   * whose DOM is structurally identical (the noise hint) is reported as
-   * passed — provided its diff percentage is at or below
-   * noiseMaxDiffPercent. Auto-passed snapshots keep their diff image and
-   * are labeled in the report. Default: false (hint stays a label).
+   * Auto-pass likely render noise: when true, a snapshot whose pixels
+   * differ is reported as passed (autoPassed 'noise') only when its DOM is
+   * structurally identical (dom.noiseHint) AND its computed styles were
+   * compared and are identical (dom.styleCheck 'match'), and its diff
+   * percentage is at or below noiseMaxDiffPercent. It never passes a diff
+   * whose styles were not compared (styleCheck 'unavailable': no element
+   * map, as with `testivai witness <url>` or `testivai run`, or no
+   * comparable style digests) or changed (styleCheck 'mismatch'): those
+   * stay changed for a human. Auto-passed snapshots keep their diff image
+   * and are labeled in the report. Default: false (the hint stays a label).
    */
   noiseAutoPass: boolean;
   /**
-   * Upper bound (diff %, 0-100) for noiseAutoPass. A DOM-identical diff
-   * larger than this still shows as changed. Default: 1.
+   * Upper bound (diff %, 0-100) for noiseAutoPass. A diff with identical
+   * DOM and computed styles that is larger than this still shows as
+   * changed. Default: 1.
    */
   noiseMaxDiffPercent: number;
   /**
