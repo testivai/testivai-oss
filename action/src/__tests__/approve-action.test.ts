@@ -69,6 +69,31 @@ describe('no step splices an expression into script source', () => {
   );
 });
 
+// The arguments actions/github-script@v9 passes to a script (its src/main.ts).
+// v9 added getOctokit; a script that redeclares one of these with const or let
+// is a SyntaxError and the step fails before it runs.
+const GITHUB_SCRIPT_V9_ARGS = [
+  'require',
+  '__original_require__',
+  'github',
+  'octokit',
+  'getOctokit',
+  'context',
+  'core',
+  'exec',
+  'glob',
+  'io',
+];
+
+describe('every github-script step compiles with the arguments github-script@v9 passes', () => {
+  it.each(
+    steps.filter((s) => s.uses?.startsWith('actions/github-script@')).map((s) => [s.name ?? '(unnamed)', s] as const),
+  )('%s', (_name, s) => {
+    const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+    expect(() => new AsyncFunction(...GITHUB_SCRIPT_V9_ARGS, s.with!.script)).not.toThrow();
+  });
+});
+
 describe('Apply baseline approvals', () => {
   const apply = step('Apply baseline approvals');
 

@@ -48,7 +48,7 @@ outputs:
     description: 'ID of the uploaded artifact (empty if upload-artifact is false)'
 
 runs:
-  using: 'node20'
+  using: 'node24'
   # action.yml lives at the repo root because GitHub Marketplace only
   # auto-lists actions whose metadata file is at root:
   # https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace
