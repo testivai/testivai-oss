@@ -122,6 +122,8 @@ Python adapter is ~200 lines if you want a template.
 ## Working examples
 
 The [example repo](https://github.com/testivai/testivai-example) is a
-complete, minimal consumer project — a static page, three `witness()` calls,
-the PR `/testivai approve` flow, and a
+complete, minimal consumer project — a three-page static site with one
+`witness()` snapshot per page, the PR `/testivai approve` flow, and a
 [live report](https://testivai.github.io/testivai-example/) published from CI.
+Its demo changes each page a different way and gets three different verdicts:
+style-only (`buttons`), layout shift (`home`) and structural (`products`).

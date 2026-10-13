@@ -259,7 +259,7 @@ Changed Snapshots
 
 ## Real-World Example
 
-A complete, minimal consumer project lives at [`testivai-example`](https://github.com/testivai/testivai-example): a static page, three `witness()` calls, the PR `/testivai approve` flow, and a [live report on Pages](https://testivai.github.io/testivai-example/) — all against the published packages.
+A complete, minimal consumer project lives at [`testivai-example`](https://github.com/testivai/testivai-example): a three-page static site with one `witness()` snapshot per page, the PR `/testivai approve` flow, and a [live report on Pages](https://testivai.github.io/testivai-example/) — all against the published packages. Its demo changes each page a different way and gets three different verdicts: style-only (`buttons`), layout shift (`home`) and structural (`products`).
 
 ## Repository Layout
 

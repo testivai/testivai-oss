@@ -118,80 +118,123 @@ ambiguous → a per-snapshot recommendation.
 
 ## What `explain_snapshot` actually returns
 
-Real output, not a mock. The scenario: a designer changes one CSS custom
-property — `--brand` from `#0e7490` to `#1f6feb` — in the
-[example project](https://github.com/testivai/testivai-example). No markup
+Real output, not a mock, from the demo in the
+[example project](https://github.com/testivai/testivai-example): `npm run demo`
+applies one change to each of its three pages, and
+`npx -y @testivai/mcp --root .demo` serves the results. On the `buttons` page
+the change is CSS only: every `.btn` becomes pill-shaped
+(`border-radius: 999px`) and `.btn-primary` turns violet (`#7c3aed`). No markup
 changes at all.
 
 The one-line verdict:
 
 ```text
-changed (1.13% pixels differ) — style-only change: 6 elements restyled with
-identical DOM (body > header, body > main > section:nth-of-type(2) > div.row >
-button.btn:nth-of-type(1), …); a real change, not noise — confirm it is
-intended before approving
+changed (2.33% pixels differ) — style-only change: 8 elements restyled with
+identical DOM (body > main > section:nth-of-type(1) > div.row:nth-of-type(1) >
+button.btn:nth-of-type(1), body > main > section:nth-of-type(1) >
+div.row:nth-of-type(1) > button.btn:nth-of-type(2), body > main >
+section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(3), …);
+a real change, not noise — confirm it is intended before approving
 ```
 
-The evidence behind it:
+The evidence behind it, trimmed: the repeated verdict, three of the five
+regions and the `changedSelectors` list are left out, and percentages are
+rounded.
 
 ```jsonc
 {
-  "name": "home",
+  "name": "buttons",
   "status": "changed",
   "layers": {
     "pixel": {
-      "diffPercent": 1.13,
+      "diffPercent": 2.33,
       "regionCount": 5,
       "regions": [
         {
-          "x": 0, "y": 0, "width": 98, "height": 165,
-          "diffPixels": 8109, "diffPercent": 50.15,
-          "classification": "change",
+          "x": 234, "y": 299, "width": 269, "height": 47,
+          "diffPixels": 9082, "diffPercent": 71.83,
           "elements": [
-            { "selector": "body > header > p", "role": "changed" },
-            { "selector": "body > header",     "role": "changed" }
-          ]
+            { "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(2)",
+              "role": "changed" },
+            { "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2)", "role": "changed" },
+            { "selector": "body > main > section:nth-of-type(1)", "role": "changed" }
+          ],
+          "classification": "change"
         },
         {
-          "x": 234, "y": 438, "width": 116, "height": 38,
-          "diffPixels": 3839, "diffPercent": 87.09,
-          "classification": "change",
+          "x": 585, "y": 246, "width": 137, "height": 39,
+          "diffPixels": 3943, "diffPercent": 73.8,
           "elements": [
-            { "selector": "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
-              "role": "changed" }
-          ]
+            { "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(4)",
+              "role": "changed" },
+            { "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1)", "role": "changed" },
+            { "selector": "body > main > section:nth-of-type(1)", "role": "changed" }
+          ],
+          "classification": "change"
         }
-        // … 3 more regions
+        // … 3 more regions: buttons 1 and 3 of the first row, and the signup
+        // form's button.btn
       ]
+    },
+    "element": {
+      "pageShift": null,
+      "shiftedSelectors": [],
+      "changedSelectors": [ /* the 10 selectors named in the regions */ ]
     },
     "dom": {
       "changed": false,
+      "summary": null,
       "noiseHint": false,
       "styleCheck": "mismatch",
       "styleChanges": {
-        "count": 6,
+        "count": 8,
         "elements": [
-          "body > header",
-          "body > main > section:nth-of-type(2) > div.row > button.btn:nth-of-type(1)",
-          "body > main > section:nth-of-type(3) > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > div.price"
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(1)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(2)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(3)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(4)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(1)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(2)",
+          "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(3)",
+          "body > main > section:nth-of-type(2) > form.signup > button.btn"
         ]
       }
     }
   },
   "guidance": [
-    "Computed styles changed on 6 element(s) … while the DOM stayed identical — a stylesheet-only change. This is REAL, not noise.",
+    "Computed styles changed on 8 element(s) (…) while the DOM stayed identical — a stylesheet-only change. This is REAL, not noise.",
     "Baseline approval is a human decision: propose, do not auto-approve."
   ]
 }
 ```
 
-Read what that gives a model that a pixel percentage doesn't. `1.13% of pixels
-differ` is unactionable. This says: nothing structural changed, six specific
-elements were restyled, and the affected selectors are the header, the primary
-buttons, and the price labels on every card — which is exactly the blast radius
-of a brand-colour token. A model can now tell you *"you changed the brand token;
-it hit the header, the primary buttons and the card prices — intended?"* rather
-than *"something moved."*
+Read what that gives a model that a pixel percentage doesn't. `2.33% of pixels
+differ` is unactionable. This says: nothing structural changed, eight specific
+elements were restyled, and every one of them is a `button.btn` — the seven in
+the button rows and the one in the newsletter signup form — which is exactly
+the blast radius of an edit to the shared `.btn` rule. A model can now tell you
+*"you changed the button styles; every button on the page picked it up, the
+signup form's included — intended?"* rather than *"something moved."*
+
+The demo's other two pages exercise the other layers. On `products`, where one
+card is dropped from the grid, the verdict is a real structural change
+(`0 added, 6 removed, 0 attribute changes, 2 text changes`) with no page shift.
+On `home`, a promo banner is inserted above the content. The one-line verdict
+calls that structural too, since the banner is a new DOM node, and
+`explain_snapshot` adds where to look:
+
+```text
+Everything at or below y=203 moved down by 73px (25 elements together) — the
+signature of content inserted or removed above that line. Look there for the
+root cause, not at the moved elements.
+```
+
+Captured from the example at
+[`f8fe0cb`](https://github.com/testivai/testivai-example/commit/f8fe0cb) on
+Linux with Chromium 141. On another OS, font set or browser build the pixel
+numbers (percentages, region boxes) can differ slightly; the restyled
+elements, the DOM summary and the kind of change come from the DOM and
+computed styles, not from pixels.
 
 ## What the model adds (and what it doesn't)
 
@@ -209,7 +252,7 @@ report.
 
 | | |
 |---|---|
-| **Intent** | The tool says *six elements restyled, DOM identical, here are the selectors*. A model that can see your diff says *you changed the brand token; it reached the header, the primary buttons and every card price*. It connects the change to the edit you just made. |
+| **Intent** | The tool says *eight elements restyled, DOM identical, here are the selectors*. A model that can see your diff says *you changed the shared `.btn` rule; it reached every button on the page, the signup form's included*. It connects the change to the edit you just made. |
 | **Triage** | Thirty changed snapshots is a reading task. The server already groups what is decidable ([below](#what-the-server-groups)); a model goes further — *these twenty-eight are the same token change, these two are something else* — by connecting different restyled elements on different pages to one edit, and puts the two in front of you first. |
 | **Explanation** | Turning the evidence into a sentence a reviewer understands, in a PR comment or in your editor. |
 | **Self-correction** | An agent that just edited the UI can check whether it changed anything it didn't intend, and fix it before you ever see it. |
