@@ -304,6 +304,9 @@ const clean = (s: string, max: number): string => {
     .replace(/\]\(/g, '] (')
     .replace(/!\[/g, '! [')
     .replace(/\r?\n+/g, ' ')
+    // Backslashes first: otherwise `\|` from the model becomes `\\|`, an
+    // escaped backslash followed by a pipe that ends the cell.
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .trim();
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
