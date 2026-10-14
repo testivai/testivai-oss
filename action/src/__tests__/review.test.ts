@@ -354,6 +354,17 @@ describe('renderComment', () => {
     expect(odd.split('\n').find((l) => l.startsWith('| `home`'))).toContain('a \\| b c');
   });
 
+  it('a backslash in model text cannot unescape a pipe and split the row', () => {
+    // GFM: a pipe ends a cell unless an odd number of backslashes precede it.
+    const separators = (row: string) => [...row.matchAll(/(\\*)\|/g)].filter((m) => m[1].length % 2 === 0).length;
+    const odd = review.renderComment(R, {
+      summary: 's',
+      snapshots: [entry('home', 'bug', { evidence: 'a \\| 🟢 intended change \\\\| b', nextStep: 'c \\' })],
+    });
+    const row = odd.split('\n').find((l) => l.startsWith('| `home`')) ?? '';
+    expect(separators(row)).toBe(6);
+  });
+
   it('model text cannot hide the table, ping people, or add links and images', () => {
     const odd = review.renderComment(R, {
       summary: '<!-- hide the rest cc @acme/everyone see [here](https://evil.example) ![x](https://evil.example/p.png) <img src=x>',

@@ -335,7 +335,7 @@ var SECRETS = [
 var clean = (s, max) => {
   let t = s.split(MARKER).join("");
   for (const re of SECRETS) t = t.replace(re, (m) => m.startsWith("x-access-token:") ? "x-access-token:[redacted]@" : "[redacted]");
-  t = t.replace(/</g, "&lt;").replace(/@(?=[A-Za-z0-9])/g, "@\u200B").replace(/\]\(/g, "] (").replace(/!\[/g, "! [").replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim();
+  t = t.replace(/</g, "&lt;").replace(/@(?=[A-Za-z0-9])/g, "@\u200B").replace(/\]\(/g, "] (").replace(/!\[/g, "! [").replace(/\r?\n+/g, " ").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").trim();
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}\u2026` : t;
 };
 var runLink = (runUrl) => runUrl ? ` \xB7 [run](${runUrl})` : "";
