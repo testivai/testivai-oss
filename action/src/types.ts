@@ -55,6 +55,10 @@ export interface SnapshotResult {
   dom?: SnapshotDomSignal;
   /** witness 1.5+: whole-page uniform displacement (injected-banner signature). */
   pageShift?: { dy: number; belowY: number; count: number };
+  /** Pixels compared (the page area); with `regions`, says whether a diff is spread out or in one area. */
+  totalPixels?: number;
+  /** Changed-pixel clusters as bounding boxes. */
+  regions?: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
 export interface Summary {

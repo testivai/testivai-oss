@@ -31,7 +31,9 @@ export const TOOL_META = {
     description:
       'Read the latest TestivAI visual regression results (visual-report/results.json). ' +
       'Returns a per-snapshot verdict combining the pixel diff with the DOM and computed-style signals. ' +
-      'A pixel diff is likely render noise when the DOM and the computed styles both match; ' +
+      'A pixel diff is likely render noise when the DOM and the computed styles both match and the diff is small and scattered; ' +
+      'a diff whose DOM and computed styles match but that is concentrated in one area or over 1% of pixels gets its own verdict, not noise: ' +
+      'it is a bad capture or a change the style check does not cover (size, overflow, transform, images…), so look at the diff (get_diff) before approving; ' +
       'a style-only change (identical DOM, different computed styles) is a real change, not noise, ' +
       'and so is any DOM change — both need human review. ' +
       'When the styles were not compared (style check unavailable), the verdict says so and does not call the diff noise: ' +
@@ -77,8 +79,10 @@ export const TOOL_META = {
 /**
  * The `review-visual-changes` prompt. It tells the model how to sort each
  * diff, so it uses the same cases as the verdicts in lib.ts: likely render
- * noise only when the DOM and computed styles both match, and an identical
- * DOM whose styles were not compared is unknown, not noise.
+ * noise only when the DOM and computed styles both match and the diff is
+ * small and scattered, a matching-styles diff concentrated in one area or
+ * large is a bad capture or a change the style check does not cover, and an
+ * identical DOM whose styles were not compared is unknown, not noise.
  */
 export const REVIEW_PROMPT = {
   name: 'review-visual-changes',
@@ -93,7 +97,10 @@ export const REVIEW_PROMPT = {
     '3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),',
     '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
     '   and which case it is:',
-    '   - likely render noise (identical DOM and computed styles match; still not proof),',
+    '   - likely render noise (identical DOM and computed styles match, and the diff is small and scattered; still not proof),',
+    '   - concentrated in one area or large (identical DOM and computed styles match, but the diff sits in one area',
+    '     or is over 1% of pixels): a bad capture or a change the style check does not cover, so call get_diff(name)',
+    '     and compare the images; do not call it noise,',
     '   - a style-only change (identical DOM, computed styles differ: a real change),',
     '   - a structural change (the DOM changed), or',
     '   - styles not compared (identical DOM, style check unavailable):',

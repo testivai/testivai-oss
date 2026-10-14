@@ -92,7 +92,7 @@ The threshold is configurable:
 }
 ```
 
-`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) pass too (it never passes a diff whose styles were not compared or changed); with `shiftTolerance` set, diffs made only of small pure element shifts pass. Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
+`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) **and** whose diff is not concentrated in one area pass too (it never passes a diff whose styles were not compared or changed, or whose regions all fit in a box covering at most a third of the page); with `shiftTolerance` set, diffs made only of small pure element shifts pass. Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
 
 ### When pixels differ and the DOM is identical
 
@@ -100,11 +100,12 @@ The DOM diff alone cannot tell render noise from a stylesheet-only change, so th
 
 | `dom.styleCheck` | Reading |
 |---|---|
-| `"match"` | **Likely render noise** (anti-aliasing, font hinting): the DOM and computed styles are identical. Likely, not proven; worth a glance, not a block. |
+| `"match"`, small and scattered diff | **Likely render noise** (anti-aliasing, font hinting): the DOM and computed styles are identical, at most 1% of pixels differ, and there are no regions or they are spread out. Likely, not proven; worth a glance, not a block. |
+| `"match"`, diff concentrated in one area or large | **Diff concentrated in one area** (every region within a box covering at most a third of the page) or **Large diff** (over 1% of pixels): not noise. The style check covers a fixed list of properties, so this is a bad capture or a change it does not cover (size, overflow, position, transform, text decoration, filters, pseudo-elements, images). Compare the images before approving. |
 | `"mismatch"` | **Style-only change**: a real change, with the restyled elements in `dom.styleChanges`. |
 | `"unavailable"`, or absent in older results | **Styles not compared**: could be render noise or a stylesheet-only change. No comparable style digests on both sides, so a stylesheet-only change is not ruled out. Compare the images before approving. |
 
-`dom.noiseHint` is `true` in both the first and the last row, so read it together with `dom.styleCheck`.
+`dom.noiseHint` is `true` in the first, second and last rows, so read it together with `dom.styleCheck`, `diffPercent` and `regions` (`diffShape` from `@testivai/witness/report` applies the rule).
 
 ---
 
@@ -152,7 +153,7 @@ visual-report/
 }
 ```
 
-This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.changed`, `dom.styleCheck` and `dom.noiseHint` to decide whether a diff needs human attention: `dom.changed: true` is a structural change, `styleCheck: "mismatch"` with `dom.changed: false` is a real style-only change, and `noiseHint: true` is likely render noise only when `styleCheck` is `"match"` (with `"unavailable"`, styles were not compared). See "Eyes for your coding agent" in the README.
+This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.changed`, `dom.styleCheck` and `dom.noiseHint` to decide whether a diff needs human attention: `dom.changed: true` is a structural change, `styleCheck: "mismatch"` with `dom.changed: false` is a real style-only change, and `noiseHint: true` is likely render noise only when `styleCheck` is `"match"` and the diff is small and scattered (with `"unavailable"`, styles were not compared; with every region in one area, or over 1% of pixels, it is a bad capture or a change the style check does not cover). See "Eyes for your coding agent" in the README.
 
 ---
 

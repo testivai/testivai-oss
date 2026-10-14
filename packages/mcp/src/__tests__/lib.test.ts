@@ -2,7 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PNG } from 'pngjs';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, describeMissingResults } from '../lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, describeMissingResults, type ResultsFile } from '../lib';
+
+/** Real runs with an identical DOM and matching styles; see the README next to it. */
+const NOISE_SHAPES_FIXTURE = path.join(
+  __dirname, '..', '..', '..', 'witness', 'src', '__tests__', 'fixtures', 'render-noise-shapes.results.json',
+);
 
 describe('@testivai/mcp lib', () => {
   let root: string;
@@ -52,7 +57,8 @@ describe('@testivai/mcp lib', () => {
 
     // noiseHint fires when the DOM is identical and no style mismatch was
     // found. With styleCheck 'match' that means the DOM and the computed
-    // styles were both compared and both matched — the verdict says so.
+    // styles were both compared and both matched — the verdict says so, and
+    // with a small, scattered diff (no regions here) it is likely noise.
     it('says the DOM and computed styles both matched when the noise hint has a style match', () => {
       const verdict = verdictFor({
         name: 'x',
@@ -61,7 +67,7 @@ describe('@testivai/mcp lib', () => {
         dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
       });
       expect(verdict).toBe(
-        "changed (0.40% pixels differ) but the DOM and computed styles both match — likely render noise (font hinting, anti-aliasing); mention it, don't block",
+        "changed (0.40% pixels differ) but the DOM and computed styles both match and the diff is small and scattered — likely render noise (font hinting, anti-aliasing); mention it, don't block",
       );
     });
 
@@ -185,6 +191,63 @@ describe('@testivai/mcp lib', () => {
 
     it('asks for human approval on new snapshots', () => {
       expect(verdictFor({ name: 'x', status: 'new' })).toContain('human');
+    });
+  });
+
+  // Identical DOM and matching styles is likely noise only when the diff is
+  // small and scattered. Real runs from packages/witness (fixtures/README.md
+  // there): the eval's clipped card, a bad capture and a bad baseline were
+  // all called "likely render noise" before.
+  describe('verdictFor on real runs with an identical DOM and matching styles', () => {
+    const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
+    const fixture: ResultsFile = JSON.parse(fs.readFileSync(NOISE_SHAPES_FIXTURE, 'utf8'));
+    const real = (name: string) => fixture.snapshots.find((s) => s.name === name)!;
+
+    it('a diff concentrated in one area: names the area, the two explanations and get_diff', () => {
+      expect(verdictFor(real('card-clipped'))).toBe(
+        'changed (0.03% pixels differ) — the DOM and computed styles both match, but the diff is concentrated in one area ' +
+          '(3 regions within 155×52 px, 0.8% of the page): a bad capture, or a change the style check does not cover ' +
+          '(size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets); ' +
+          'compare the images (get_diff) before approving',
+      );
+    });
+
+    it.each([['card-clipped'], ['card-text-not-painted'], ['baseline-band-shifted'], ['titles-underlined']])(
+      '%s is not called noise',
+      (name) => {
+        const verdict = verdictFor(real(name));
+        expect(verdict).toMatch(/concentrated in one area/);
+        expect(verdict).toMatch(/get_diff/);
+        expect(verdict).not.toMatch(NOISE_ADVICE);
+      },
+    );
+
+    it('a large diff spread across the page: more than render noise usually changes', () => {
+      expect(verdictFor(real('font-subpixel-noise-over-1pct'))).toBe(
+        'changed (1.19% pixels differ) — the DOM and computed styles both match, but the diff is large (over 1% of pixels, ' +
+          'spread across the page), more than render noise usually changes: often fonts or rendering that differ between ' +
+          'machines, a bad capture, or a change the style check does not cover; compare the images (get_diff) before approving',
+      );
+      expect(verdictFor(real('fonts-differ-between-machines'))).not.toMatch(NOISE_ADVICE);
+    });
+
+    it.each([['glyph-edge-noise'], ['font-subpixel-noise']])('%s (render noise, small and scattered) stays likely noise', (name) => {
+      expect(verdictFor(real(name))).toMatch(
+        /but the DOM and computed styles both match and the diff is small and scattered — likely render noise \(font hinting, anti-aliasing\); mention it, don't block$/,
+      );
+    });
+
+    it("flags a legacy 'noise' auto-pass of a diff concentrated in one area", () => {
+      expect(verdictFor({ ...real('card-clipped'), status: 'passed', autoPassed: 'noise' })).toBe(
+        "passed — auto-passed by the configured 'noise' criterion: 0.03% pixels differ, within its tolerance; " +
+          'but the diff is concentrated in one area (3 regions within 155×52 px, 0.8% of the page), which render noise is not — look at the diff',
+      );
+    });
+
+    it('a noise auto-pass of a scattered diff keeps the plain auto-pass verdict', () => {
+      expect(verdictFor({ ...real('font-subpixel-noise'), status: 'passed', autoPassed: 'noise' })).toBe(
+        "passed — auto-passed by the configured 'noise' criterion: 0.85% pixels differ, within its tolerance",
+      );
     });
   });
 
@@ -461,9 +524,96 @@ describe('@testivai/mcp explainSnapshot', () => {
     const e = explainSnapshot(root, 'home');
     expect(e.layers.dom.noiseHint).toBe(true);
     expect(e.guidance).toContain(
-      'Pixels differ but the DOM is structurally identical and style digests match — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.',
+      'Pixels differ but the DOM is structurally identical, style digests match, and the diff is small and scattered — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.',
     );
     expect(e.guidance.join(' ')).toMatch(/human decision/i);
+  });
+
+  // Real runs from packages/witness (fixtures/README.md there).
+  describe('identical DOM and matching styles, but not the shape of render noise', () => {
+    const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
+    const fixture: ResultsFile = JSON.parse(fs.readFileSync(NOISE_SHAPES_FIXTURE, 'utf8'));
+    const real = (name: string) => fixture.snapshots.find((s) => s.name === name)!;
+
+    it('concentrated in one area: guidance names the area, the element it maps to, both explanations and get_diff', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([real('card-clipped')]);
+      const e = explainSnapshot(root, 'card-clipped');
+      expect(e.guidance).toContain(
+        'Diff concentrated in one area, which render noise does not do: pixels differ and the DOM is structurally ' +
+          'identical with matching style digests, but 3 regions within 155×52 px, 0.8% of the page, changed (box at ' +
+          'x=525, y=387), and every region maps to `body > main > section > div.cards > div.card:nth-of-type(2) > ' +
+          'div.body:nth-of-type(2)`. Render noise is small and scattered (anti-aliasing and font hinting at glyph edges), ' +
+          'so this is a bad capture (a torn or partly blank render, a shifted band, a bad baseline) or a change the style ' +
+          'check does not cover (size, overflow, position, transform, text decoration, filters, pseudo-elements, or images ' +
+          'and other assets). Do not treat it as noise: compare the images (get_diff) before approving.',
+      );
+      expect(e.guidance.join(' ')).not.toMatch(NOISE_ADVICE);
+      expect(e.verdict).not.toMatch(NOISE_ADVICE);
+    });
+
+    it('one region: says the region maps to its element', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([real('card-text-not-painted')]);
+      const guidance = explainSnapshot(root, 'card-text-not-painted').guidance.join(' ');
+      expect(guidance).toContain(
+        'but 1 region within 211×53 px, 1.1% of the page, changed (box at x=525, y=352), and the region maps to ' +
+          '`body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p`.',
+      );
+    });
+
+    it('regions with no element in common: no element is named', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([real('titles-underlined')]);
+      const guidance = explainSnapshot(root, 'titles-underlined').guidance.join(' ');
+      expect(guidance).toContain('but 6 regions within');
+      expect(guidance).not.toMatch(/maps to/);
+    });
+
+    it('large and spread out: guidance says it is more than render noise usually changes, and what it often is', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([real('font-subpixel-noise-over-1pct')]);
+      const e = explainSnapshot(root, 'font-subpixel-noise-over-1pct');
+      expect(e.guidance).toContain(
+        'Large diff, more than render noise usually changes: pixels differ and the DOM is structurally identical with ' +
+          'matching style digests, but 1.19% of pixels differ (over 1%), spread across the page. That is often fonts or ' +
+          'rendering that differ between the machines that captured the baseline and the current image; it can also be a ' +
+          'bad capture or a change the style check does not cover (size, overflow, position, transform, text decoration, ' +
+          'filters, pseudo-elements, or images and other assets). Do not treat it as noise: compare the images (get_diff) ' +
+          'before approving.',
+      );
+      expect(e.guidance.join(' ')).not.toMatch(NOISE_ADVICE);
+    });
+
+    it('the pixel layer carries the shape, so an agent can read it as data', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([real('card-clipped'), real('glyph-edge-noise'), { name: 'fresh', status: 'new' }]);
+      expect(explainSnapshot(root, 'card-clipped').layers.pixel.shape).toEqual({
+        kind: 'concentrated',
+        regionCount: 3,
+        box: { x: 525, y: 387, width: 155, height: 52 },
+        pagePercent: (155 * 52 * 100) / 1018880,
+      });
+      expect(explainSnapshot(root, 'glyph-edge-noise').layers.pixel.shape).toEqual({
+        kind: 'scattered',
+        regionCount: 0,
+        box: null,
+        pagePercent: null,
+      });
+      expect(explainSnapshot(root, 'fresh').layers.pixel.shape).toBeNull();
+    });
+
+    it("a legacy 'noise' auto-pass of a concentrated diff: guidance does not say no action is needed", () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([{ ...real('card-clipped'), status: 'passed', autoPassed: 'noise' }]);
+      const guidance = explainSnapshot(root, 'card-clipped').guidance;
+      expect(guidance).toContain(
+        "This diff auto-passed via the 'noise' criterion although it is concentrated in one area (3 regions within " +
+          '155×52 px, 0.8% of the page), which render noise is not — compare the images (get_diff) before relying on it.',
+      );
+      expect(guidance.join(' ')).not.toMatch(/no action needed/i);
+      expect(guidance.join(' ')).not.toMatch(NOISE_ADVICE);
+    });
   });
 
   // The verdict and the guidance ship in the same explanation, so they must

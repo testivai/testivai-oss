@@ -63,7 +63,9 @@ With the server added, a visual review happens in the conversation:
    with `get_diff` when the evidence is ambiguous (always when the styles were
    not compared), and recommends approve, investigate, or likely noise for
    each snapshot. "Likely noise" is only for an identical DOM whose computed
-   styles were compared and match.
+   styles were compared and match, and whose diff is small and scattered: a
+   diff concentrated in one area, or over 1% of pixels, gets its own verdict
+   (see [Matching styles are not always noise](#matching-styles-are-not-always-noise)).
 3. To accept a change, say so: *"approve home"*. Claude calls
    `approve_snapshot`, and Claude Code shows its permission prompt for that
    call. Answer **Yes** to approve it, or **No** to keep the current baseline.
@@ -237,6 +239,41 @@ of a brand-colour token. A model can now tell you *"you changed the brand token;
 it hit the header, the primary buttons and the card prices — intended?"* rather
 than *"something moved."*
 
+### Matching styles are not always noise
+
+The style check digests a fixed list of computed properties: colours, fonts,
+borders, padding and margin, display, opacity, visibility and box-shadow. A
+real change to size, overflow, position, transform, text decoration, filters,
+pseudo-elements, or an image or other asset leaves the DOM identical and the
+styles matching, and so does a bad capture (a torn render, text that did not
+paint, a bad baseline). What tells those apart from render noise is the shape
+of the diff, read from `diffPercent`, `totalPixels` and `regions`:
+
+| Shape | When | Verdict |
+|---|---|---|
+| Scattered | at most 1% of pixels, and no regions or regions spread out (their combined bounding box covers more than a third of the page) | likely render noise; mention it, don't block |
+| Concentrated | every region fits in a box covering at most a third of the page | not noise: a bad capture or a change the style check does not cover; compare the images (`get_diff`) before approving |
+| Large | spread out, but over 1% of pixels | more than render noise usually changes: often fonts or rendering that differ between machines; compare the images |
+
+`explain_snapshot` returns the shape as `layers.pixel.shape`, and for a
+concentrated diff names the element every region maps to. On real runs of the
+[example project](https://github.com/testivai/testivai-example), with the DOM
+identical and the styles matching throughout:
+
+| Diff | Pixels | Regions | Shape |
+|---|---|---|---|
+| `max-height` + `overflow: hidden` clipping one product card (a real bug) | 0.03% | 3, in 0.8% of the page | concentrated |
+| one card's text did not paint (a bad current capture) | 0.14% | 1, in 1.1% of the page | concentrated |
+| a 260px band of the baseline moved 24px (a bad baseline) | 2.07% | 1, in 18.8% of the page | concentrated |
+| sixty glyph-edge pixels changed (anti-aliasing) | 0.006% | none | scattered |
+| every text run re-rasterized (`--disable-font-subpixel-positioning`) | 0.85% | 20, over 37.8% of the page | scattered |
+| a CI-made baseline against a local capture | 4.77% | 22, over 93% of the page | large |
+
+`noiseAutoPass` applies the same rule: it never passes a concentrated diff.
+The limit: a change to a class that repeats down a long page (an underline on
+thirty product titles) spreads its regions as widely as text-rendering noise,
+so a small one can still read as scattered.
+
 ## What the model adds (and what it doesn't)
 
 Worth being precise, because this is where visual testing tools usually
@@ -269,10 +306,12 @@ order (a snapshot joins at most one group):
 | Style-only change | identical DOM and **exactly the same set of restyled elements** | whether the new style values are the same: the grouping is on which elements changed style |
 | Page shift | the same displacement: identical `dy` and `belowY` | whether the same content caused it |
 | Styles not compared | identical DOM, styles not compared (`styleCheck: "unavailable"`, or no style check in older results; the two are grouped apart). Labelled *render noise or a stylesheet-only change, not ruled out*, never labelled noise | which of the two it is: compare the images |
-| Likely render noise | identical DOM and the computed styles compared and identical (`styleCheck: "match"`) | anything the DOM and style signals don't cover |
+| Large diff | identical DOM and matching styles, but over 1% of pixels differ, spread across the page. Labelled *more than render noise usually changes*, never labelled noise | whether it is the same cause: often fonts or rendering that differ between machines, sometimes a bad capture or a change the style check does not cover |
+| Likely render noise | identical DOM, the computed styles compared and identical (`styleCheck: "match"`), and a small, scattered diff | anything the DOM, style and diff-shape signals don't cover |
 
-It never groups structural DOM changes, snapshots without DOM data, or
-style-only changes with more than 10 restyled elements (witness lists only
+It never groups structural DOM changes, snapshots without DOM data, diffs
+concentrated in one area (each sits in its own place, so grouping two would
+suggest one cause), or style-only changes with more than 10 restyled elements (witness lists only
 the first 10, so those lists can't be compared exactly; the section names
 them instead). Passed, auto-passed and new snapshots are left out. Every
 snapshot keeps its own verdict line below the groups, unchanged.
@@ -318,7 +357,8 @@ If your agent isn't MCP-capable, paste into `AGENTS.md` / `CLAUDE.md` /
 After changing UI code, run the visual tests, then read visual-report/results.json:
 - status "changed" + dom.changed true → real structural change; compare against intent
 - status "changed" + dom.changed false + dom.styleCheck "mismatch" → style-only change; real, not noise
-- status "changed" + dom.noiseHint true + dom.styleCheck "match" → likely render noise; mention, don't block
+- status "changed" + dom.noiseHint true + dom.styleCheck "match", diffPercent at most 1, and no regions or regions spread out (their combined bounding box covers more than a third of the page, totalPixels) → likely render noise; mention, don't block
+- status "changed" + dom.noiseHint true + dom.styleCheck "match" otherwise (every region within a box of at most a third of the page, or diffPercent over 1) → not noise: a bad capture or a change the style check does not cover (size, overflow, transform, images…); look at the diff before approving
 - status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
 - status "new" → no baseline yet; tell the human
 Never run `testivai approve` yourself — approval is a human decision.

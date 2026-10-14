@@ -2,6 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 import { BaselineStore } from '@testivai/witness/baselines';
+import {
+  describeRegions,
+  diffShape,
+  NOISE_MAX_DIFF_PERCENT,
+  STYLE_CHECK_DOES_NOT_COVER,
+  type DiffShape,
+} from '@testivai/witness/report';
 
 /** Subset of the semver-governed results.json contract this server reads. */
 export interface DomInfo {
@@ -30,6 +37,8 @@ export interface SnapshotResult {
   name: string;
   status: 'passed' | 'changed' | 'new';
   diffPercent?: number;
+  /** Pixels compared: the page area. With `regions`, it says whether a diff is spread out or in one area. */
+  totalPixels?: number;
   baselinePath?: string;
   currentPath?: string;
   diffPath?: string;
@@ -95,17 +104,34 @@ const NOT_COMPARED_REASON: Record<'unavailable' | 'absent', string> = {
   absent: 'no style check in these results',
 };
 
+/**
+ * The shape of an identical-DOM diff whose computed styles match, or null for
+ * any other snapshot. Render noise is small and scattered; a diff
+ * concentrated in one area or large is a bad capture or a change the style
+ * check does not cover (see diffShape in @testivai/witness).
+ */
+function matchedStylesShape(snapshot: SnapshotResult): DiffShape | null {
+  if (!snapshot.dom?.noiseHint || snapshot.dom.styleCheck !== 'match') return null;
+  return diffShape(snapshot);
+}
+
 /** One-line, agent-oriented verdict for a snapshot. */
 export function verdictFor(snapshot: SnapshotResult): string {
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
   const notCompared = stylesNotCompared(snapshot.dom);
+  const shape = matchedStylesShape(snapshot);
   if (snapshot.status === 'passed') {
     if (!snapshot.autoPassed) return 'passed — no visual change';
     // An auto-pass is a configured tolerance: the pixel diff is still there.
     const verdict = `passed — auto-passed by the configured '${snapshot.autoPassed}' criterion: ${pct}, within its tolerance`;
-    return snapshot.autoPassed === 'noise' && notCompared
-      ? `${verdict}; styles were not compared (${NOT_COMPARED_REASON[notCompared]}), so a stylesheet-only change is not ruled out — look at the diff`
-      : verdict;
+    if (snapshot.autoPassed === 'noise' && notCompared) {
+      return `${verdict}; styles were not compared (${NOT_COMPARED_REASON[notCompared]}), so a stylesheet-only change is not ruled out — look at the diff`;
+    }
+    // A noise auto-pass from before noiseAutoPass refused concentrated diffs.
+    if (snapshot.autoPassed === 'noise' && shape?.kind === 'concentrated') {
+      return `${verdict}; but the diff is concentrated in one area (${describeRegions(shape)}), which render noise is not — look at the diff`;
+    }
+    return verdict;
   }
   if (snapshot.status === 'new') return 'new snapshot — no baseline yet; a human should review and approve it';
   if (notCompared) {
@@ -114,8 +140,21 @@ export function verdictFor(snapshot: SnapshotResult): string {
       'could be render noise or a stylesheet-only change; look at the diff before approving'
     );
   }
+  if (shape?.kind === 'concentrated') {
+    return (
+      `changed (${pct}) — the DOM and computed styles both match, but the diff is concentrated in one area (${describeRegions(shape)}): ` +
+      `a bad capture, or a change the style check does not cover (${STYLE_CHECK_DOES_NOT_COVER}); compare the images (get_diff) before approving`
+    );
+  }
+  if (shape?.kind === 'large') {
+    return (
+      `changed (${pct}) — the DOM and computed styles both match, but the diff is large (over ${NOISE_MAX_DIFF_PERCENT}% of pixels, spread across the page), ` +
+      'more than render noise usually changes: often fonts or rendering that differ between machines, a bad capture, ' +
+      'or a change the style check does not cover; compare the images (get_diff) before approving'
+    );
+  }
   if (snapshot.dom?.noiseHint) {
-    return `changed (${pct}) but the DOM and computed styles both match — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
+    return `changed (${pct}) but the DOM and computed styles both match and the diff is small and scattered — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
   }
   if (snapshot.dom?.changed) {
     const s = snapshot.dom.summary;
@@ -241,6 +280,14 @@ export interface SnapshotExplanation {
       regionCount: number;
       /** Top regions by area, largest first (max 10). */
       regions: RegionInfo[];
+      /**
+       * How the diff is laid out (diffShape in @testivai/witness): 'scattered'
+       * (small and spread out, the only shape render noise takes),
+       * 'concentrated' (every region in one box covering at most a third of
+       * the page) or 'large' (spread out, over 1% of pixels). Null for a new
+       * snapshot or a pass with no pixel diff.
+       */
+      shape: DiffShape | null;
     };
     /** Element-level evidence: which elements, moved vs changed. */
     element: {
@@ -253,6 +300,20 @@ export interface SnapshotExplanation {
   };
   /** Interpretation rules the evidence supports, phrased for the model. */
   guidance: string[];
+}
+
+/**
+ * The smallest element every region maps to, or null when they share none.
+ * Each region lists its elements smallest first, so the first shared one of
+ * the first region is the smallest.
+ */
+function sharedElement(regions: RegionInfo[]): string | null {
+  const [first, ...rest] = regions;
+  if (!first) return null;
+  const shared = (first.elements ?? [])
+    .map((e) => e.selector)
+    .filter((selector) => rest.every((r) => (r.elements ?? []).some((e) => e.selector === selector)));
+  return shared[0] ?? null;
 }
 
 /** Build the layered explanation bundle for one snapshot, or null if absent. */
@@ -278,6 +339,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
     guidance.push('No baseline exists yet — this is a first capture, not a regression. A human should review and approve it.');
   }
   const notCompared = stylesNotCompared(snapshot.dom);
+  const shape = matchedStylesShape(snapshot);
   // The DOM signal is computed before the pass criteria, so a passed snapshot
   // can still carry noiseHint. The noise / styles-not-compared reading is for
   // a diff pending review; a passed snapshot has nothing pending approval
@@ -290,8 +352,31 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
         'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
     );
+  } else if (pending && shape?.kind === 'concentrated' && shape.box) {
+    const regionList = snapshot.regions ?? [];
+    const element = sharedElement(regionList);
+    const mapsTo = element ? `, and ${regionList.length === 1 ? 'the region' : 'every region'} maps to \`${element}\`` : '';
+    guidance.push(
+      'Diff concentrated in one area, which render noise does not do: pixels differ and the DOM is structurally ' +
+        `identical with matching style digests, but ${describeRegions(shape)}, changed (box at x=${shape.box.x}, ` +
+        `y=${shape.box.y})${mapsTo}. Render noise is small and scattered (anti-aliasing and font hinting at glyph edges), ` +
+        'so this is a bad capture (a torn or partly blank render, a shifted band, a bad baseline) or a change the style ' +
+        `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
+    );
+  } else if (pending && shape?.kind === 'large') {
+    // diffShape treats an unknown size as not small; say so rather than claim a share.
+    const size =
+      snapshot.diffPercent === undefined
+        ? 'the share of pixels that differ is unknown'
+        : `${snapshot.diffPercent.toFixed(2)}% of pixels differ (over ${NOISE_MAX_DIFF_PERCENT}%)`;
+    guidance.push(
+      'Large diff, more than render noise usually changes: pixels differ and the DOM is structurally identical with ' +
+        `matching style digests, but ${size}, spread across the page. That is often fonts or rendering that differ between the ` +
+        'machines that captured the baseline and the current image; it can also be a bad capture or a change the style ' +
+        `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
+    );
   } else if (pending && snapshot.dom?.noiseHint) {
-    guidance.push('Pixels differ but the DOM is structurally identical and style digests match — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
+    guidance.push('Pixels differ but the DOM is structurally identical, style digests match, and the diff is small and scattered — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
   }
   if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.changed) {
     // A class or style attribute change: the DOM changed AND elements were
@@ -318,6 +403,12 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
       "This diff auto-passed via the 'noise' criterion although its styles were not compared, so a " +
         'stylesheet-only change was not ruled out — compare the images (get_diff) before relying on it.',
     );
+  } else if (snapshot.autoPassed === 'noise' && shape?.kind === 'concentrated') {
+    // A noise auto-pass from before noiseAutoPass refused concentrated diffs.
+    guidance.push(
+      `This diff auto-passed via the 'noise' criterion although it is concentrated in one area (${describeRegions(shape)}), ` +
+        'which render noise is not — compare the images (get_diff) before relying on it.',
+    );
   } else if (snapshot.autoPassed) {
     guidance.push(`This diff auto-passed via the '${snapshot.autoPassed}' criterion — reported for transparency, no action needed.`);
   }
@@ -335,6 +426,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         diffPercent: snapshot.diffPercent ?? null,
         regionCount: snapshot.regions?.length ?? 0,
         regions,
+        shape: snapshot.status === 'changed' || snapshot.autoPassed ? diffShape(snapshot) : null,
       },
       element: {
         pageShift: snapshot.pageShift ?? null,
@@ -453,8 +545,11 @@ export interface ChangeGroup {
   /**
    * 'styles-not-compared' is an identical DOM whose styles were not compared:
    * unknown (render noise or a stylesheet-only change), never 'noise'.
+   * 'large-diff' is an identical DOM with matching styles whose diff is
+   * spread out but over 1% of pixels: more than render noise usually
+   * changes, never 'noise'. A diff concentrated in one area is never grouped.
    */
-  basis: 'style-only' | 'page-shift' | 'styles-not-compared' | 'noise';
+  basis: 'style-only' | 'page-shift' | 'styles-not-compared' | 'large-diff' | 'noise';
   /** What every member has in common, phrased for the reader. */
   label: string;
   /** Snapshot names, sorted. Always two or more. */
@@ -464,13 +559,14 @@ export interface ChangeGroup {
 type Signature = { basis: ChangeGroup['basis']; key: string; label: string };
 
 // Real changes, then unknowns, before likely noise when groups are the same size.
-const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles-not-compared', 'noise'];
+const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles-not-compared', 'large-diff', 'noise'];
 
 /**
  * The one grouping signal a changed snapshot carries, or null when it must
  * not be grouped. Precedence: structural (never grouped) > style-only >
- * page shift > styles not compared > noise. Every rule errs towards null:
- * under-grouping is acceptable, over-grouping is a bug.
+ * page shift > styles not compared > concentrated (never grouped) > large
+ * diff > noise. Every rule errs towards null: under-grouping is acceptable,
+ * over-grouping is a bug.
  */
 function signatureOf(s: SnapshotResult): Signature | null {
   // Only changed snapshots; auto-passed ones are status 'passed'.
@@ -519,8 +615,26 @@ function signatureOf(s: SnapshotResult): Signature | null {
         'render noise or a stylesheet-only change, not ruled out',
     };
   }
+  // Matching styles: likely noise only when the diff is small and scattered.
+  // A diff concentrated in one area sits in its own place on its own page,
+  // so grouping two would suggest one cause: never grouped, never as noise.
+  const shape = matchedStylesShape(s);
+  if (shape?.kind === 'concentrated') return null;
+  if (shape?.kind === 'large') {
+    return {
+      basis: 'large-diff',
+      key: 'large-diff',
+      label:
+        `identical DOM and computed styles, but over ${NOISE_MAX_DIFF_PERCENT}% of pixels differ, spread across the page: ` +
+        'more than render noise usually changes; grouped on that signal, not on its cause',
+    };
+  }
   if (s.dom.noiseHint) {
-    return { basis: 'noise', key: 'noise:match', label: 'likely render noise: the DOM and computed styles both match' };
+    return {
+      basis: 'noise',
+      key: 'noise:match',
+      label: 'likely render noise: the DOM and computed styles both match and the diff is small and scattered',
+    };
   }
   return null;
 }
@@ -529,8 +643,8 @@ function signatureOf(s: SnapshotResult): Signature | null {
  * Deterministic grouping of changed snapshots whose grouping signal is
  * identical. Pure: no I/O, and the output does not depend on input order.
  * Groups are ordered by size (largest first), then kind (style-only, page
- * shift, styles not compared, noise), then signature; members by name. Only
- * groups with two or more members are returned.
+ * shift, styles not compared, large diff, noise), then signature; members by
+ * name. Only groups with two or more members are returned.
  */
 export function groupChanges(snapshots: SnapshotResult[]): ChangeGroup[] {
   const byKey = new Map<string, { signature: Signature; members: string[] }>();
