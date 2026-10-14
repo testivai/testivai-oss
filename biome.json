@@ -62,7 +62,8 @@
 		{
 			"includes": [
 				"packages/witness/src/utils/framework-detect.ts",
-				"packages/witness/src/utils/template-generator.ts"
+				"packages/witness/src/utils/template-generator.ts",
+				"action/src/__tests__/review-action.test.ts"
 			],
 			"linter": {
 				"rules": {

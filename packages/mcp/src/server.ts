@@ -4,8 +4,8 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines } from './lib';
-import { REVIEW_PROMPT, toolMetaFor } from './tool-meta';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments } from './lib';
+import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
 
@@ -204,8 +204,34 @@ server.registerPrompt(
   })
 );
 
+// Glitch, intended change, bug or possible bug for one snapshot or all of
+// them. The arguments are optional; the text quotes them (tool-meta.ts).
+server.registerPrompt(
+  TRIAGE_PROMPT.name,
+  {
+    title: TRIAGE_PROMPT.title,
+    description: TRIAGE_PROMPT.description,
+    argsSchema: {
+      snapshot: z.string().optional().describe(TRIAGE_PROMPT.args.snapshot),
+      intent: z.string().optional().describe(TRIAGE_PROMPT.args.intent),
+    },
+  },
+  async ({ snapshot, intent }) => ({
+    messages: [
+      {
+        role: 'user' as const,
+        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent }) },
+      },
+    ],
+  })
+);
+
 async function main(): Promise<void> {
-  await server.connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  // After connect, which installs the server's handler: see withPromptArguments.
+  const handle = transport.onmessage;
+  transport.onmessage = (message) => handle?.(withPromptArguments(message));
 }
 
 main().catch((err) => {

@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { REVIEW_PROMPT, TOOL_META } from '../tool-meta';
+import { REVIEW_PROMPT, TOOL_META, TRIAGE_PROMPT } from '../tool-meta';
 import { connectBuiltServer } from './stdio-harness';
 
 /**
@@ -115,12 +115,33 @@ describe('built server over stdio', () => {
   // sort an identical-DOM diff whose styles were not compared into noise.
   it('serves the review-visual-changes prompt with the styles-not-compared case', async () => {
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name)).toEqual(['review-visual-changes']);
+    expect(prompts.map((p) => p.name).sort()).toEqual(['review-visual-changes', 'triage-visual-diff']);
     const prompt = await client.getPrompt({ name: 'review-visual-changes' });
     const text = (prompt.messages[0].content as { type: string; text: string }).text;
     expect(text).toMatch(/styles not compared[^.]*could be render noise or a stylesheet-only change/i);
     expect(text).not.toMatch(/ignore-as-noise/i);
     expect(text).toBe(REVIEW_PROMPT.text);
+  });
+
+  it('serves triage-visual-diff with optional snapshot and intent arguments', async () => {
+    const { prompts } = await client.listPrompts();
+    const triage = prompts.find((p) => p.name === 'triage-visual-diff');
+    expect(triage?.arguments?.map((a) => [a.name, a.required ?? false]).sort()).toEqual([
+      ['intent', false],
+      ['snapshot', false],
+    ]);
+    // MCP makes `arguments` optional: no object, an empty one, and empty
+    // strings all mean "not given".
+    const omitted = await client.getPrompt({ name: 'triage-visual-diff' });
+    expect((omitted.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const all = await client.getPrompt({ name: 'triage-visual-diff', arguments: {} });
+    expect((all.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const blank = await client.getPrompt({ name: 'triage-visual-diff', arguments: { snapshot: '', intent: '' } });
+    expect((blank.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const one = await client.getPrompt({ name: 'triage-visual-diff', arguments: { snapshot: 'home', intent: 'Add a promo banner.' } });
+    const text = (one.messages[0].content as { text: string }).text;
+    expect(text).toBe(TRIAGE_PROMPT.textFor({ snapshot: 'home', intent: 'Add a promo banner.' }));
+    expect(text).toMatch(/snapshot `home`/);
   });
 
   it('get_visual_results never calls identical-DOM diffs whose styles were not compared noise', async () => {

@@ -114,9 +114,51 @@ diff image, and each new snapshot's capture.
 | `list_baselines` | Committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed snapshots to baselines — **only after a human says so** |
 
-There's also a prompt, **`review-visual-changes`**, that walks a client through a
+There are also two prompts. **`review-visual-changes`** walks a client through a
 full review: summary → `explain_snapshot` per change → diff images when
-ambiguous → a per-snapshot recommendation.
+ambiguous → a per-snapshot recommendation. **`triage-visual-diff`** sorts each
+diff into glitch, intended change, bug or possible bug ([below](#triage-a-diff-glitch-intended-change-bug-or-possible-bug)).
+
+## Triage a diff: glitch, intended change, bug or possible bug
+
+A pixel diff alone can't tell a rendering glitch from a regression. The
+`triage-visual-diff` prompt has the model decide, per snapshot, from the
+signals, the images and what the change was meant to do:
+
+| Verdict | Meaning |
+|---|---|
+| **glitch** | The page did not change: render noise, a bad capture (the baseline's or the current one), or a font or other resource that failed to load |
+| **intended change** | The page changed, and it matches what the change under test was meant to do |
+| **bug** | The page changed in a way the change was not meant to make, or the result looks broken |
+| **possible bug** | The page really changed, but the evidence can't settle whether that was meant, or it is incomplete (styles not compared, no DOM data); the model says what to check |
+
+In Claude Code, type `/testivai:triage-visual-diff` (or
+`/mcp__testivai__triage-visual-diff`). Both arguments are optional:
+
+- `snapshot`: triage one snapshot; empty triages every changed one.
+- `intent`: what the change was meant to do, for example the pull request
+  description. Empty has the model look for it in the conversation, the PR or
+  the branch's diff; with no statement of intent anywhere it calls a real
+  change a possible bug rather than guess.
+
+The rules it gives the model:
+
+- A changed DOM or changed computed styles (`styleCheck: "mismatch"`) is never
+  a glitch.
+- An identical DOM whose styles were not compared (`styleCheck: "unavailable"`
+  or missing) is not called a glitch from the DOM alone; the images decide.
+- Render noise is small and scattered. A larger or local diff with an
+  identical DOM and matching styles is a bad capture or a change the style
+  check cannot see (it does not cover size, overflow, position, transform and
+  some other properties, or images). The model calls it a glitch only when
+  nothing the change touched could have caused it, and then says which image
+  is wrong. A bad baseline has to be replaced from a capture two runs agree
+  on.
+- It reports a verdict, confidence, evidence and next step per snapshot, and
+  never calls `approve_snapshot` or `approve_all`.
+
+Other MCP clients list it as a prompt too. To run the same triage on every
+pull request in CI, use the [`testivai/testivai-oss/review@v1` action](./github-action.md#ai-triage-of-every-diff).
 
 ## What `explain_snapshot` actually returns
 
@@ -259,7 +301,7 @@ Approving a baseline rewrites the definition of "correct," so an agent that
 approves its own work can launder a regression into the new baseline. The
 guardrails are in the wording the model actually reads: both tool descriptions
 say to invoke them only after a reviewer has confirmed, the
-`review-visual-changes` prompt repeats it, and every `get_visual_results`
+`review-visual-changes` and `triage-visual-diff` prompts repeat it, and every `get_visual_results`
 response ends with the same instruction.
 
 Human-shaped approval paths stay available either way: `npx testivai approve`

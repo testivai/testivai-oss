@@ -17,9 +17,15 @@ signals cannot settle.
 | `list_baselines` | Lists the committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed captures to committed baselines (same as `testivai approve`), **only after a human confirms** |
 
-The server also ships a prompt, `review-visual-changes`, that walks the agent
+The server also ships two prompts. `review-visual-changes` walks the agent
 through a full review: summary, `explain_snapshot` per change, diff images when
 the evidence is ambiguous, and a recommendation per snapshot.
+`triage-visual-diff` (optional `snapshot` and `intent` arguments) sorts each
+diff into glitch, intended change, bug or possible bug, with the evidence and
+a next step; a changed DOM or changed computed styles is never a glitch. The
+same rules run in CI with the
+[`testivai/testivai-oss/review@v1`](https://github.com/testivai/testivai-oss/blob/main/docs/github-action.md#ai-triage-of-every-diff)
+action.
 
 ### Approval is a human decision
 
