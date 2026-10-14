@@ -52,7 +52,7 @@ Verified against the adapter source, not aspirational:
 | | |
 |---|---|
 | **Pixel diff + heatmap** | Difference magnitude rendered as a yellow→red heatmap over a washed baseline, with changed regions outlined. |
-| **DOM capture** | The page's DOM is captured next to the screenshot, so the report can tell you *pixels differ but the DOM is identical* (render noise) from *the DOM actually changed* — with added / removed / attribute / text counts. |
+| **DOM + element map** | The page's DOM and per-element computed-style digests are captured next to the screenshot, so the report can tell *pixels differ, DOM and styles identical* (likely render noise) from *only the styles changed* (a real style-only change) and *the DOM actually changed* — with added / removed / attribute / text counts. When the styles could not be compared, it says so instead of calling the diff noise. |
 | **Full-page screenshots** | Chromium via CDP `captureBeyondViewport`; Firefox natively (Python). Other browsers fall back to viewport — documented, not silent. |
 | **Stabilization** | Animations and transitions collapsed, caret hidden, web fonts awaited before capture. |
 | **Masks & ignored selectors** | Exclude dynamic areas; masked regions are hatched in the diff and listed in the report, so nothing hides silently. |
@@ -93,7 +93,9 @@ unrepresentable.
 Element-map capture is best-effort, exactly like the DOM snapshot: if a strict
 Content-Security-Policy blocks the injected script, the capture still writes the
 screenshot and DOM, and the report falls back to the pixel and DOM layers rather
-than failing. Per-call escape hatches exist in every language
+than failing. Without the map, computed styles are not compared, so an
+identical-DOM diff reads *styles not compared* (render noise or a
+stylesheet-only change), never likely noise. Per-call escape hatches exist in every language
 (`skipElementMap` / `skip_element_map` / `setSkipElementMap`), plus a
 `maxElements` cap for very large pages.
 
@@ -117,7 +119,7 @@ works and is tested, but it hasn't been through as many real suites.
 | Pixel diff | Yes you write it | Yes | Yes |
 | Diff image for review | you build it | Yes | Yes heatmap + regions |
 | Tolerance / threshold | you tune it | Yes | Yes + auto-pass rules |
-| Noise vs. real change | No | No | Yes via DOM diff |
+| Noise vs. real change | No | No | Yes via DOM diff + computed-style check |
 | Text-change detection | No | No | Yes |
 | Baseline store + approval flow | you build it | No | Yes CLI + PR command |
 | Missing-baseline detection | No | No | Yes (exit 3) |

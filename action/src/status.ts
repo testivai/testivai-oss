@@ -96,12 +96,16 @@ export function determineStatus(results: ResultsData, config: StatusConfig): Vis
   }
 
   if (changed === 0 && added === 0) {
+    // summary.passed includes snapshots witness auto-passed through a
+    // configured pass criterion (maxDiffPercent / maxDiffPixels /
+    // shiftTolerance / noiseAutoPass), whose pixels did differ: say that
+    // nothing needs review, not that nothing was detected.
     return {
       state: 'success',
       conclusion: 'success',
       description: `All ${summary.passed} snapshots passed`,
       title: `All ${summary.passed} snapshots passed`,
-      summary: 'No visual changes detected.',
+      summary: 'No visual changes need review (diffs within your configured pass criteria count as passed).',
     };
   }
 

@@ -29,9 +29,13 @@ git add .testivai/baselines/ && git commit -m "visual baselines"
 ```
 
 From now on, run `npx testivai witness http://localhost:3000` after any
-prompt-driven change. The report at `visual-report/index.html` shows exactly
-what changed — and the DOM-based noise hint separates real changes from
-render noise.
+prompt-driven change. The report at `visual-report/index.html` shows what
+changed, and the DOM diff says whether the markup changed (added / removed /
+attribute / text counts). The crawler records no element map, so computed
+styles are not compared: when pixels differ and the DOM is identical, the
+report says **styles not compared** — could be render noise or a
+stylesheet-only change. A CSS-only edit looks exactly like that, so compare
+the images before approving.
 
 Want specific routes instead of crawling? List them:
 
@@ -111,10 +115,14 @@ needed. If you use a custom runner, set `TESTIVAI_CHROME_PATH` or run
 ## Tips for AI-generated apps
 
 - **Dynamic content** (clocks, feeds, random imagery) causes false diffs —
-  hide it with `"ignoreSelectors": [".live-feed", "[data-clock]"]` in
+  nothing filters it for you. Hide it with
+  `"ignoreSelectors": [".live-feed", "[data-clock]"]`, or exclude a fixed
+  area with a geometric `"mask"` (e.g. `{ "top": 24 }`), in
   `.testivai/config.json`.
-- **Tolerances**: `"noiseAutoPass": true` lets DOM-identical render noise
-  pass automatically; `"maxDiffPercent"` sets how much drift you accept.
+- **Tolerances**: `"maxDiffPercent"` sets how much drift you accept (a CSS
+  change inside that tolerance passes too). `"noiseAutoPass"` does nothing
+  for `testivai witness <url>` captures: it passes only diffs whose computed
+  styles were compared and match, and the crawler does not compare styles.
 - **Agents can read the results**: `visual-report/results.json` is
   machine-readable, and the [`@testivai/mcp`](https://github.com/testivai/testivai-oss/tree/main/packages/mcp) server
   lets Claude Code or Cursor see the diffs directly — so the same agent

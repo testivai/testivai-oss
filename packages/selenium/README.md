@@ -1,6 +1,6 @@
 # @testivai/witness-selenium
 
-Selenium WebDriver adapter for [TestivAI Witness](https://github.com/testivai/testivai-oss) — local-first visual regression testing with pixel + DOM comparison. No cloud account, nothing uploaded.
+Selenium WebDriver adapter for [TestivAI Witness](https://github.com/testivai/testivai-oss) — local-first visual regression testing with pixel, DOM and computed-style comparison. No account, nothing uploaded.
 
 Shares baselines, tolerances, the HTML report, and the PR approval flow with every other TestivAI adapter (Playwright, WebdriverIO, Python, Java) through one on-disk contract.
 
@@ -38,11 +38,21 @@ await testivai.witness(driver, 'pricing', {
   ignoreSelectors: ['.live-chat', '[data-testid="ad"]'], // hidden from pixels AND the DOM snapshot
   variant: 'firefox',       // baselines keyed as pricing__firefox
   stabilize: false,         // skip animation-freeze + font wait for this capture
-  skipDom: true,            // pixel diff only, no noise hint
+  skipDom: true,            // no DOM diff, noise hint or style check
 });
 ```
 
 Global settings (thresholds, tolerances, `ignoreSelectors`) live in `.testivai/config.json` — see the [main docs](https://github.com/testivai/testivai-oss/tree/main/docs).
+
+## DOM and style check
+
+Each capture writes `dom.html` and `elements.json` (each element's box and computed-style digest) next to the screenshot. When pixels differ and the DOM is identical, the report reads:
+
+- computed styles identical → likely render noise (anti-aliasing, font hinting): likely, not proven;
+- computed styles differ → a style-only change, which is real, with the restyled elements named;
+- styles not compared (no element map on one side, e.g. `skipElementMap: true` or a blocked collector script) → could be render noise or a stylesheet-only change, so compare the images before approving.
+
+All of these stay `changed` unless you configure a pass criterion; `noiseAutoPass` passes only the first.
 
 ## Full-page screenshots
 

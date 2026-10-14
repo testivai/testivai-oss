@@ -375,9 +375,17 @@ describe('Report Generator', () => {
     describe('noiseAutoPass', () => {
       const DOM = '<html><body><p>stable</p></body></html>';
 
-      it('auto-passes DOM-identical small diffs when enabled', () => {
+      /** Element maps with identical style digests on both sides (styleCheck 'match'). */
+      const writeMatchingElementMaps = (name: string) => {
+        const map = JSON.stringify([{ path: 'body > p', x: 0, y: 0, width: 10, height: 10, styleHash: 'aaaa' }]);
+        fs.writeFileSync(path.join(tmpDir, '.testivai', 'baselines', name, 'elements.json'), map);
+        fs.writeFileSync(path.join(tmpDir, '.testivai', 'temp', name, 'elements.json'), map);
+      };
+
+      it('auto-passes small diffs with identical DOM and computed styles when enabled', () => {
         store.write('page', baselinePng(), undefined, DOM);
         store.writeTemp('page', blockOff(), DOM);
+        writeMatchingElementMaps('page');
 
         const results = compareAll({
           projectRoot: tmpDir,
@@ -389,11 +397,30 @@ describe('Report Generator', () => {
         expect(results[0].status).toBe('passed');
         expect(results[0].autoPassed).toBe('noise');
         expect(results[0].dom?.noiseHint).toBe(true);
+        expect(results[0].dom?.styleCheck).toBe('match');
+      });
+
+      it('does not auto-pass a DOM-identical diff whose styles were not compared (no element maps)', () => {
+        store.write('page', baselinePng(), undefined, DOM);
+        store.writeTemp('page', blockOff(), DOM);
+
+        const results = compareAll({
+          projectRoot: tmpDir,
+          reportDir,
+          threshold: 0.1,
+          passCriteria: { noiseAutoPass: true, noiseMaxDiffPercent: 10 },
+        });
+
+        expect(results[0].dom?.noiseHint).toBe(true);
+        expect(results[0].dom?.styleCheck).toBe('unavailable');
+        expect(results[0].status).toBe('changed');
+        expect(results[0].autoPassed).toBeUndefined();
       });
 
       it('does not auto-pass when the DOM changed', () => {
         store.write('page', baselinePng(), undefined, DOM);
         store.writeTemp('page', blockOff(), '<html><body><p>edited</p><span>new</span></body></html>');
+        writeMatchingElementMaps('page');
 
         const results = compareAll({
           projectRoot: tmpDir,
@@ -408,6 +435,7 @@ describe('Report Generator', () => {
       it('does not auto-pass above noiseMaxDiffPercent', () => {
         store.write('page', baselinePng(), undefined, DOM);
         store.writeTemp('page', blockOff(), DOM);
+        writeMatchingElementMaps('page');
 
         const results = compareAll({
           projectRoot: tmpDir,

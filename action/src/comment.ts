@@ -31,9 +31,16 @@ function formatDiffPercent(snapshot: SnapshotResult): string {
 }
 
 /**
- * Render the DOM noise hint inside the <details> body for a changed
- * snapshot. Mirrors the witness HTML report wording so reviewers see
- * the same signal in the PR comment.
+ * Render the DOM / style verdict inside the <details> body for a changed
+ * snapshot, so reviewers see the same signal as the witness HTML report.
+ *
+ * When the pixels differ and the DOM is identical, the style check decides
+ * what that means:
+ *   - 'match': likely render noise (still not proof);
+ *   - 'mismatch': a real style-only change;
+ *   - 'unavailable', or no styleCheck (older results.json): the styles were
+ *     not compared, so render noise and a stylesheet-only change are both
+ *     still possible. Never call this case noise.
  *
  * Returns empty string when the snapshot has no DOM data — better than
  * a confusing "no signal available" line.
@@ -42,10 +49,15 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
   const lines: string[] = [];
 
   // Verdict priority mirrors the witness report: style-only change (real)
-  // > page shift (injected content) > structural DOM change > render noise.
-  if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.styleChanges) {
-    const n = snapshot.dom.styleChanges.count;
-    const first = snapshot.dom.styleChanges.elements[0];
+  // > page shift (injected content) > structural DOM change > identical DOM
+  // (likely noise only when the styles were compared and matched).
+  // Style-only only when the DOM is unchanged: a class or style attribute
+  // change restyles elements too, and is reported as a DOM change below.
+  const styleChanges = snapshot.dom?.styleCheck === 'mismatch' ? snapshot.dom.styleChanges : undefined;
+  const styleOnly = Boolean(styleChanges && !snapshot.dom?.changed);
+  if (styleOnly && styleChanges) {
+    const n = styleChanges.count;
+    const first = styleChanges.elements[0];
     const el = first ? ` (\`${first.split(' > ').slice(-1)[0]}\`${n > 1 ? ', …' : ''})` : '';
     lines.push(`> **Style-only change — real, not noise** — ${n} element${n === 1 ? '' : 's'} restyled with identical DOM${el}.`);
   }
@@ -55,17 +67,16 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
     lines.push(`> **Layout shift** — everything below y=${p.belowY} moved ${p.dy > 0 ? 'down' : 'up'} ${Math.abs(p.dy)}px (${p.count} elements together). Look *above* that line for inserted/removed content.`);
   }
 
-  if (snapshot.dom && !(snapshot.dom.styleCheck === 'mismatch' && snapshot.dom.styleChanges)) {
+  if (snapshot.dom && !styleOnly) {
     if (snapshot.dom.noiseHint) {
-      // An identical DOM does not rule out a stylesheet-only change unless the
-      // computed styles were compared too; say which, as the witness report does.
-      const styleNote =
-        snapshot.dom.styleCheck === 'match'
-          ? ' Styles verified unchanged.'
-          : snapshot.dom.styleCheck === 'unavailable'
-            ? ' (Style check unavailable — no comparable style digests on both sides.)'
-            : '';
-      lines.push(`> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting).${styleNote}`);
+      // An identical DOM rules out a stylesheet-only change only when the
+      // computed styles were compared too. 'unavailable' and a missing
+      // styleCheck (older results.json) mean they were not: unknown, not noise.
+      if (snapshot.dom.styleCheck === 'match') {
+        lines.push('> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.');
+      } else {
+        lines.push('> **DOM unchanged, styles not compared** — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.');
+      }
     } else {
       const s = snapshot.dom.summary;
       if (s) {
@@ -74,7 +85,13 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
         if (s.removed > 0) parts.push(`${s.removed} removed`);
         if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute change${s.attributeChanges === 1 ? '' : 's'}`);
         if (s.textChanges) parts.push(`${s.textChanges} text change${s.textChanges === 1 ? '' : 's'}`);
-        lines.push(`> **DOM changed** — ${parts.join(', ') || 'structural difference'}.`);
+        const alsoRestyled = styleChanges
+          ? ` Computed styles also changed on ${styleChanges.count} element${styleChanges.count === 1 ? '' : 's'} (${styleChanges.elements
+              .slice(0, 3)
+              .map((p) => `\`${p.split(' > ').slice(-1)[0]}\``)
+              .join(', ')}${styleChanges.count > 3 ? ', …' : ''}).`
+          : '';
+        lines.push(`> **DOM changed** — ${parts.join(', ') || 'structural difference'}.${alsoRestyled}`);
       }
     }
   }
@@ -161,7 +178,7 @@ ${domHint}
     comment += '\n';
   }
 
-  comment += '---\n> Pixel-exact comparison — dynamic content (images, fonts, animations) may cause false positives. An identical DOM points to render noise, and rules out a stylesheet-only change only when the hint also says "Styles verified unchanged". Reviewing with an AI agent? [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (`explain_snapshot`).\n\n*Generated by [TestivAI](https://github.com/testivai/testivai-oss)*\n';
+  comment += '---\n> Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with `ignoreSelectors` or exclude it with `mask`. An identical DOM points to render noise only when the hint also says "Styles verified unchanged"; without that, a stylesheet-only change is not ruled out. Reviewing with an AI agent? [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (`explain_snapshot`).\n\n*Generated by [TestivAI](https://github.com/testivai/testivai-oss)*\n';
 
   return comment;
 }

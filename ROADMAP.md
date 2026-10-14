@@ -101,8 +101,9 @@ flip-flops across recent runs and badge them "flaky" in the report.
 
 ### 3.1 Computed-style fingerprint — SHIPPED (witness 1.6.0)
 The documented false negative, closed: captures carry a per-element
-computed-style digest (fixed property list), and the noise hint fires only
-when DOM **and** style digests both match. A stylesheet-only change now
+computed-style digest (fixed property list), and an identical DOM reads as
+likely noise only when the style digests match too (without comparable
+digests it reads "styles not compared"). A stylesheet-only change now
 reads as an attributed "Styles changed" signal (`dom.styleCheck`,
 `dom.styleChanges` in results.json) that `noiseAutoPass` can never
 auto-pass. The benchmark failure case is a permanent regression test.

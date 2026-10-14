@@ -76,21 +76,46 @@ export function readResults(paths: ProjectPaths): ResultsFile | null {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as ResultsFile;
 }
 
+/**
+ * Why the styles of an identical-DOM snapshot were not compared, or null when
+ * they were. noiseHint means the DOM is identical and no style mismatch was
+ * found, but only styleCheck 'match' proves the styles were compared:
+ * 'unavailable' (no comparable digests on both sides) and results written
+ * before the style check also carry the hint. Those are unknown, not noise:
+ * a stylesheet-only change is not ruled out.
+ */
+function stylesNotCompared(dom: DomInfo | undefined): 'unavailable' | 'absent' | null {
+  if (!dom?.noiseHint || dom.styleCheck === 'match') return null;
+  return dom.styleCheck === undefined ? 'absent' : 'unavailable';
+}
+
+/** The parenthetical naming why the styles were not compared. */
+const NOT_COMPARED_REASON: Record<'unavailable' | 'absent', string> = {
+  unavailable: 'style check unavailable',
+  absent: 'no style check in these results',
+};
+
 /** One-line, agent-oriented verdict for a snapshot. */
 export function verdictFor(snapshot: SnapshotResult): string {
-  if (snapshot.status === 'passed') return 'passed — no visual change';
-  if (snapshot.status === 'new') return 'new snapshot — no baseline yet; a human should review and approve it';
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
-  // noiseHint means the DOM is identical and no style mismatch was found. Only
-  // styleCheck 'match' proves the styles were compared; 'unavailable' (no
-  // comparable digests) and results from before the style check also carry
-  // the hint, so the verdict must not claim the styles matched there.
+  const notCompared = stylesNotCompared(snapshot.dom);
+  if (snapshot.status === 'passed') {
+    if (!snapshot.autoPassed) return 'passed — no visual change';
+    // An auto-pass is a configured tolerance: the pixel diff is still there.
+    const verdict = `passed — auto-passed by the configured '${snapshot.autoPassed}' criterion: ${pct}, within its tolerance`;
+    return snapshot.autoPassed === 'noise' && notCompared
+      ? `${verdict}; styles were not compared (${NOT_COMPARED_REASON[notCompared]}), so a stylesheet-only change is not ruled out — look at the diff`
+      : verdict;
+  }
+  if (snapshot.status === 'new') return 'new snapshot — no baseline yet; a human should review and approve it';
+  if (notCompared) {
+    return (
+      `changed (${pct}) but the DOM is structurally identical and styles were not compared (${NOT_COMPARED_REASON[notCompared]}) — ` +
+      'could be render noise or a stylesheet-only change; look at the diff before approving'
+    );
+  }
   if (snapshot.dom?.noiseHint) {
-    const evidence =
-      snapshot.dom.styleCheck === 'match'
-        ? 'the DOM and computed styles both match'
-        : 'DOM is structurally identical; styles were not compared (style check unavailable), so a style-only change is not ruled out';
-    return `changed (${pct}) but ${evidence} — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
+    return `changed (${pct}) but the DOM and computed styles both match — likely render noise (font hinting, anti-aliasing); mention it, don't block`;
   }
   if (snapshot.dom?.changed) {
     const s = snapshot.dom.summary;
@@ -252,14 +277,28 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   if (snapshot.status === 'new') {
     guidance.push('No baseline exists yet — this is a first capture, not a regression. A human should review and approve it.');
   }
-  if (snapshot.dom?.noiseHint) {
-    const evidence =
-      snapshot.dom.styleCheck === 'match'
-        ? 'the DOM is structurally identical and style digests match'
-        : 'the DOM is structurally identical; styles were not compared (no comparable style digests), so a style-only change is not ruled out';
-    guidance.push(`Pixels differ but ${evidence} — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.`);
+  const notCompared = stylesNotCompared(snapshot.dom);
+  // The DOM signal is computed before the pass criteria, so a passed snapshot
+  // can still carry noiseHint. The noise / styles-not-compared reading is for
+  // a diff pending review; a passed snapshot has nothing pending approval
+  // (an auto-pass gets its own line below), so the verdict and guidance agree.
+  const pending = snapshot.status === 'changed';
+  if (pending && notCompared) {
+    const why = notCompared === 'absent' ? 'these results have no style check' : 'no comparable style digests on both sides';
+    guidance.push(
+      'Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is ' +
+        `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
+        'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
+    );
+  } else if (pending && snapshot.dom?.noiseHint) {
+    guidance.push('Pixels differ but the DOM is structurally identical and style digests match — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
   }
-  if (snapshot.dom?.styleCheck === 'mismatch') {
+  if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.changed) {
+    // A class or style attribute change: the DOM changed AND elements were
+    // restyled. Never call the DOM identical here.
+    const els = snapshot.dom.styleChanges?.elements?.slice(0, 5).join(', ');
+    guidance.push(`Computed styles also changed on ${snapshot.dom.styleChanges?.count ?? 'some'} element(s)${els ? ` (${els})` : ''} along with the DOM change.`);
+  } else if (snapshot.dom?.styleCheck === 'mismatch') {
     const els = snapshot.dom.styleChanges?.elements?.slice(0, 5).join(', ');
     guidance.push(`Computed styles changed on ${snapshot.dom.styleChanges?.count ?? 'some'} element(s)${els ? ` (${els})` : ''} while the DOM stayed identical — a stylesheet-only change. This is REAL, not noise.`);
   }
@@ -273,7 +312,13 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
     const s = snapshot.dom.summary;
     guidance.push(`The DOM changed structurally (${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''}) — confirm the change is intended before approving.`);
   }
-  if (snapshot.autoPassed) {
+  if (snapshot.autoPassed === 'noise' && notCompared) {
+    // A noise auto-pass that did not require a style match (older results).
+    guidance.push(
+      "This diff auto-passed via the 'noise' criterion although its styles were not compared, so a " +
+        'stylesheet-only change was not ruled out — compare the images (get_diff) before relying on it.',
+    );
+  } else if (snapshot.autoPassed) {
     guidance.push(`This diff auto-passed via the '${snapshot.autoPassed}' criterion — reported for transparency, no action needed.`);
   }
   if (snapshot.maskWarnings?.length) {
@@ -405,7 +450,11 @@ export function resolveApprovalPrompt(argv: string[], configValue: boolean | und
 
 /** Snapshots listed together because their grouping signal is identical. */
 export interface ChangeGroup {
-  basis: 'style-only' | 'page-shift' | 'noise';
+  /**
+   * 'styles-not-compared' is an identical DOM whose styles were not compared:
+   * unknown (render noise or a stylesheet-only change), never 'noise'.
+   */
+  basis: 'style-only' | 'page-shift' | 'styles-not-compared' | 'noise';
   /** What every member has in common, phrased for the reader. */
   label: string;
   /** Snapshot names, sorted. Always two or more. */
@@ -414,14 +463,14 @@ export interface ChangeGroup {
 
 type Signature = { basis: ChangeGroup['basis']; key: string; label: string };
 
-// Real changes before noise when groups are the same size.
-const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'noise'];
+// Real changes, then unknowns, before likely noise when groups are the same size.
+const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles-not-compared', 'noise'];
 
 /**
  * The one grouping signal a changed snapshot carries, or null when it must
  * not be grouped. Precedence: structural (never grouped) > style-only >
- * page shift > noise. Every rule errs towards null: under-grouping is
- * acceptable, over-grouping is a bug.
+ * page shift > styles not compared > noise. Every rule errs towards null:
+ * under-grouping is acceptable, over-grouping is a bug.
  */
 function signatureOf(s: SnapshotResult): Signature | null {
   // Only changed snapshots; auto-passed ones are status 'passed'.
@@ -457,14 +506,21 @@ function signatureOf(s: SnapshotResult): Signature | null {
     };
   }
 
+  // Styles not compared is unknown, not noise: its own basis, so it is never
+  // grouped or labelled with noise. Unavailable and absent style checks are
+  // labelled differently, so they are keyed apart.
+  const notCompared = stylesNotCompared(s.dom);
+  if (notCompared) {
+    return {
+      basis: 'styles-not-compared',
+      key: `styles-not-compared:${notCompared}`,
+      label:
+        `identical DOM, styles not compared (${NOT_COMPARED_REASON[notCompared]}): ` +
+        'render noise or a stylesheet-only change, not ruled out',
+    };
+  }
   if (s.dom.noiseHint) {
-    return s.dom.styleCheck === 'match'
-      ? { basis: 'noise', key: 'noise:match', label: 'likely render noise: the DOM and computed styles both match' }
-      : {
-          basis: 'noise',
-          key: 'noise:not-compared',
-          label: 'likely render noise with identical DOM, but styles not compared (style check unavailable)',
-        };
+    return { basis: 'noise', key: 'noise:match', label: 'likely render noise: the DOM and computed styles both match' };
   }
   return null;
 }
@@ -473,8 +529,8 @@ function signatureOf(s: SnapshotResult): Signature | null {
  * Deterministic grouping of changed snapshots whose grouping signal is
  * identical. Pure: no I/O, and the output does not depend on input order.
  * Groups are ordered by size (largest first), then kind (style-only, page
- * shift, noise), then signature; members by name. Only groups with two or
- * more members are returned.
+ * shift, styles not compared, noise), then signature; members by name. Only
+ * groups with two or more members are returned.
  */
 export function groupChanges(snapshots: SnapshotResult[]): ChangeGroup[] {
   const byKey = new Map<string, { signature: Signature; members: string[] }>();

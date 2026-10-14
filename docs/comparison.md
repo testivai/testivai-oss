@@ -73,21 +73,24 @@ Tunables:
 ```json
 {
   "diffRegions": {
-    "minSize": 10,        // noise floor: ignore clusters smaller than N changed px
+    "minSize": 10,        // smallest cluster (changed px) listed as a region; smaller ones still count toward diff %
     "mergeDistance": 12   // merge clusters within N px of each other
   }
 }
 ```
 
-`minSize` filters isolated speck noise; `mergeDistance` re-joins one
+`minSize` leaves isolated specks out of the region list (their pixels still
+count toward the diff percentage and the status); `mergeDistance` re-joins one
 logical change that rasterized as several nearby fragments (e.g. letters
 of one word). Merging cascades until stable.
 
 ## Element attribution — which element changed
 
-When captures carry an element map (`elements.json`, recorded automatically
-by the Playwright adapter in local mode), every region is attributed to the
-smallest element covering it:
+When captures carry an element map (`elements.json`, recorded by the
+Playwright JS/TS, WebdriverIO, Selenium and Ruby adapters; not by
+playwright-python, playwright-java, the `testivai witness <url>` crawler or
+the `testivai run` sidecar), every region is attributed to the smallest
+element covering it:
 
 ```json
 "regions": [{
@@ -113,22 +116,27 @@ elements below a line all moved by one uniform offset, the snapshot gains
 ```
 
 and the report explains it in words. No element map (image-only input,
-older captures, adapters without support yet) → regions still work, just
-without names.
+older captures, capture paths without one) → regions still work, just
+without names, and there is no style check or shift detection.
 
-## Style fingerprint — the noise hint you can trust
+## Style fingerprint — closing the stylesheet-only gap
 
 The noise hint's historical weakness (documented in our benchmark repo): a
 stylesheet-only change alters pixels while the DOM stays identical, which
 looked exactly like render noise. With element maps on both sides, the
-hint now requires the computed-style digests to match too:
+computed-style digests are compared too, and only a match keeps the
+"likely render noise" reading:
 
 | DOM | Style digests | Verdict |
 |---|---|---|
-| identical | match | likely render noise (`styleCheck: "match"`) |
-| identical | **differ** | **Styles changed** — real change, attributed to the element(s); never auto-passed |
-| identical | unavailable | legacy DOM-only hint, labeled `styleCheck: "unavailable"` |
+| identical | match | likely render noise (`styleCheck: "match"`), still not proof; auto-passed only with `noiseAutoPass`, up to `noiseMaxDiffPercent` |
+| identical | **differ** | **Styles changed** — real change, attributed to the element(s); `noiseAutoPass` never passes it |
+| identical | unavailable | **Styles not compared** (`styleCheck: "unavailable"`: no element map on one or both sides, or no comparable digest) — could be render noise or a stylesheet-only change, which is not ruled out. Compare the images before approving; `noiseAutoPass` never passes it |
 | changed | — | DOM changed (counts shown) |
+
+`dom.noiseHint` is `true` in the first and third rows; only `styleCheck`
+tells them apart. A `maxDiffPercent` / `maxDiffPixels` tolerance is
+blind to all of this: it passes any diff within its bound, whatever the row.
 
 The digest covers a fixed, documented property list (colors, backgrounds,
 borders, typography, spacing, shadows, opacity/visibility/display) —
@@ -142,8 +150,9 @@ time.
 3. The pixel diff runs with `threshold` (per-pixel) and the engine's
    anti-aliasing absorption.
 4. Clustering groups what remains into regions.
-5. Pass criteria (`maxDiffPercent`, `maxDiffPixels`, `noiseAutoPass`)
-   decide the verdict — see [Getting Started](./intro.md) for those.
+5. Pass criteria (`maxDiffPercent`, `maxDiffPixels`, `noiseAutoPass`,
+   `shiftTolerance`) decide the verdict. Each is off until you configure
+   it — see [Getting Started](./intro.md) for those.
 6. Mask hatching is drawn onto the diff image (after clustering, so the
    hatch itself never counts as a region).
 

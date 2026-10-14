@@ -39,8 +39,11 @@ states (e.g. a loading spinner snapshot).
 
 Some page regions change on every run and are irrelevant to your visual
 baseline: timestamps, live-chat widgets, rotating ad banners, "last updated"
-badges. `ignoreSelectors` lets you blank those elements before the capture
-so they never contribute to the diff.
+badges. Stabilization does not touch them: you list them. `ignoreSelectors`
+lets you blank those elements before the capture so their content never
+contributes to the diff. In the default `mask` mode the box keeps its layout,
+so if its size changes it can still shift what is around it; use `collapse`
+for that.
 
 ### Two modes
 
@@ -120,15 +123,24 @@ per-snapshot calls) — the first occurrence wins.
 | Dynamic text (timestamps, emails, counters, "ago" strings) | `ignoreSelectors` with `mask` | Blanks the text while preserving the surrounding layout |
 | Data-dependent table/list heights that vary across runs | `ignoreSelectors` with `collapse` | Removes the element from flow so the rest of the page stays aligned |
 | Image/avatar/ad content changing inside a stable container | `ignoreSelectors` with `mask` | Hides the variable content, keeps the container box |
-| Cross-machine anti-aliasing or font-rendering differences | Tune `threshold` or enable `noiseAutoPass` | The DOM noise hint already flags these ("pixels differ but DOM and styles unchanged"); let tolerance auto-pass them |
+| Cross-machine anti-aliasing or font-rendering differences | Per-platform baselines ([below](#cross-platform-baselines)), tune `threshold`, or enable `noiseAutoPass` | The report labels these *likely render noise* when the DOM and the computed styles both match; `noiseAutoPass` passes only those, never a diff whose styles were not compared |
 
 :::tip DOM noise hint
-When the pixel diff is non-zero but the DOM is structurally identical and no
-computed-style change was found, the report labels the snapshot with a
-**noise hint**. (A style-only change, with identical DOM and different computed
-styles, is labelled as a real change instead.) The noise hint usually means font
-rendering, sub-pixel anti-aliasing, or GPU-level differences — not a real
-visual regression. Use `noiseAutoPass` to let these auto-pass up to a
+When the pixel diff is non-zero but the DOM is structurally identical, the
+computed-style check decides what the report says:
+
+- **Styles compared and identical** (`styleCheck: "match"`) → **likely render
+  noise**: usually font rendering, sub-pixel anti-aliasing, or GPU-level
+  differences. Likely, not proven: worth a glance, not a block.
+- **Styles differ** (`styleCheck: "mismatch"`) → a **style-only change**,
+  labelled as a real change.
+- **Styles not compared** (`styleCheck: "unavailable"`: no element map on one
+  or both sides, as with `testivai witness <url>`, playwright-python and
+  playwright-java) → could be render noise or a stylesheet-only change, which
+  is not ruled out. Compare the images before approving.
+
+Noise is labelled, not removed: these snapshots stay `changed` unless you
+enable `noiseAutoPass`, which passes only the first case, up to a
 `noiseMaxDiffPercent` ceiling.
 :::
 
@@ -155,10 +167,10 @@ failing the run:
 | `threshold` | `number` (0–1) | `0.1` | Per-pixel tolerance. Pixels differing by less than this fraction (0.1 = 10%) are considered identical |
 | `maxDiffPercent` | `number` (0–100) | `0` | Snapshots whose total diff percentage is at or below this value report as **passed**. Default 0 = only pixel-perfect passes |
 | `maxDiffPixels` | `number` | unset | Absolute variant: pass when changed-pixel count is at or below this. When both are set, satisfying **either** passes |
-| `noiseAutoPass` | `boolean` | `false` | Auto-pass diffs whose DOM is structurally identical (the noise hint), up to `noiseMaxDiffPercent` |
-| `noiseMaxDiffPercent` | `number` (0–100) | `1` | Upper diff-% bound for `noiseAutoPass`. DOM-identical diffs larger than this still show as changed |
-| `shiftTolerance` | `number` (px) | off | Auto-pass when every diff region is a pure element shift within this many px per axis — kills sub-pixel layout jitter (labeled `autoPassed: "shift"`, auditable in the report) |
-| `diffRegions` | `object` | `{ minSize: 10, mergeDistance: 12 }` | Diff clustering: `minSize` = noise floor in pixels, `mergeDistance` = px gap for merging nearby diff regions |
+| `noiseAutoPass` | `boolean` | `false` | Auto-pass likely render noise, up to `noiseMaxDiffPercent` (labeled `autoPassed: "noise"`): only a diff whose DOM is structurally identical (`dom.noiseHint`) **and** whose computed styles were compared and match (`dom.styleCheck: "match"`). It never passes a diff whose styles were not compared (`"unavailable"`, e.g. every `testivai witness <url>` capture) or changed (`"mismatch"`); it leaves those `changed` for a human. **Changed in this release:** `@testivai/witness` 2.1.1 and earlier also passed diffs whose styles were not compared |
+| `noiseMaxDiffPercent` | `number` (0–100) | `1` | Upper diff-% bound for `noiseAutoPass`. Diffs with identical DOM and computed styles that are larger than this still show as changed |
+| `shiftTolerance` | `number` (px) | off | Auto-pass when every diff region is a pure element shift within this many px per axis — kills sub-pixel layout jitter (labeled `autoPassed: "shift"`, auditable in the report). Needs element maps on both sides |
+| `diffRegions` | `object` | `{ minSize: 10, mergeDistance: 12 }` | Diff clustering: `minSize` = smallest cluster (changed px) listed as a region, `mergeDistance` = px gap for merging nearby diff regions. Pixels in dropped clusters still count toward the diff percentage |
 
 ### Capture behavior
 

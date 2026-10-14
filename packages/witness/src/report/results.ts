@@ -12,17 +12,23 @@ export interface SnapshotDomSignal {
   /** Per-bucket counts; null when changed is false. */
   summary: { added: number; removed: number; attributeChanges: number; textChanges?: number } | null;
   /**
-   * Noise hint: pixel diff is non-zero but DOM is structurally unchanged
-   * AND (when element maps exist) computed-style digests match. Suggests
-   * render noise (anti-aliasing, font hinting, sub-pixel layout) rather
-   * than a real visual regression.
+   * Noise hint: pixel diff is non-zero, the DOM is structurally unchanged,
+   * and no computed-style mismatch was found. Read it together with
+   * `styleCheck`: only with 'match' does it suggest render noise
+   * (anti-aliasing, font hinting, sub-pixel layout), and even then it is not
+   * proof. It is also true when styleCheck is 'unavailable' (or missing, in
+   * older results): styles were not compared, so a stylesheet-only change is
+   * not ruled out.
    */
   noiseHint: boolean;
   /**
-   * Style-fingerprint verdict: 'match' (digests equal — the hint is
-   * trustworthy), 'mismatch' (styles changed with identical DOM — a REAL
-   * change; the noise hint is suppressed), 'unavailable' (no element
-   * maps — legacy DOM-only hint, labeled).
+   * Style-fingerprint verdict: 'match' (comparable digests equal — likely
+   * render noise, still not proof), 'mismatch' (styles changed with
+   * identical DOM — a REAL change; the noise hint is suppressed),
+   * 'unavailable' (no element map on one or both sides, or no element with
+   * a style digest on both sides — styles were not compared, so a
+   * stylesheet-only change is not ruled out). Absent in results written
+   * before the style check existed; treat that like 'unavailable'.
    */
   styleCheck?: 'match' | 'mismatch' | 'unavailable';
   /** Present on mismatch: how many elements changed styles, and which. */
@@ -70,8 +76,10 @@ export interface SnapshotResult {
   /**
    * Present when the snapshot's pixels differed but a pass criterion
    * reported it as passed: 'threshold' (within maxDiffPercent /
-   * maxDiffPixels), 'noise' (DOM identical + within noiseMaxDiffPercent,
-   * with noiseAutoPass enabled), or 'shift' (every region is a pure
+   * maxDiffPixels), 'noise' (noiseAutoPass enabled, DOM identical AND
+   * computed styles compared and identical — styleCheck 'match' — and
+   * within noiseMaxDiffPercent; a diff whose styles were not compared or
+   * changed is never auto-passed as noise), or 'shift' (every region is a pure
    * element shift within shiftTolerance px). The diff image is still
    * written — auto-passes stay auditable.
    */

@@ -9,7 +9,10 @@
  *
  * Everything downstream of capture (diff, tolerances, noise hint, report,
  * approve, GitHub Action) is the exact same pipeline the test-suite adapters
- * feed.
+ * feed. The capture itself differs: no element map is written, so regions
+ * stay unattributed, no page shift is detected, and the computed-style check
+ * has nothing to compare (dom.styleCheck is 'unavailable', a stylesheet-only
+ * change is not ruled out, and noiseAutoPass never passes these snapshots).
  */
 
 import CDP from 'chrome-remote-interface';

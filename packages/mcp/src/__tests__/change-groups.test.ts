@@ -83,13 +83,30 @@ describe('groupChanges', () => {
     ]);
   });
 
-  it('splits noise by whether the styles were compared', () => {
-    expect(
-      members([noise('a', 'match'), noise('b', 'match'), noise('c', 'unavailable'), noise('d', undefined)]),
-    ).toEqual([
-      ['noise', ['a', 'b']],
-      ['noise', ['c', 'd']],
+  // Only a compared style match makes identical-DOM diffs likely noise. When
+  // the styles were not compared, a stylesheet-only change is not ruled out,
+  // so those snapshots get their own basis and are never grouped (or
+  // labelled) with noise. A style check that came back unavailable and
+  // results with no style check at all are labelled differently, so they are
+  // grouped apart.
+  it('keeps identical-DOM diffs whose styles were not compared out of the noise group', () => {
+    const groups = groupChanges([
+      noise('a', 'match'),
+      noise('b', 'match'),
+      noise('c', 'unavailable'),
+      noise('d', 'unavailable'),
+      noise('e', undefined),
+      noise('f', undefined),
     ]);
+    expect(groups.map((g) => [g.basis, g.members])).toEqual([
+      ['styles-not-compared', ['e', 'f']],
+      ['styles-not-compared', ['c', 'd']],
+      ['noise', ['a', 'b']],
+    ]);
+    expect(groups[0].label).toBe(
+      'identical DOM, styles not compared (no style check in these results): render noise or a stylesheet-only change, not ruled out',
+    );
+    expect(groups.slice(0, 2).every((g) => !/likely render noise/i.test(g.label))).toBe(true);
   });
 
   it('puts each snapshot in one group: style-only before page shift before noise', () => {
@@ -102,22 +119,29 @@ describe('groupChanges', () => {
     ]);
   });
 
-  it('orders groups by size, then kind (style-only, page shift, noise), members by name, whatever the input order', () => {
+  it('orders groups by size, then kind (style-only, page shift, styles not compared, noise), members by name, whatever the input order', () => {
     const input = [
       noise('n2', 'match'),
       styleOnly('s3', ['x']),
+      noise('u2', 'unavailable'),
       shifted('p1', 8, 40),
       styleOnly('s1', ['x']),
       noise('n1', 'match'),
+      noise('u1', 'unavailable'),
       styleOnly('s2', ['x']),
       shifted('p2', 8, 40),
     ];
     const expected = [
       ['style-only', ['s1', 's2', 's3']],
       ['page-shift', ['p1', 'p2']],
+      ['styles-not-compared', ['u1', 'u2']],
       ['noise', ['n1', 'n2']],
     ];
-    for (const order of [input, [...input].reverse(), [input[3], input[0], input[6], input[1], input[5], input[2], input[4]]]) {
+    for (const order of [
+      input,
+      [...input].reverse(),
+      [input[4], input[0], input[8], input[2], input[1], input[7], input[3], input[6], input[5]],
+    ]) {
       expect(members(order)).toEqual(expected);
       expect(changeGroupLines(order)).toEqual(changeGroupLines(input));
     }
@@ -131,14 +155,28 @@ describe('groupChanges', () => {
     expect(shift.label).toMatch(/y=120 moved down 24px/);
     expect(shift.label).toMatch(/not .*cause/i);
     const [notCompared] = groupChanges([noise('a', 'unavailable'), noise('b', 'unavailable')]);
-    expect(notCompared.label).toMatch(/styles not compared/i);
-    expect(notCompared.label).not.toMatch(/styles both match/i);
+    expect(notCompared.basis).toBe('styles-not-compared');
+    expect(notCompared.label).toBe(
+      'identical DOM, styles not compared (style check unavailable): render noise or a stylesheet-only change, not ruled out',
+    );
+    expect(notCompared.label).not.toMatch(/likely render noise|styles both match/i);
+    const [noiseGroup] = groupChanges([noise('a', 'match'), noise('b', 'match')]);
+    expect(noiseGroup.basis).toBe('noise');
+    expect(noiseGroup.label).toBe('likely render noise: the DOM and computed styles both match');
   });
 });
 
 describe('changeGroupLines', () => {
   it('is empty when no group has two or more members', () => {
     expect(changeGroupLines([styleOnly('a', ['body > header']), structural('b')])).toEqual([]);
+  });
+
+  it('prints the styles-not-compared group without calling it noise', () => {
+    const lines = changeGroupLines([noise('a', 'unavailable'), noise('b', 'unavailable')]);
+    expect(lines[1]).toBe(
+      '- a, b (2): identical DOM, styles not compared (style check unavailable): render noise or a stylesheet-only change, not ruled out',
+    );
+    expect(lines.join('\n')).not.toMatch(/likely render noise/i);
   });
 
   it('heads the section, lists one line per group, and names truncated snapshots it could not group', () => {
