@@ -52,9 +52,10 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 - **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
-The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison. The action does not filter on the hint: every snapshot with status `changed` is listed with its approve command. A diff becomes `passed` before it reaches the action only through witness pass criteria you configure (`maxDiffPercent`, `maxDiffPixels`, `shiftTolerance`, or `noiseAutoPass`, which passes an identical-DOM diff only when `styleCheck` is "match"). When pixels differ but the DOM is structurally identical, the computed-style check decides what the comment says:
+The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison. The action does not filter on the hint: every snapshot with status `changed` is listed with its approve command. A diff becomes `passed` before it reaches the action only through witness pass criteria you configure (`maxDiffPercent`, `maxDiffPixels`, `shiftTolerance`, or `noiseAutoPass`, which passes an identical-DOM diff only when `styleCheck` is "match" and the diff is not concentrated in one area). When pixels differ but the DOM is structurally identical, the computed-style check decides what the comment says:
 
-- **Styles compared and unchanged** (`styleCheck: "match"`): likely render noise (anti-aliasing, font hinting), still not proof. The line ends "Styles verified unchanged".
+- **Styles compared and unchanged** (`styleCheck: "match"`), small and scattered diff: likely render noise (anti-aliasing, font hinting), still not proof. The line ends "Styles verified unchanged; the diff is small and scattered".
+- **Styles compared and unchanged, but the diff is concentrated in one area** (every diff region fits in a box covering at most a third of the page) **or large** (over 1% of pixels): not called noise. The style check covers a fixed list of properties, so this is a bad capture or a change it does not cover (size, overflow, transform, images…). The comment names the regions and their box, and says to compare the images before approving.
 - **Styles changed** (`styleCheck: "mismatch"`): a style-only change, which is real, not noise.
 - **Styles not compared** (`styleCheck: "unavailable"`, or a `results.json` from before the style check): the comment says "DOM unchanged, styles not compared". It could be render noise or a stylesheet-only change, so compare the images before approving. This happens when there are no comparable style digests on both sides, for example when a capture has no element map.
 
@@ -71,7 +72,7 @@ When the DOM also differs, the comment summarises added / removed / attribute-ch
 <details>
 <summary>checkout-page — 0.5% different</summary>
 
-> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
+> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.
 
 /testivai approve checkout-page
 </details>

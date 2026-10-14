@@ -50,7 +50,7 @@ Optional tolerance and capture settings (all have safe defaults):
 |---|---|---|
 | `maxDiffPercent` | `0` | Diffs at or below this percentage report as **passed** — your team's tolerance dial |
 | `maxDiffPixels` | unset | Absolute variant: pass when changed-pixel count is at or below this |
-| `noiseAutoPass` | `false` | Auto-pass likely render noise, up to `noiseMaxDiffPercent`: only diffs whose DOM is structurally identical (`dom.noiseHint`) **and** whose computed styles were compared and match (`dom.styleCheck: "match"`). It never passes a diff whose styles were not compared (`"unavailable"`) or changed (`"mismatch"`). **Changed in this release:** `@testivai/witness` 2.1.1 and earlier also passed diffs whose styles were not compared |
+| `noiseAutoPass` | `false` | Auto-pass likely render noise, up to `noiseMaxDiffPercent`: only diffs whose DOM is structurally identical (`dom.noiseHint`) **and** whose computed styles were compared and match (`dom.styleCheck: "match"`). It never passes a diff whose styles were not compared (`"unavailable"`) or changed (`"mismatch"`), nor one concentrated in one area (every region within a box covering at most a third of the page). **Changed in this release:** `@testivai/witness` 2.1.1 and earlier also passed diffs whose styles were not compared, and diffs concentrated in one area |
 | `noiseMaxDiffPercent` | `1` | Upper bound (diff %) for `noiseAutoPass` |
 | `stabilize` | `true` | Freeze animations/transitions, hide the caret, and wait for web fonts before every capture |
 | `ignoreSelectors` | `[]` | Elements hidden (`visibility: hidden`) during capture — timestamps, ads, live widgets |

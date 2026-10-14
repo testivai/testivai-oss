@@ -203,8 +203,12 @@ CI runs again on the approve commit only if the approve step pushes with a token
    "dom": { "changed": false, "noiseHint": true, "styleCheck": "match" }
    ```
    - `noiseHint: true` + `changed: false` + `styleCheck: "match"` → the DOM and
-     computed styles are identical; the diff is likely render noise (font
-     hinting, anti-aliasing, sub-pixel rendering). Likely, not proven.
+     computed styles are identical; with a small, scattered diff (at most 1% of
+     pixels, no `regions` or regions spread over more than a third of the
+     page) it is likely render noise (font hinting, anti-aliasing, sub-pixel
+     rendering). Likely, not proven. With every region in one area, or over
+     1% of pixels, it is not noise: a bad capture or a change the style check
+     does not cover (size, overflow, transform, images); compare the images.
    - `noiseHint: true` + `styleCheck: "unavailable"` or missing → styles not
      compared: could be render noise or a stylesheet-only change. Do not call it
      noise; compare the images before approving.

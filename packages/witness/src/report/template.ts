@@ -9,6 +9,7 @@
  * 3-column diff view, approve command copy button, image zoom overlay.
  */
 
+import { describeRegions, diffShape, NOISE_MAX_DIFF_PERCENT, STYLE_CHECK_DOES_NOT_COVER } from './diff-shape';
 import type { ReportData, SnapshotResult } from './results';
 
 /**
@@ -146,6 +147,8 @@ export function renderHtml(data: ReportData): string {
     .verdict.v-noise { background: var(--info-bg); color: var(--info); border: 1px solid var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
     /* Identical DOM, styles not compared: unknown, so a warning look (dashed = not verified), never the info-blue noise style */
     .verdict.v-unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
+    /* Identical DOM and styles, but a diff concentrated in one area or large: not noise, a warning look */
+    .verdict.v-unexplained { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-style { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-structural { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
@@ -157,6 +160,7 @@ export function renderHtml(data: ReportData): string {
     .dom-hint { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
     .dom-hint.noise { background: var(--info-bg); color: var(--info); }
     .dom-hint.unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
+    .dom-hint.unexplained { background: var(--new-bg); color: var(--new); }
     .dom-hint.changed { background: var(--surface); border: 1px solid var(--border-soft); color: var(--text); }
     .dom-hint.style-changed { background: var(--new-bg); color: var(--new); }
     .dom-hint.style-changed code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 11px; }
@@ -274,7 +278,7 @@ export function renderHtml(data: ReportData): string {
     <div class="oss-notice">
       <h4>Pixel-exact mode</h4>
       <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
-      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise; when styles were not compared, a stylesheet-only change is not ruled out.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out.</p>
       <p>To reduce noise:<br>
         • Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
         • For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>
@@ -451,11 +455,13 @@ function renderStats(snapshot: SnapshotResult): string {
 /** Why an auto-passed snapshot passed, in the words of its criterion. */
 function autoPassNote(snapshot: SnapshotResult): string {
   if (snapshot.autoPassed === 'noise') {
-    // noiseAutoPass requires styleCheck 'match'; results written before
-    // that rule could carry a 'noise' pass whose styles were never compared.
-    return snapshot.dom?.styleCheck === 'match'
-      ? 'DOM and computed styles unchanged, within noise tolerance'
-      : 'DOM unchanged, styles not compared, within noise tolerance';
+    // noiseAutoPass requires styleCheck 'match' and a diff not concentrated
+    // in one area; results written before those rules could carry a 'noise'
+    // pass whose styles were never compared, or whose diff sits in one area.
+    if (snapshot.dom?.styleCheck !== 'match') return 'DOM unchanged, styles not compared, within noise tolerance';
+    return diffShape(snapshot).kind === 'concentrated'
+      ? 'DOM and computed styles unchanged, within noise tolerance, but the diff is concentrated in one area'
+      : 'DOM and computed styles unchanged, within noise tolerance';
   }
   if (snapshot.autoPassed === 'shift') return 'pure element shifts within layout tolerance';
   return 'within configured diff tolerance';
@@ -489,10 +495,12 @@ function renderAnalysis(snapshot: SnapshotResult): string {
  * (injected content) > structural DOM change > identical DOM > auto-pass.
  *
  * Identical DOM is only "likely render noise" when the computed styles were
- * compared and match (styleCheck 'match'). With styleCheck 'unavailable' (or
- * missing, in older results) styles were not compared, so a stylesheet-only
- * change is not ruled out: that case gets its own warning, never the noise
- * wording.
+ * compared and match (styleCheck 'match') AND the diff is small and
+ * scattered (diffShape). With styleCheck 'unavailable' (or missing, in older
+ * results) styles were not compared, so a stylesheet-only change is not
+ * ruled out: that case gets its own warning, never the noise wording. With
+ * matching styles, a diff concentrated in one area or large gets its own
+ * warning too: a bad capture, or a change the style check does not cover.
  */
 function renderVerdict(snapshot: SnapshotResult): string {
   if (snapshot.status === 'passed' && !snapshot.autoPassed) return '';
@@ -527,7 +535,16 @@ function renderVerdict(snapshot: SnapshotResult): string {
 
   if (snapshot.dom?.noiseHint) {
     if (snapshot.dom.styleCheck === 'match') {
-      return `<div class="verdict v-noise"><span>Likely render noise — pixels differ but the DOM and computed styles are identical (anti-aliasing, font hinting). Worth a glance, not a block.</span></div>`;
+      const shape = diffShape(snapshot);
+      // An auto-passed snapshot has nothing to approve.
+      const next = snapshot.status === 'changed' ? 'Compare the images before approving.' : 'Compare the images before relying on the auto-pass.';
+      if (shape.kind === 'concentrated') {
+        return `<div class="verdict v-unexplained"><span>Diff concentrated in one area — the DOM and computed styles are identical, but ${describeRegions(shape)}, changed. Render noise is small and scattered, so this is a bad capture, or a change the style check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). ${next}</span></div>`;
+      }
+      if (shape.kind === 'large') {
+        return `<div class="verdict v-unexplained"><span>Large diff — the DOM and computed styles are identical, but ${snapshot.diffPercent.toFixed(2)}% of pixels differ, spread across the page: more than render noise usually changes. Often fonts or rendering that differ between the machines that captured the baseline and the current image; it can also be a bad capture or a change the style check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). ${next}</span></div>`;
+      }
+      return `<div class="verdict v-noise"><span>Likely render noise — pixels differ but the DOM and computed styles are identical and the diff is small and scattered (anti-aliasing, font hinting). Worth a glance, not a block.</span></div>`;
     }
     return `<div class="verdict v-unverified"><span>Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is identical, but computed styles were not compared (no comparable style digests on both sides), so a stylesheet-only change is not ruled out. Compare the images before approving.</span></div>`;
   }
@@ -542,12 +559,16 @@ function renderVerdict(snapshot: SnapshotResult): string {
 /**
  * Render the DOM / style signal badge for a snapshot.
  *
- * Four states (the DOM signal is only computed for `changed` snapshots
+ * Five states (the DOM signal is only computed for `changed` snapshots
  * that have DOM data captured on both sides):
  *   - style-changed: DOM identical, computed styles differ (styleCheck
  *                    'mismatch') → a real change, never noise
  *   - noise:         DOM identical, computed styles compared and identical
- *                    (styleCheck 'match') → "likely render noise", not proof
+ *                    (styleCheck 'match'), diff small and scattered →
+ *                    "likely render noise", not proof
+ *   - unexplained:   DOM identical and styles match, but the diff is
+ *                    concentrated in one area or large → a bad capture or a
+ *                    change the style check does not cover
  *   - unverified:    DOM identical, styles not compared (styleCheck
  *                    'unavailable', or missing in older results) → could be
  *                    render noise or a stylesheet-only change
@@ -581,10 +602,25 @@ function renderDomHint(snapshot: SnapshotResult): string {
 
   if (snapshot.dom.noiseHint) {
     if (snapshot.dom.styleCheck === 'match') {
+      const shape = diffShape(snapshot);
+      if (shape.kind === 'concentrated') {
+        return `
+      <div class="dom-hint unexplained" title="DOM tree and computed styles are identical, but the pixel diff sits in one area, which render noise does not do.">
+        <span class="label">DOM and styles unchanged, diff in one area</span>
+        <span class="summary">— ${describeRegions(shape)}: a bad capture, or a change the style check does not cover. Compare the images.</span>
+      </div>`;
+      }
+      if (shape.kind === 'large') {
+        return `
+      <div class="dom-hint unexplained" title="DOM tree and computed styles are identical, but more pixels differ than render noise usually changes.">
+        <span class="label">DOM and styles unchanged, large diff</span>
+        <span class="summary">— ${snapshot.diffPercent.toFixed(2)}% of pixels differ, spread across the page. Compare the images.</span>
+      </div>`;
+      }
       return `
-      <div class="dom-hint noise" title="DOM tree and computed styles are identical between baseline and candidate; the pixel diff is likely render noise.">
+      <div class="dom-hint noise" title="DOM tree and computed styles are identical between baseline and candidate, and the diff is small and scattered; the pixel diff is likely render noise.">
         <span class="label">DOM unchanged</span>
-        <span class="summary">— pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.</span>
+        <span class="summary">— pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.</span>
       </div>`;
     }
     // 'unavailable', or no styleCheck at all (results from before the style

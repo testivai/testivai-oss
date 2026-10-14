@@ -86,7 +86,7 @@ other adapter reads.
 |---|---|
 | `screenshot.png` | The pixel diff and heatmap |
 | `dom.html` | DOM diff, noise hint, text-change detection |
-| `elements.json` | Region→selector attribution, shift detection, style checks (an identical-DOM diff is *likely render noise* only when these styles match) |
+| `elements.json` | Region→selector attribution, shift detection, style checks (an identical-DOM diff is *likely render noise* only when these styles match and the diff is small and scattered) |
 
 Full-page capture uses Chromium's CDP `captureBeyondViewport` when the driver
 exposes `execute_cdp`, Firefox's native full-page screenshot when available, and

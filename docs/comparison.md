@@ -129,13 +129,14 @@ computed-style digests are compared too, and only a match keeps the
 
 | DOM | Style digests | Verdict |
 |---|---|---|
-| identical | match | likely render noise (`styleCheck: "match"`), still not proof; auto-passed only with `noiseAutoPass`, up to `noiseMaxDiffPercent` |
+| identical | match | likely render noise (`styleCheck: "match"`) when the diff is small and scattered, still not proof; auto-passed only with `noiseAutoPass`, up to `noiseMaxDiffPercent` |
+| identical | match, diff concentrated in one area or over 1% | **Not noise**: the digest covers a fixed list of properties, so this is a bad capture or a change it does not cover (size, overflow, transform, images…). Compare the images before approving; `noiseAutoPass` never passes a concentrated diff |
 | identical | **differ** | **Styles changed** — real change, attributed to the element(s); `noiseAutoPass` never passes it |
 | identical | unavailable | **Styles not compared** (`styleCheck: "unavailable"`: no element map on one or both sides, or no comparable digest) — could be render noise or a stylesheet-only change, which is not ruled out. Compare the images before approving; `noiseAutoPass` never passes it |
 | changed | — | DOM changed (counts shown) |
 
-`dom.noiseHint` is `true` in the first and third rows; only `styleCheck`
-tells them apart. A `maxDiffPercent` / `maxDiffPixels` tolerance is
+`dom.noiseHint` is `true` in the first, second and fourth rows; `styleCheck`
+and the shape of the diff tell them apart. A `maxDiffPercent` / `maxDiffPixels` tolerance is
 blind to all of this: it passes any diff within its bound, whatever the row.
 
 The digest covers a fixed, documented property list (colors, backgrounds,

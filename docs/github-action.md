@@ -120,7 +120,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 <details>
 <summary>checkout-page — 0.5% different</summary>
 
-> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
+> DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.
 
 /testivai approve checkout-page
 </details>
@@ -142,7 +142,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 </details>
 ```
 
-The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline and the computed styles were compared and match, the comment says "likely render noise" (likely, not proven) so reviewers can triage it faster. When only the computed styles changed, it flags a style-only change, which is real. When the DOM is identical but the styles were not compared (no comparable style digests on both sides, as with `testivai witness <url>` captures), it says **DOM unchanged, styles not compared**: render noise and a stylesheet-only change are both still possible, so compare the images before approving. When the DOM also differs, it shows added / removed / attribute-change counts.
+The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline, the computed styles were compared and match, and the diff is small and scattered, the comment says "likely render noise" (likely, not proven) so reviewers can triage it faster. When the DOM and styles match but the diff is concentrated in one area or over 1% of pixels, it says **DOM and styles unchanged, but the diff is concentrated in one area** (or **is large**): a bad capture, or a change the style check does not cover (size, overflow, transform, images…), so compare the images before approving. When only the computed styles changed, it flags a style-only change, which is real. When the DOM is identical but the styles were not compared (no comparable style digests on both sides, as with `testivai witness <url>` captures), it says **DOM unchanged, styles not compared**: render noise and a stylesheet-only change are both still possible, so compare the images before approving. When the DOM also differs, it shows added / removed / attribute-change counts.
 
 ### Commit status
 

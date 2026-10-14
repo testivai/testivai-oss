@@ -1,0 +1,2528 @@
+{
+  "version": "2.3.0",
+  "timestamp": "2026-10-14T00:00:00.000Z",
+  "summary": {
+    "total": 9,
+    "passed": 0,
+    "changed": 9,
+    "newSnapshots": 0,
+    "missing": 0
+  },
+  "missingBaselines": [],
+  "snapshots": [
+    {
+      "name": "glyph-edge-noise",
+      "status": "changed",
+      "diffPercent": 0.005888819095477386,
+      "diffCount": 60,
+      "totalPixels": 1018880,
+      "baselinePath": "images/glyph-edge-noise/baseline.png",
+      "currentPath": "images/glyph-edge-noise/current.png",
+      "diffPath": "images/glyph-edge-noise/diff.png",
+      "regions": [],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "card-clipped",
+      "status": "changed",
+      "diffPercent": 0.029738536432160803,
+      "diffCount": 303,
+      "totalPixels": 1018880,
+      "baselinePath": "images/card-clipped/baseline.png",
+      "currentPath": "images/card-clipped/current.png",
+      "diffPath": "images/card-clipped/diff.png",
+      "regions": [
+        {
+          "x": 674,
+          "y": 387,
+          "width": 6,
+          "height": 2,
+          "diffPixels": 10,
+          "diffPercent": 83.33333333333334,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 398,
+          "width": 18,
+          "height": 7,
+          "diffPixels": 74,
+          "diffPercent": 58.730158730158735,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 423,
+          "width": 27,
+          "height": 16,
+          "diffPixels": 213,
+          "diffPercent": 49.30555555555556,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "card-text-not-painted",
+      "status": "changed",
+      "diffPercent": 0.14035018844221106,
+      "diffCount": 1430,
+      "totalPixels": 1018880,
+      "baselinePath": "images/card-text-not-painted/baseline.png",
+      "currentPath": "images/card-text-not-painted/current.png",
+      "diffPath": "images/card-text-not-painted/diff.png",
+      "regions": [
+        {
+          "x": 525,
+          "y": 352,
+          "width": 211,
+          "height": 53,
+          "diffPixels": 1427,
+          "diffPercent": 12.76043995350085,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "baseline-band-shifted",
+      "status": "changed",
+      "diffPercent": 2.0682612728310503,
+      "diffCount": 23191,
+      "totalPixels": 1121280,
+      "baselinePath": "images/baseline-band-shifted/baseline.png",
+      "currentPath": "images/baseline-band-shifted/current.png",
+      "diffPath": "images/baseline-band-shifted/diff.png",
+      "regions": [
+        {
+          "x": 234,
+          "y": 324,
+          "width": 812,
+          "height": 260,
+          "diffPixels": 23018,
+          "diffPercent": 10.902804092459265,
+          "elements": [
+            {
+              "selector": "body > main",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "titles-underlined",
+      "status": "changed",
+      "diffPercent": 0.05996780778894473,
+      "diffCount": 611,
+      "totalPixels": 1018880,
+      "baselinePath": "images/titles-underlined/baseline.png",
+      "currentPath": "images/titles-underlined/current.png",
+      "diffPath": "images/titles-underlined/diff.png",
+      "regions": [
+        {
+          "x": 249,
+          "y": 364,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 364,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 364,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 588,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 588,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 588,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "font-subpixel-noise",
+      "status": "changed",
+      "diffPercent": 0.8460286458333334,
+      "diffCount": 7797,
+      "totalPixels": 921600,
+      "baselinePath": "images/font-subpixel-noise/baseline.png",
+      "currentPath": "images/font-subpixel-noise/current.png",
+      "diffPath": "images/font-subpixel-noise/diff.png",
+      "regions": [
+        {
+          "x": 543,
+          "y": 40,
+          "width": 199,
+          "height": 22,
+          "diffPixels": 615,
+          "diffPercent": 14.047510278666058,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 370,
+          "y": 75,
+          "width": 8,
+          "height": 12,
+          "diffPixels": 50,
+          "diffPercent": 52.083333333333336,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 391,
+          "y": 75,
+          "width": 182,
+          "height": 15,
+          "diffPixels": 598,
+          "diffPercent": 21.904761904761905,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 683,
+          "y": 75,
+          "width": 223,
+          "height": 15,
+          "diffPixels": 713,
+          "diffPercent": 21.315396113602393,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 586,
+          "y": 78,
+          "width": 84,
+          "height": 10,
+          "diffPixels": 305,
+          "diffPercent": 36.30952380952381,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 607,
+          "y": 148,
+          "width": 47,
+          "height": 12,
+          "diffPixels": 188,
+          "diffPercent": 33.33333333333333,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 687,
+          "y": 148,
+          "width": 56,
+          "height": 12,
+          "diffPixels": 220,
+          "diffPercent": 32.73809523809524,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(3)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 540,
+          "y": 150,
+          "width": 34,
+          "height": 10,
+          "diffPixels": 119,
+          "diffPercent": 35,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 235,
+          "y": 205,
+          "width": 63,
+          "height": 15,
+          "diffPixels": 297,
+          "diffPercent": 31.428571428571427,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > h2",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 258,
+          "y": 259,
+          "width": 68,
+          "height": 13,
+          "diffPixels": 249,
+          "diffPercent": 28.167420814479637,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 384,
+          "y": 259,
+          "width": 90,
+          "height": 13,
+          "diffPixels": 378,
+          "diffPercent": 32.30769230769231,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 528,
+          "y": 259,
+          "width": 54,
+          "height": 13,
+          "diffPixels": 259,
+          "diffPercent": 36.894586894586894,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(3)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 638,
+          "y": 260,
+          "width": 57,
+          "height": 12,
+          "diffPixels": 132,
+          "diffPercent": 19.298245614035086,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1) > button.btn:nth-of-type(4)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 247,
+          "y": 316,
+          "width": 26,
+          "height": 12,
+          "diffPixels": 123,
+          "diffPercent": 39.42307692307692,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 327,
+          "y": 316,
+          "width": 39,
+          "height": 13,
+          "diffPixels": 152,
+          "diffPercent": 29.980276134122285,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2) > button.btn:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1) > div.row:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 239,
+          "y": 379,
+          "width": 85,
+          "height": 14,
+          "diffPixels": 442,
+          "diffPercent": 37.142857142857146,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > h2",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 235,
+          "y": 423,
+          "width": 242,
+          "height": 13,
+          "diffPixels": 717,
+          "diffPercent": 22.790845518118246,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > p.lede",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 490,
+          "y": 426,
+          "width": 19,
+          "height": 10,
+          "diffPixels": 68,
+          "diffPercent": 35.78947368421053,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > p.lede",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 957,
+          "y": 466,
+          "width": 68,
+          "height": 13,
+          "diffPixels": 304,
+          "diffPercent": 34.38914027149321,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > form.signup > button.btn",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > form.signup",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 467,
+          "width": 123,
+          "height": 14,
+          "diffPixels": 412,
+          "diffPercent": 23.925667828106853,
+          "elements": [
+            {
+              "selector": "body > main > section:nth-of-type(2) > form.signup > input",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2) > form.signup",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "font-subpixel-noise-over-1pct",
+      "status": "changed",
+      "diffPercent": 1.1917988379396984,
+      "diffCount": 12143,
+      "totalPixels": 1018880,
+      "baselinePath": "images/font-subpixel-noise-over-1pct/baseline.png",
+      "currentPath": "images/font-subpixel-noise-over-1pct/current.png",
+      "diffPath": "images/font-subpixel-noise-over-1pct/diff.png",
+      "regions": [
+        {
+          "x": 543,
+          "y": 40,
+          "width": 199,
+          "height": 22,
+          "diffPixels": 615,
+          "diffPercent": 14.047510278666058,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 370,
+          "y": 75,
+          "width": 8,
+          "height": 12,
+          "diffPixels": 50,
+          "diffPercent": 52.083333333333336,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 391,
+          "y": 75,
+          "width": 182,
+          "height": 15,
+          "diffPixels": 598,
+          "diffPercent": 21.904761904761905,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 683,
+          "y": 75,
+          "width": 223,
+          "height": 15,
+          "diffPixels": 713,
+          "diffPercent": 21.315396113602393,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 586,
+          "y": 78,
+          "width": 84,
+          "height": 10,
+          "diffPixels": 305,
+          "diffPercent": 36.30952380952381,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 607,
+          "y": 148,
+          "width": 47,
+          "height": 12,
+          "diffPixels": 133,
+          "diffPercent": 23.581560283687946,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 687,
+          "y": 148,
+          "width": 56,
+          "height": 12,
+          "diffPixels": 243,
+          "diffPercent": 36.160714285714285,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(3)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 540,
+          "y": 150,
+          "width": 34,
+          "height": 10,
+          "diffPixels": 119,
+          "diffPercent": 35,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 235,
+          "y": 205,
+          "width": 73,
+          "height": 15,
+          "diffPixels": 318,
+          "diffPercent": 29.041095890410958,
+          "elements": [
+            {
+              "selector": "body > main > section > h2",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 250,
+          "y": 351,
+          "width": 172,
+          "height": 57,
+          "diffPixels": 1211,
+          "diffPercent": 12.352101183190536,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 351,
+          "width": 121,
+          "height": 54,
+          "diffPixels": 734,
+          "diffPercent": 11.23354759718396,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 351,
+          "width": 155,
+          "height": 55,
+          "diffPixels": 1006,
+          "diffPercent": 11.80058651026393,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 659,
+          "y": 375,
+          "width": 74,
+          "height": 14,
+          "diffPixels": 171,
+          "diffPercent": 16.505791505791507,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 970,
+          "y": 378,
+          "width": 26,
+          "height": 11,
+          "diffPixels": 126,
+          "diffPercent": 44.05594405594406,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 575,
+          "width": 202,
+          "height": 55,
+          "diffPixels": 1213,
+          "diffPercent": 10.918091809180918,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 525,
+          "y": 575,
+          "width": 203,
+          "height": 55,
+          "diffPixels": 1258,
+          "diffPercent": 11.267353336318854,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2) > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 575,
+          "width": 210,
+          "height": 38,
+          "diffPixels": 1055,
+          "diffPercent": 13.220551378446116,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "fonts-differ-between-machines",
+      "status": "changed",
+      "diffPercent": 4.771588740458015,
+      "diffCount": 48006,
+      "totalPixels": 1006080,
+      "baselinePath": "images/fonts-differ-between-machines/baseline.png",
+      "currentPath": "images/fonts-differ-between-machines/current.png",
+      "diffPath": "images/fonts-differ-between-machines/diff.png",
+      "regions": [
+        {
+          "x": 538,
+          "y": 41,
+          "width": 204,
+          "height": 21,
+          "diffPixels": 1716,
+          "diffPercent": 40.056022408963585,
+          "elements": [
+            {
+              "selector": "body > header > h1",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 369,
+          "y": 75,
+          "width": 537,
+          "height": 15,
+          "diffPixels": 3407,
+          "diffPercent": 42.29671011793917,
+          "elements": [
+            {
+              "selector": "body > header > p",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 0,
+          "y": 135,
+          "width": 1280,
+          "height": 36,
+          "diffPixels": 4794,
+          "diffPercent": 10.403645833333334,
+          "elements": [
+            {
+              "selector": "body > header > nav > a:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header > nav",
+              "role": "changed"
+            },
+            {
+              "selector": "body > header",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 235,
+          "y": 203,
+          "width": 73,
+          "height": 17,
+          "diffPixels": 710,
+          "diffPercent": 57.2119258662369,
+          "elements": [
+            {
+              "selector": "body > main > section > h2",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 235,
+          "y": 244,
+          "width": 259,
+          "height": 12,
+          "diffPixels": 797,
+          "diffPercent": 25.643500643500644,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 510,
+          "y": 244,
+          "width": 260,
+          "height": 12,
+          "diffPixels": 799,
+          "diffPercent": 25.608974358974358,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 786,
+          "y": 244,
+          "width": 259,
+          "height": 12,
+          "diffPixels": 799,
+          "diffPercent": 25.70785070785071,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 235,
+          "y": 332,
+          "width": 259,
+          "height": 3,
+          "diffPixels": 777,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 510,
+          "y": 332,
+          "width": 260,
+          "height": 3,
+          "diffPixels": 780,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 786,
+          "y": 332,
+          "width": 259,
+          "height": 3,
+          "diffPixels": 777,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 3
+          }
+        },
+        {
+          "x": 799,
+          "y": 348,
+          "width": 213,
+          "height": 91,
+          "diffPixels": 2985,
+          "diffPercent": 15.400092864881598,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > p",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 4
+          }
+        },
+        {
+          "x": 249,
+          "y": 349,
+          "width": 185,
+          "height": 90,
+          "diffPixels": 3438,
+          "diffPercent": 20.64864864864865,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > p",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 4
+          }
+        },
+        {
+          "x": 524,
+          "y": 349,
+          "width": 220,
+          "height": 56,
+          "diffPixels": 2428,
+          "diffPercent": 19.707792207792206,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > p",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 4
+          }
+        },
+        {
+          "x": 524,
+          "y": 419,
+          "width": 28,
+          "height": 20,
+          "diffPixels": 308,
+          "diffPercent": 55.00000000000001,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 235,
+          "y": 465,
+          "width": 259,
+          "height": 15,
+          "diffPixels": 1574,
+          "diffPercent": 40.51480051480051,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 6
+          }
+        },
+        {
+          "x": 510,
+          "y": 465,
+          "width": 260,
+          "height": 15,
+          "diffPixels": 1584,
+          "diffPercent": 40.61538461538461,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 6
+          }
+        },
+        {
+          "x": 786,
+          "y": 465,
+          "width": 259,
+          "height": 15,
+          "diffPixels": 1568,
+          "diffPercent": 40.36036036036036,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.thumb:nth-of-type(1)",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 6
+          }
+        },
+        {
+          "x": 235,
+          "y": 553,
+          "width": 259,
+          "height": 110,
+          "diffPixels": 5209,
+          "diffPercent": 18.28360828360828,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2) > p",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 7
+          }
+        },
+        {
+          "x": 510,
+          "y": 553,
+          "width": 260,
+          "height": 110,
+          "diffPixels": 5477,
+          "diffPercent": 19.15034965034965,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2) > p",
+              "role": "shifted"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5)",
+              "role": "changed"
+            }
+          ],
+          "classification": "shift",
+          "shift": {
+            "dx": 0,
+            "dy": 7
+          }
+        },
+        {
+          "x": 786,
+          "y": 553,
+          "width": 259,
+          "height": 60,
+          "diffPixels": 4454,
+          "diffPercent": 28.66151866151866,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 800,
+          "y": 640,
+          "width": 30,
+          "height": 23,
+          "diffPixels": 384,
+          "diffPercent": 55.65217391304348,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2) > div.price",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 455,
+          "y": 752,
+          "width": 370,
+          "height": 22,
+          "diffPixels": 2857,
+          "diffPercent": 35.0982800982801,
+          "elements": [
+            {
+              "selector": "body > footer",
+              "role": "changed"
+            },
+            {
+              "selector": "body",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-14T00:00:00.000Z",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    },
+    {
+      "name": "titles-underlined-long-page",
+      "status": "changed",
+      "diffPercent": 0.09223342034029389,
+      "diffCount": 3053,
+      "totalPixels": 3310080,
+      "baselinePath": "images/titles-underlined-long-page/baseline.png",
+      "currentPath": "images/titles-underlined-long-page/current.png",
+      "diffPath": "images/titles-underlined-long-page/diff.png",
+      "regions": [
+        {
+          "x": 249,
+          "y": 364,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(1)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 364,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(2)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 364,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(3)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 588,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(4)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 588,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(5)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 588,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(6)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 812,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(7) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(7) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(7)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 812,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(8) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(8) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(8)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 812,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(9) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(9) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(9)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 1035,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(10) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(10) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(10)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 1035,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(11) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(11) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(11)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 1035,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(12) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(12) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(12)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 1259,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(13) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(13) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(13)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 1259,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(14) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(14) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(14)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 1259,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(15) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(15) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(15)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 1483,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(16) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(16) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(16)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 1483,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(17) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(17) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(17)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 1483,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(18) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(18) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(18)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 1707,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(19) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(19) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(19)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 1707,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(20) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(20) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(20)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 1707,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(21) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(21) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(21)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 1930,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(22) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(22) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(22)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 1930,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(23) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(23) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(23)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 1930,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(24) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(24) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(24)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 2154,
+          "width": 78,
+          "height": 1,
+          "diffPixels": 78,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(25) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(25) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(25)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 2154,
+          "width": 73,
+          "height": 1,
+          "diffPixels": 73,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(26) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(26) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(26)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 2154,
+          "width": 111,
+          "height": 1,
+          "diffPixels": 111,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(27) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(27) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(27)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 249,
+          "y": 2378,
+          "width": 116,
+          "height": 1,
+          "diffPixels": 116,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(28) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(28) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(28)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 524,
+          "y": 2378,
+          "width": 125,
+          "height": 1,
+          "diffPixels": 120,
+          "diffPercent": 96,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(29) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(29) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(29)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        },
+        {
+          "x": 799,
+          "y": 2378,
+          "width": 107,
+          "height": 1,
+          "diffPixels": 107,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(30) > div.body:nth-of-type(2) > h3",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(30) > div.body:nth-of-type(2)",
+              "role": "changed"
+            },
+            {
+              "selector": "body > main > section > div.cards > div.card:nth-of-type(30)",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      }
+    }
+  ]
+}

@@ -54,7 +54,7 @@ The reporter detects this file and switches to local mode automatically. **Skip 
 Tolerance & capture settings (all optional — full reference in [Getting Started](../intro.md)):
 
 - `maxDiffPercent` / `maxDiffPixels` — diffs within these bounds report as **passed** (labeled `autoPassed` in the report and `results.json`)
-- `noiseAutoPass` + `noiseMaxDiffPercent` — auto-pass likely render noise within the bound: only diffs whose DOM is identical **and** whose computed styles were compared and match (`styleCheck: "match"`). It never passes style-only changes or diffs whose styles were not compared (changed in this release: earlier versions also passed the latter)
+- `noiseAutoPass` + `noiseMaxDiffPercent` — auto-pass likely render noise within the bound: only diffs whose DOM is identical **and** whose computed styles were compared and match (`styleCheck: "match"`) **and** whose diff is not concentrated in one area. It never passes style-only changes, diffs whose styles were not compared, or diffs concentrated in one area (changed in this release: earlier versions also passed the last two)
 - `stabilize` (default `true`) — before every capture: animations/transitions frozen, caret hidden, web fonts awaited — the top causes of flaky visual diffs, neutralized by default
 - `ignoreSelectors` — elements hidden (`visibility: hidden`) during capture
 
@@ -271,7 +271,7 @@ useful as a smoke check, just not as the source of truth.
 
 Everything is written under `.testivai/temp/<name>/` and compared against `.testivai/baselines/<name>/`. Nothing leaves your machine.
 
-The DOM snapshot powers the DOM diff and text-change detection, and the element map powers region→selector attribution, shift detection, and the style check. Together they decide what an identical-DOM pixel diff means: *likely render noise* when the computed styles match, a *style-only change* when they differ, and *styles not compared* (could be render noise or a stylesheet-only change) when one side has no element map.
+The DOM snapshot powers the DOM diff and text-change detection, and the element map powers region→selector attribution, shift detection, and the style check. Together they decide what an identical-DOM pixel diff means: *likely render noise* when the computed styles match and the diff is small and scattered, a *bad capture or a change the style check does not cover* when they match but the diff sits in one area, a *style-only change* when they differ, and *styles not compared* (could be render noise or a stylesheet-only change) when one side has no element map.
 
 ---
 

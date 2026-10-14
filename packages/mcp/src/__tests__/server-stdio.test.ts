@@ -174,6 +174,61 @@ describe('built server over stdio', () => {
     expect(text).not.toMatch(/likely render noise|don't block/i);
   });
 
+  // Real runs with an identical DOM and matching styles (packages/witness,
+  // fixtures/README.md there): the eval's clipped card, a bad capture and a
+  // bad baseline used to come back "likely render noise; don't block".
+  describe('identical DOM and matching styles, real runs', () => {
+    const fixture = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, '..', '..', '..', 'witness', 'src', '__tests__', 'fixtures', 'render-noise-shapes.results.json'),
+        'utf8',
+      ),
+    );
+    const { verdictFor } = require('../lib') as typeof import('../lib');
+    const NOISE_ADVICE = /likely render noise|don't block|mention it/i;
+
+    beforeAll(() => {
+      const report = path.join(root, 'visual-report');
+      fs.mkdirSync(report, { recursive: true });
+      fs.writeFileSync(path.join(report, 'results.json'), JSON.stringify(fixture));
+    });
+
+    it('get_visual_results: noise only for the small, scattered diffs; groups the rest apart', async () => {
+      const lines = textOf(await client.callTool({ name: 'get_visual_results', arguments: {} })).split('\n');
+      for (const s of fixture.snapshots) expect(lines).toContain(`- ${s.name}: ${verdictFor(s)}`);
+      const line = (name: string) => lines.find((l) => l.startsWith(`- ${name}: `))!;
+      for (const name of ['card-clipped', 'card-text-not-painted', 'baseline-band-shifted', 'titles-underlined']) {
+        expect(line(name)).toMatch(/concentrated in one area/);
+        expect(line(name)).not.toMatch(NOISE_ADVICE);
+      }
+      for (const name of ['font-subpixel-noise-over-1pct', 'fonts-differ-between-machines']) {
+        expect(line(name)).toMatch(/the diff is large/);
+        expect(line(name)).not.toMatch(NOISE_ADVICE);
+      }
+      expect(line('glyph-edge-noise')).toMatch(/small and scattered — likely render noise/);
+      expect(lines).toContain(
+        '- font-subpixel-noise, glyph-edge-noise, titles-underlined-long-page (3): likely render noise: the DOM and computed styles both match and the diff is small and scattered',
+      );
+      expect(lines).toContain(
+        '- font-subpixel-noise-over-1pct, fonts-differ-between-machines (2): identical DOM and computed styles, but over 1% of pixels differ, spread across the page: more than render noise usually changes; grouped on that signal, not on its cause',
+      );
+    });
+
+    it('explain_snapshot: the concentrated case carries its shape and guidance, and agrees with its verdict', async () => {
+      const e = JSON.parse(textOf(await client.callTool({ name: 'explain_snapshot', arguments: { name: 'card-clipped' } })));
+      expect(e.layers.pixel.shape).toMatchObject({ kind: 'concentrated', regionCount: 3, box: { x: 525, y: 387, width: 155, height: 52 } });
+      expect(e.guidance.join(' ')).toMatch(/^Diff concentrated in one area, which render noise does not do:/);
+      expect(e.guidance.join(' ')).toMatch(/compare the images \(get_diff\) before approving/);
+      expect(`${e.verdict} ${e.guidance.join(' ')}`).not.toMatch(NOISE_ADVICE);
+    });
+  });
+
+  it('serves the review-visual-changes prompt with the concentrated-or-large case', async () => {
+    const prompt = await client.getPrompt({ name: 'review-visual-changes' });
+    const text = (prompt.messages[0].content as { type: string; text: string }).text;
+    expect(text).toMatch(/concentrated in one area[^.]*get_diff[^.]*do not call it noise/i);
+  });
+
   it('get_visual_results offers in-conversation approval once the human confirms', async () => {
     const report = path.join(root, 'visual-report');
     fs.mkdirSync(report, { recursive: true });

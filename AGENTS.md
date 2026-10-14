@@ -118,6 +118,7 @@ CI — GitHub Actions
 | `src/diff/diff.ts` | Pixel comparison (pixelmatch) |
 | `src/diff/dom-diff.ts` | Zero-dep DOM tokenizer + multiset comparator; emits noiseHint |
 | `src/report/compare.ts` | Orchestrates diff, writes images to `visual-report/images/` |
+| `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
 | `src/report/template.ts` | Self-contained HTML template for the report |
 
@@ -230,12 +231,18 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 ```
 
 When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
-`"match"` → likely render noise (not proof); `"mismatch"` → a real style-only change
-(`noiseHint` is then false); `"unavailable"`, or absent in older results → styles not
-compared, so a stylesheet-only change is not ruled out: never word it as noise.
-`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case (`noiseHint`
-true AND `styleCheck: "match"`, within `noiseMaxDiffPercent`), and `autoPassed` always
-comes with `status: "passed"`.
+`"match"` → likely render noise (not proof) only when the diff is also small and
+scattered (`diffShape` in `packages/witness/src/report/diff-shape.ts`: at most 1% of
+pixels, and no regions or regions spread over more than a third of the page); a
+`"match"` diff concentrated in one area, or larger, is a bad capture or a change the
+style check does not cover (size, overflow, transform, images…): never word it as
+noise; `"mismatch"` → a real style-only change (`noiseHint` is then false);
+`"unavailable"`, or absent in older results → styles not compared, so a
+stylesheet-only change is not ruled out: never word it as noise.
+`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case whose diff is
+not concentrated in one area (`noiseHint` true AND `styleCheck: "match"` AND
+`diffShape(...).kind !== "concentrated"`, within `noiseMaxDiffPercent`), and
+`autoPassed` always comes with `status: "passed"`.
 
 Breaking changes to this schema require a major version bump on `@testivai/witness`.
 

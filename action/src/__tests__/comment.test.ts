@@ -2,6 +2,8 @@
  * Tests for comment builder
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { buildComment, buildEmptyComment, resolveUpsertMarker, UPSERT_MARKER } from '../comment';
 import { STATUS_CONTEXT } from '../status';
 import type { ResultsData } from '../types';
@@ -288,12 +290,57 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
   const NOT_COMPARED_LINE =
     '> **DOM unchanged, styles not compared** — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.';
 
-  it('noise hint says the styles were verified when the style check matched', () => {
+  it('noise hint says the styles were verified and the diff is small and scattered when the style check matched', () => {
     const comment = noiseComment('match');
     expect(lineStarting(comment, '> **DOM unchanged')).toBe(
-      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.',
+      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.',
     );
     expect(comment).not.toContain('styles not compared');
+  });
+
+  // Matching styles are likely noise only when the diff is small and
+  // scattered. Real runs from packages/witness (fixtures/README.md there).
+  describe('styles verified unchanged, but not the shape of render noise (real runs)', () => {
+    const fixture = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, '..', '..', '..', 'packages', 'witness', 'src', '__tests__', 'fixtures', 'render-noise-shapes.results.json'),
+        'utf8',
+      ),
+    );
+    const realComment = (name: string) =>
+      buildComment({ ...base, snapshots: [fixture.snapshots.find((s: { name: string }) => s.name === name)] } as any);
+    const NOISE_CLAIMS = /likely (render )?noise|worth a glance|not a block|don.t block|do not block/i;
+
+    it('a diff concentrated in one area names the area and says what it can be', () => {
+      expect(lineStarting(realComment('card-clipped'), '> **DOM and styles unchanged')).toBe(
+        '> **DOM and styles unchanged, but the diff is concentrated in one area** — 3 regions within 155×52 px, 0.8% of the page: ' +
+          'a bad capture, or a change the style check does not cover (size, overflow, position, transform, text decoration, ' +
+          'filters, pseudo-elements, or images and other assets). Compare the images before approving.',
+      );
+    });
+
+    it.each([['card-clipped'], ['card-text-not-painted'], ['baseline-band-shifted'], ['titles-underlined']])(
+      '%s is not called noise',
+      (name) => {
+        const comment = realComment(name);
+        expect(comment).toContain('concentrated in one area');
+        expect(comment).not.toMatch(NOISE_CLAIMS);
+      },
+    );
+
+    it('a large spread-out diff says it is more than render noise usually changes', () => {
+      expect(lineStarting(realComment('font-subpixel-noise-over-1pct'), '> **DOM and styles unchanged')).toBe(
+        '> **DOM and styles unchanged, but the diff is large** — 1.19% of pixels differ, spread across the page: more than ' +
+          'render noise usually changes (often fonts or rendering that differ between machines). Compare the images before approving.',
+      );
+      expect(realComment('fonts-differ-between-machines')).not.toMatch(NOISE_CLAIMS);
+    });
+
+    it('scattered render noise keeps the likely-noise line', () => {
+      for (const name of ['glyph-edge-noise', 'font-subpixel-noise']) {
+        expect(lineStarting(realComment(name), '> **DOM unchanged')).toMatch(/likely render noise/);
+      }
+    });
   });
 
   it('noise hint says the styles were not compared when the style check was unavailable', () => {
@@ -314,12 +361,13 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
     },
   );
 
-  it('footer ties render noise to a verified style check and points dynamic content at ignoreSelectors/mask', () => {
+  it('footer ties render noise to a verified style check and a small, scattered diff, and points dynamic content at ignoreSelectors/mask', () => {
     const footerLine = noiseComment('match').split('\n').find(l => l.includes('[`@testivai/mcp`]'));
     expect(footerLine).toBeDefined();
     expect(footerLine).toContain(
-      'An identical DOM points to render noise only when the hint also says "Styles verified unchanged"; without that, a stylesheet-only change is not ruled out.',
+      'An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out.',
     );
+    expect(footerLine).not.toContain('only when the hint also says "Styles verified unchanged"');
     expect(footerLine).toContain(
       'Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with `ignoreSelectors` or exclude it with `mask`.',
     );

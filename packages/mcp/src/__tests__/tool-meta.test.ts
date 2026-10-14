@@ -57,6 +57,24 @@ describe('get_visual_results description', () => {
     expect(notCompared.some((c) => /could be render noise or a stylesheet-only change/i.test(c))).toBe(true);
     expect(notCompared.some((c) => /look at the diff/i.test(c))).toBe(true);
   });
+
+  // Matching styles are not enough either: the style check covers a fixed
+  // list of properties, so the verdict calls a diff noise only when it is
+  // small and scattered, and so must this.
+  it('ties noise to a small, scattered diff too', () => {
+    const noise = clauses(description).filter((c) => /likely render noise/i.test(c));
+    expect(noise.length).toBeGreaterThan(0);
+    for (const c of noise) expect(c).toMatch(/small and scattered/i);
+  });
+
+  it('does not call a diff concentrated in one area or large noise, and sends the model to the images', () => {
+    const shape = clauses(description).filter((c) => /concentrated in one area/i.test(c));
+    expect(shape).toHaveLength(1);
+    expect(shape[0]).toMatch(/over 1% of pixels/i);
+    expect(shape[0]).toMatch(/bad capture or a change the style check does not cover/i);
+    expect(shape[0]).toMatch(/get_diff/);
+    expect(shape[0]).not.toMatch(NOISE_ADVICE);
+  });
 });
 
 /**
@@ -85,6 +103,18 @@ describe('review-visual-changes prompt', () => {
     // Every other mention of render noise is the unknown case, never a verdict.
     const bare = text.match(/(?<!likely )render noise(?! or a stylesheet-only change)/gi) ?? [];
     expect(bare).toEqual([]);
+  });
+
+  it('only calls it likely render noise when the diff is small and scattered too', () => {
+    expect(text).toMatch(/likely render noise \(identical DOM and computed styles match, and the diff is small and scattered/i);
+  });
+
+  it('names the concentrated-or-large case and sends the model to the images, not to noise', () => {
+    const line = text.split('\n').find((l) => /concentrated in one area/i.test(l));
+    expect(line).toBeDefined();
+    expect(text).toMatch(/concentrated in one area[^.]*over 1% of pixels/i);
+    expect(text).toMatch(/concentrated in one area[^.]*bad capture or a change the style check does not cover/i);
+    expect(text).toMatch(/concentrated in one area[^.]*get_diff[^.]*do not call it noise/i);
   });
 
   it('never recommends ignoring a diff as noise', () => {
