@@ -48,7 +48,8 @@ Global settings (thresholds, tolerances, `ignoreSelectors`) live in `.testivai/c
 
 Each capture writes `dom.html` and `elements.json` (each element's box and computed-style digest) next to the screenshot. When pixels differ and the DOM is identical, the report reads:
 
-- computed styles identical → likely render noise (anti-aliasing, font hinting): likely, not proven;
+- computed styles identical, diff small and scattered → likely render noise (anti-aliasing, font hinting): likely, not proven;
+- computed styles identical, but the diff concentrated in one area or over 1% of pixels → not noise: a bad capture or a change the style check does not cover (size, overflow, transform, images), so compare the images;
 - computed styles differ → a style-only change, which is real, with the restyled elements named;
 - styles not compared (no element map on one side, e.g. `skipElementMap: true` or a blocked collector script) → could be render noise or a stylesheet-only change, so compare the images before approving.
 

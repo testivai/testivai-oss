@@ -81,7 +81,7 @@ Without `elements.json` on both sides, computed styles are not compared (`styleC
   "baselinesDir": ".testivai/baselines",  // override baseline storage ({platform} token supported)
   "maxDiffPercent": 0,        // pass diffs at or below this % (autoPassed: "threshold")
   "maxDiffPixels": 100,       // absolute variant; either criterion passing suffices
-  "noiseAutoPass": false,     // auto-pass diffs with identical DOM AND styleCheck "match" (autoPassed: "noise")
+  "noiseAutoPass": false,     // auto-pass diffs with identical DOM AND styleCheck "match", not concentrated in one area (autoPassed: "noise")
   "noiseMaxDiffPercent": 1,   // upper bound (diff %) for noiseAutoPass
   "shiftTolerance": 0,        // auto-pass pure element shifts ≤ N px/axis, needs element maps (autoPassed: "shift")
   "stabilize": true,          // freeze animations, hide caret, await fonts pre-capture
@@ -147,7 +147,8 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "autoPassed": "noise"   // present only when a pass criterion applied:
                               // "threshold" (maxDiffPercent/maxDiffPixels),
                               // "noise" (noiseAutoPass: needs noiseHint AND
-                              // styleCheck "match"), or "shift"
+                              // styleCheck "match" AND a diff not
+                              // concentrated in one area), or "shift"
                               // (shiftTolerance); status is then "passed"
     },
     {
@@ -243,7 +244,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].dom.summary` | object &#124; null | yes within `dom` | null when `changed` is false |
 | `snapshots[].dom.summary.added` / `.removed` / `.attributeChanges` | number | yes within `summary` | structural change counts |
 | `snapshots[].dom.summary.textChanges` | number | optional | visible-text token changes |
-| `snapshots[].dom.noiseHint` | boolean | yes within `dom` | true when pixel diff exists but DOM unchanged **and** no style mismatch was found: either the style digests match (`styleCheck: "match"`) or none were comparable (`styleCheck: "unavailable"`, so styles were not compared). Read it with `styleCheck`: only `noiseHint` + `match` is likely render noise; `noiseHint` + `unavailable` means a stylesheet-only change is not ruled out |
+| `snapshots[].dom.noiseHint` | boolean | yes within `dom` | true when pixel diff exists but DOM unchanged **and** no style mismatch was found: either the style digests match (`styleCheck: "match"`) or none were comparable (`styleCheck: "unavailable"`, so styles were not compared). Read it with `styleCheck` and the shape of the diff: only `noiseHint` + `match` with a small, scattered diff (at most 1% of pixels, and no `regions` or regions spread over more than a third of the page; `diffShape` from `@testivai/witness/report`) is likely render noise; `noiseHint` + `match` with every region in a box covering at most a third of the page is a bad capture or a change the style check does not cover; `noiseHint` + `unavailable` means a stylesheet-only change is not ruled out |
 | `snapshots[].dom.styleCheck` | enum | optional | `match` &#124; `mismatch` &#124; `unavailable` — computed-style fingerprint verdict; `unavailable` when the verdict could not be measured — no element map on one or both sides, or no element whose `styleHash` is present on both. An adapter that emits bounds without a `styleHash` gets `unavailable`, never a `match`. Absent in results written before the style check existed: treat as `unavailable` |
 | `snapshots[].dom.styleChanges` | object | optional | present on `mismatch`: `{ count, elements[] }` (up to 10 selectors) |
 | `snapshots[].regions` | array | optional | changed-pixel clusters as bounding boxes: `x`, `y`, `width`, `height`, `diffPixels`, `diffPercent`, plus optional `classification` (`shift` &#124; `change`), `shift` (`{ dx, dy }` when classified `shift`), and `elements[]` (`{ selector, role }`, `role` = `shifted` &#124; `changed`, max 3, smallest first). Attribution fields require captured element maps |

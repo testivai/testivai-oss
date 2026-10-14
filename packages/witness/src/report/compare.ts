@@ -11,6 +11,7 @@ import { diff as diffEngine } from '../diff';
 import { domDiff } from '../diff/dom-diff';
 import { BaselineStore, resolveBaselinesDir } from '../baselines/store';
 import type { SnapshotDomSignal, SnapshotResult, SnapshotStatus } from './results';
+import { diffShape } from './diff-shape';
 import {
   type CapturedMaskRect,
   type MaskSpec,
@@ -90,9 +91,11 @@ export interface PassCriteria {
   /**
    * Auto-pass likely render noise up to noiseMaxDiffPercent: only when the
    * DOM is identical (dom.noiseHint) AND the computed styles were compared
-   * and match (dom.styleCheck 'match'). A diff whose styles were not
-   * compared ('unavailable' or missing) or changed ('mismatch') stays
-   * 'changed' for a human. Default false.
+   * and match (dom.styleCheck 'match') AND the diff is not concentrated in
+   * one area (see diffShape). A diff whose styles were not compared
+   * ('unavailable' or missing) or changed ('mismatch'), or whose regions all
+   * sit in one area (a bad capture, or a change the style check does not
+   * cover), stays 'changed' for a human. Default false.
    */
   noiseAutoPass?: boolean;
   /** Upper bound (diff %, 0-100) for noiseAutoPass. Default 1. */
@@ -267,11 +270,15 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
   // Likely render noise: identical DOM AND computed styles compared and
   // equal. 'unavailable' (or a missing styleCheck from older results) means
   // a stylesheet-only change is not ruled out, so it stays for a human.
+  // Render noise is also scattered: regions that all sit in one area are a
+  // bad capture or a change the style check does not cover, so they stay
+  // too. The size bound is noiseMaxDiffPercent, not diffShape's 1%.
   if (
     noiseAutoPass &&
     result.dom?.noiseHint === true &&
     result.dom.styleCheck === 'match' &&
-    result.diffPercent <= noiseMaxDiffPercent
+    result.diffPercent <= noiseMaxDiffPercent &&
+    diffShape(result).kind !== 'concentrated'
   ) {
     result.status = 'passed';
     result.autoPassed = 'noise';

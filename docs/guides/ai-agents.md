@@ -48,9 +48,15 @@ Then read `visual-report/results.json` and act on each snapshot:
 - `status: "changed"` with `dom.styleCheck: "mismatch"` → a style-only
   change; real, not noise. Compare `dom.styleChanges` (the restyled
   elements) against what you intended.
+- `status: "changed"` with `dom.noiseHint: true`, `dom.styleCheck:
+  "match"`, `diffPercent` at most 1, and no `regions` or regions spread out
+  (their combined box covers more than a third of the page) → likely render
+  noise (font hinting, anti-aliasing); mention it, don't block.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck:
-  "match"` → likely render noise (font hinting, anti-aliasing); mention it,
-  don't block.
+  "match"` but every region within a third of the page, or `diffPercent`
+  over 1 → not noise: a bad capture or a change the style check does not
+  cover (size, overflow, transform, images). Look at the diff image before
+  reporting it.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck`
   `"unavailable"` or missing (always the case for `testivai witness <url>`)
   → styles not compared: could be render noise or a stylesheet-only change.
@@ -97,7 +103,7 @@ claude mcp add testivai -- npx -y @testivai/mcp
 | `approve_snapshot` | Promote one confirmed snapshot to its committed baseline |
 | `approve_all` | Promote every pending snapshot (only after review) |
 
-The server also ships a prompt, **`review-visual-changes`**, that walks the agent through a full review: summary → `explain_snapshot` per change → diff images when ambiguous (always when the styles were not compared) → a per-snapshot recommendation (approve once the human confirms / investigate / likely noise, the last only when the DOM and computed styles both match). Your model does the reasoning; the server supplies the evidence — so the quality of the narrative scales with the model you already use, no hosted analysis service required.
+The server also ships a prompt, **`review-visual-changes`**, that walks the agent through a full review: summary → `explain_snapshot` per change → diff images when ambiguous (always when the styles were not compared) → a per-snapshot recommendation (approve once the human confirms / investigate / likely noise, the last only when the DOM and computed styles both match and the diff is small and scattered). Your model does the reasoning; the server supplies the evidence — so the quality of the narrative scales with the model you already use, no hosted analysis service required.
 
 The server reads the project from its working directory (`--root <path>` to
 override) and honors `reportDir` from `.testivai/config.json`. The approve
@@ -197,15 +203,16 @@ consequences — the design pushes the other way on purpose.
 // .testivai/config.json
 {
   "stabilize": true,          // default — freezes animations, hides the caret, awaits fonts
-  "noiseAutoPass": true,      // micro-diffs with identical DOM AND matching computed styles stop demanding attention
+  "noiseAutoPass": true,      // micro-diffs with identical DOM AND matching computed styles, scattered, stop demanding attention
   "noiseMaxDiffPercent": 1,
   "ignoreSelectors": [".live-feed", "[data-clock]"]  // your dynamic regions
 }
 ```
 
 - `noiseAutoPass` keeps agent loops quiet: a diff passes as noise only when
-  the DOM is identical and the computed styles were compared and match
-  (labeled `autoPassed: "noise"` in results.json — never hidden). It never
+  the DOM is identical, the computed styles were compared and match, and the
+  diff is not concentrated in one area (labeled `autoPassed: "noise"` in
+  results.json — never hidden). It never
   passes text, structural or style-only changes: the DOM diff tokenizes
   visible text precisely so wording edits can't slip through this gate, and
   a style mismatch is never noise. It never passes a diff whose styles were

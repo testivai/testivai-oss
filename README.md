@@ -17,7 +17,7 @@ This is the home of TestivAI. It contains everything you need to capture, diff, 
 
 Pixel-only visual testing drowns you in false positives — a font re-hint or an anti-aliasing shift across machines lights up as a "change," and you spend your time re-approving noise.
 
-**TestivAI pairs the screenshot with a snapshot of the page DOM** (every adapter and the crawler capture one by default; the experimental `testivai run` sidecar does not) and, from most test-framework adapters, a digest of every element's computed styles. When pixels differ but the DOM and the computed styles are identical, the report labels the diff **likely render noise** instead of crying wolf. It still shows the diff; it tells you what it most likely is. When only the styles changed, it says so: a style-only change is real. When the styles could not be compared, it says *styles not compared* and does not call the diff noise, because a stylesheet-only change is not ruled out. When the DOM actually changed, you see exactly what (`2 added, 1 removed`). That layered signal is the difference between a flaky test wall and a report you trust.
+**TestivAI pairs the screenshot with a snapshot of the page DOM** (every adapter and the crawler capture one by default; the experimental `testivai run` sidecar does not) and, from most test-framework adapters, a digest of every element's computed styles. When pixels differ but the DOM and the computed styles are identical and the diff is small and scattered, the report labels the diff **likely render noise** instead of crying wolf. When the DOM and styles match but the diff sits in one area, it says that too: the style check covers a fixed list of properties, not size, overflow, transform or images, so that is a bad capture or a real change, not noise. It still shows the diff; it tells you what it most likely is. When only the styles changed, it says so: a style-only change is real. When the styles could not be compared, it says *styles not compared* and does not call the diff noise, because a stylesheet-only change is not ruled out. When the DOM actually changed, you see exactly what (`2 added, 1 removed`). That layered signal is the difference between a flaky test wall and a report you trust.
 
 - **Fully local, no account** — captures, diffs, and a self-contained HTML report all stay on your machine.
 - **DOM + style-aware noise hint** — tells likely render jitter from real changes, and catches the stylesheet-only case. When both captures carry an element map (the Playwright JS/TS, WebdriverIO, Selenium and Ruby adapters record one), an identical DOM with changed computed styles reads as "Styles changed on `button.cta`", never as noise. Without an element map on both sides (the `testivai witness <url>` crawler, playwright-python, playwright-java), computed styles are not compared, and an identical-DOM diff reads "styles not compared", not "likely render noise".
@@ -42,7 +42,7 @@ If an AI agent (Claude Code, Cursor, Copilot, …) writes your UI code, someone 
 
 - **No account, no API key, no network** — an agent can run it inside any sandbox without you provisioning secrets.
 - **Machine-readable output** — every run writes `visual-report/results.json` (a [semver-governed schema](./docs/how-it-works.md)) with per-snapshot diff percentages and DOM change summaries, so an agent can read the result and self-correct.
-- **Noise-aware verdicts** — the DOM and computed-style checks tell the agent whether a pixel diff is *likely render noise* (identical DOM, styles compared and identical), a *style-only change* (identical DOM, restyled elements), a *real structural change* (`2 added, 1 removed`), or *styles not compared* (identical DOM, but no style data to compare, so a stylesheet-only change is not ruled out). It doesn't chase anti-aliasing ghosts, and it doesn't label a diff it couldn't check as noise.
+- **Noise-aware verdicts** — the DOM and computed-style checks tell the agent whether a pixel diff is *likely render noise* (identical DOM, styles compared and identical, a small and scattered diff), a *concentrated or large diff* (identical DOM and styles, but the diff sits in one area or covers over 1% of pixels: a bad capture or a change the style check does not cover), a *style-only change* (identical DOM, restyled elements), a *real structural change* (`2 added, 1 removed`), or *styles not compared* (identical DOM, but no style data to compare, so a stylesheet-only change is not ruled out). It doesn't chase anti-aliasing ghosts, and it doesn't label a diff it couldn't check as noise.
 - **Explanations, bring-your-own-model** — the MCP `explain_snapshot` tool hands your agent layered evidence (which selectors shifted vs changed, whole-page shift detection, style-only changes) and your model writes the narrative: *"card #2 shifted +24px — likely the banner injected above it."* No hosted AI service in the loop.
 - **Human approval stays in the PR** — the agent iterates locally; you approve baselines with one `/testivai approve` comment.
 
@@ -57,8 +57,14 @@ screenshots automatically), then read `visual-report/results.json`.
 - `status: "changed"` with `dom.changed: false` and `dom.styleCheck: "mismatch"`
   → style-only change; real, not noise. Compare `dom.styleChanges` with what
   you intended.
+- `status: "changed"` with `dom.noiseHint: true`, `dom.styleCheck: "match"`,
+  `diffPercent` at most 1, and no `regions` or regions spread out (their
+  combined box covers more than a third of the page) → likely render noise;
+  mention it but don't block.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck: "match"`
-  → likely render noise; mention it but don't block.
+  but every region within a third of the page, or `diffPercent` over 1 → not
+  noise: a bad capture or a change the style check does not cover (size,
+  overflow, transform, images). Look at the diff image before approving.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck`
   `"unavailable"` or missing → styles not compared: could be render noise or a
   stylesheet-only change. Don't treat it as noise: look at the diff image before approving.
@@ -121,7 +127,7 @@ npx playwright install chromium
 {
   "threshold": 0.1,            // per-pixel color sensitivity (0-1)
   "maxDiffPercent": 0,         // pass diffs at or below this % (your tolerance dial)
-  "noiseAutoPass": false,      // true: diffs with identical DOM AND matching computed styles, within noiseMaxDiffPercent, pass
+  "noiseAutoPass": false,      // true: diffs with identical DOM AND matching computed styles, not concentrated in one area, within noiseMaxDiffPercent, pass
   "stabilize": true,           // freeze animations, hide caret, wait for fonts
   "ignoreSelectors": [],       // e.g. [".live-chat", "[data-testid=clock]"]
   "reportDir": "visual-report",
@@ -165,7 +171,7 @@ npx playwright test
 - Full-page screenshot capture via Playwright
 - **Stabilized captures by default** — animations/transitions frozen, caret hidden, web fonts awaited (the top causes of flaky visual tests, neutralized before every screenshot)
 - Local pixel diff with configurable threshold
-- **Tunable pass criteria, all opt-in** — `maxDiffPercent` / `maxDiffPixels` tolerances, `shiftTolerance` for pure element shifts, and `noiseAutoPass`, which passes a diff only when the DOM is identical and the computed styles were compared and match (never one whose styles were not compared). Nothing auto-passes until you configure it, and auto-passed snapshots stay labeled in the report
+- **Tunable pass criteria, all opt-in** — `maxDiffPercent` / `maxDiffPixels` tolerances, `shiftTolerance` for pure element shifts, and `noiseAutoPass`, which passes a diff only when the DOM is identical, the computed styles were compared and match, and the diff is not concentrated in one area (never one whose styles were not compared). Nothing auto-passes until you configure it, and auto-passed snapshots stay labeled in the report
 - `ignoreSelectors` and `mask` for dynamic content such as timestamps (global or per-snapshot): stabilization does not hide changing content, so you list it
 - Self-contained HTML report (`visual-report/index.html`)
 - Machine-readable results (`visual-report/results.json`)
@@ -284,12 +290,15 @@ Step 5 needs a token other than `GITHUB_TOKEN`: GitHub starts no workflow run fo
 ```
 TestivAI Visual Report
 
-4 passed | 3 changed | 1 new — 8 total
+4 passed | 4 changed | 1 new — 9 total
 
 Changed Snapshots
 
-▼ homepage — 12.34% different
-  DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
+▼ homepage — 0.31% different
+  DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.
+
+▼ products — 0.03% different
+  DOM and styles unchanged, but the diff is concentrated in one area — 3 regions within 155×52 px, 0.8% of the page: a bad capture, or a change the style check does not cover (size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets). Compare the images before approving.
 
 ▼ pricing — 0.42% different
   DOM unchanged, styles not compared — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.

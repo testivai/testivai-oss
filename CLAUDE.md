@@ -73,6 +73,7 @@ CI (GitHub Actions):
 - `src/diff/diff.ts`         — pixel comparison (pixelmatch-based)
 - `src/diff/dom-diff.ts`     — zero-dep DOM tokenizer + multiset comparator; emits noiseHint
 - `src/config/local-config.ts` — LocalConfig type + defaults (single source of truth for config.json fields)
+- `src/report/diff-shape.ts` — `diffShape()`: scattered / concentrated / large, the rule for when matching styles still mean likely render noise (shared by compare, the report, MCP and the action)
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html
 - `src/report/template.ts`   — HTML template for the report
@@ -193,12 +194,18 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 ```
 
 When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
-`"match"` → likely render noise (not proof); `"mismatch"` → a real style-only change
-(`noiseHint` is then false); `"unavailable"`, or absent in older results → styles not
-compared, so a stylesheet-only change is not ruled out: never word it as noise.
-`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case (`noiseHint`
-true AND `styleCheck: "match"`, within `noiseMaxDiffPercent`), and `autoPassed` always
-comes with `status: "passed"`.
+`"match"` → likely render noise (not proof) only when the diff is also small and
+scattered (`diffShape` in `packages/witness/src/report/diff-shape.ts`: at most 1% of
+pixels, and no regions or regions spread over more than a third of the page); a
+`"match"` diff concentrated in one area, or larger, is a bad capture or a change the
+style check does not cover (size, overflow, transform, images…): never word it as
+noise; `"mismatch"` → a real style-only change (`noiseHint` is then false);
+`"unavailable"`, or absent in older results → styles not compared, so a
+stylesheet-only change is not ruled out: never word it as noise.
+`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case whose diff is
+not concentrated in one area (`noiseHint` true AND `styleCheck: "match"` AND
+`diffShape(...).kind !== "concentrated"`, within `noiseMaxDiffPercent`), and
+`autoPassed` always comes with `status: "passed"`.
 
 Exit-code contract (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 changed / 2 new-only (gated by `--fail-on-diff`) / 3 missing-only (`failOnMissing` defaults **true**; escape with config `false` or `--allow-missing`). Precedence: changed > missing > new.
 

@@ -109,6 +109,40 @@ describe('groupChanges', () => {
     expect(groups.slice(0, 2).every((g) => !/likely render noise/i.test(g.label))).toBe(true);
   });
 
+  // Identical DOM and matching styles is likely noise only when the diff is
+  // small and scattered. A diff concentrated in one area sits in its own
+  // place on its own page: grouping two of them would suggest one cause, so
+  // they are never grouped, and never with noise.
+  it('never groups diffs concentrated in one area, and keeps them out of the noise group', () => {
+    const concentrated = (name: string) =>
+      changed(name, {
+        diffPercent: 0.03,
+        totalPixels: 1000 * 1000,
+        regions: [{ x: 10, y: 10, width: 100, height: 50 }],
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      });
+    expect(groupChanges([concentrated('a'), concentrated('b')])).toEqual([]);
+    expect(members([concentrated('a'), concentrated('b'), noise('c', 'match'), noise('d', 'match')])).toEqual([
+      ['noise', ['c', 'd']],
+    ]);
+  });
+
+  // Spread out but over 1% of pixels: more than render noise usually
+  // changes, often the same font or rendering difference between machines.
+  // Its own basis, never noise.
+  it('groups large spread-out diffs under their own basis, not with noise', () => {
+    const large = (name: string) => changed(name, { diffPercent: 1.5, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } });
+    const groups = groupChanges([large('a'), large('b'), noise('c', 'match'), noise('d', 'match')]);
+    expect(groups.map((g) => [g.basis, g.members])).toEqual([
+      ['large-diff', ['a', 'b']],
+      ['noise', ['c', 'd']],
+    ]);
+    expect(groups[0].label).toBe(
+      'identical DOM and computed styles, but over 1% of pixels differ, spread across the page: more than render noise usually changes; grouped on that signal, not on its cause',
+    );
+    expect(groups[0].label).not.toMatch(/likely render noise/i);
+  });
+
   it('puts each snapshot in one group: style-only before page shift before noise', () => {
     const both = changed('both', {
       dom: { changed: false, noiseHint: false, summary: null, styleCheck: 'mismatch', styleChanges: { count: 1, elements: ['body > header'] } },
@@ -119,15 +153,18 @@ describe('groupChanges', () => {
     ]);
   });
 
-  it('orders groups by size, then kind (style-only, page shift, styles not compared, noise), members by name, whatever the input order', () => {
+  it('orders groups by size, then kind (style-only, page shift, styles not compared, large diff, noise), members by name, whatever the input order', () => {
+    const large = (name: string) => changed(name, { diffPercent: 2, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } });
     const input = [
       noise('n2', 'match'),
       styleOnly('s3', ['x']),
       noise('u2', 'unavailable'),
+      large('l2'),
       shifted('p1', 8, 40),
       styleOnly('s1', ['x']),
       noise('n1', 'match'),
       noise('u1', 'unavailable'),
+      large('l1'),
       styleOnly('s2', ['x']),
       shifted('p2', 8, 40),
     ];
@@ -135,12 +172,13 @@ describe('groupChanges', () => {
       ['style-only', ['s1', 's2', 's3']],
       ['page-shift', ['p1', 'p2']],
       ['styles-not-compared', ['u1', 'u2']],
+      ['large-diff', ['l1', 'l2']],
       ['noise', ['n1', 'n2']],
     ];
     for (const order of [
       input,
       [...input].reverse(),
-      [input[4], input[0], input[8], input[2], input[1], input[7], input[3], input[6], input[5]],
+      [input[5], input[0], input[10], input[2], input[8], input[1], input[9], input[3], input[7], input[6], input[4]],
     ]) {
       expect(members(order)).toEqual(expected);
       expect(changeGroupLines(order)).toEqual(changeGroupLines(input));
@@ -162,7 +200,7 @@ describe('groupChanges', () => {
     expect(notCompared.label).not.toMatch(/likely render noise|styles both match/i);
     const [noiseGroup] = groupChanges([noise('a', 'match'), noise('b', 'match')]);
     expect(noiseGroup.basis).toBe('noise');
-    expect(noiseGroup.label).toBe('likely render noise: the DOM and computed styles both match');
+    expect(noiseGroup.label).toBe('likely render noise: the DOM and computed styles both match and the diff is small and scattered');
   });
 });
 
@@ -202,6 +240,23 @@ describe('groupChanges on real results.json (see fixtures/README.md)', () => {
   it('example project, --brand changed: one group of the three identical captures', () => {
     expect(members(load('example-brand.results.json').snapshots)).toEqual([
       ['style-only', ['buttons', 'home', 'products']],
+    ]);
+  });
+
+  // packages/witness/src/__tests__/fixtures/README.md: identical DOM and
+  // matching styles throughout. The concentrated cases (the clipped card, the
+  // bad capture, the bad baseline, the underlined titles) are never grouped;
+  // the long-page underline is the rule's known blind spot and reads as noise.
+  it('real runs with an identical DOM and matching styles: only scattered noise and large diffs are grouped', () => {
+    const fixture = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, '..', '..', '..', 'witness', 'src', '__tests__', 'fixtures', 'render-noise-shapes.results.json'),
+        'utf8',
+      ),
+    ) as ResultsFile;
+    expect(members(fixture.snapshots)).toEqual([
+      ['noise', ['font-subpixel-noise', 'glyph-edge-noise', 'titles-underlined-long-page']],
+      ['large-diff', ['font-subpixel-noise-over-1pct', 'fonts-differ-between-machines']],
     ]);
   });
 
