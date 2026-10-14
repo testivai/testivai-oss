@@ -120,7 +120,7 @@ visual-report/
     └── <name>/
         ├── baseline.png
         ├── current.png
-        └── diff.png    (when status = changed)
+        └── diff.png    (when the PNGs differ: changed or auto-passed)
 ```
 
 `results.json` schema (excerpt):
@@ -129,7 +129,7 @@ visual-report/
 {
   "version": "2.3.0",
   "timestamp": "2026-04-30T...",
-  "summary": { "total": 2, "passed": 0, "changed": 2, "newSnapshots": 0 },
+  "summary": { "total": 2, "passed": 1, "changed": 1, "newSnapshots": 0 },
   "snapshots": [
     {
       "name": "homepage",
@@ -152,7 +152,7 @@ visual-report/
 }
 ```
 
-This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.changed`, `dom.styleCheck` and `dom.noiseHint` to decide whether a diff needs human attention: `dom.changed: true` is a structural change, `styleCheck: "mismatch"` is a real style-only change, and `noiseHint: true` is likely render noise only when `styleCheck` is `"match"` (with `"unavailable"`, styles were not compared). See "Eyes for your coding agent" in the README.
+This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.changed`, `dom.styleCheck` and `dom.noiseHint` to decide whether a diff needs human attention: `dom.changed: true` is a structural change, `styleCheck: "mismatch"` with `dom.changed: false` is a real style-only change, and `noiseHint: true` is likely render noise only when `styleCheck` is `"match"` (with `"unavailable"`, styles were not compared). See "Eyes for your coding agent" in the README.
 
 ---
 

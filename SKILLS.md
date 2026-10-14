@@ -200,15 +200,19 @@ CI runs again on the approve commit only if the approve step pushes with a token
 2. **Check the DOM diff hint**
    In `visual-report/results.json`, look at the snapshot's `dom` field:
    ```json
-   "dom": { "changed": false, "noiseHint": true }
+   "dom": { "changed": false, "noiseHint": true, "styleCheck": "match" }
    ```
-   - `noiseHint: true` + `changed: false` → DOM is identical and no style change
-     was found; the diff is likely render noise (font hinting, anti-aliasing,
-     sub-pixel rendering). With `styleCheck: "unavailable"` the styles were not
-     compared, so glance at the diff before approving.
-   - `styleCheck: "mismatch"` → style-only change (identical DOM, different
-     computed styles). Real, not noise; `styleChanges` lists the elements.
-   - `changed: true` → real DOM change. Check `dom.summary` for what added/removed.
+   - `noiseHint: true` + `changed: false` + `styleCheck: "match"` → the DOM and
+     computed styles are identical; the diff is likely render noise (font
+     hinting, anti-aliasing, sub-pixel rendering). Likely, not proven.
+   - `noiseHint: true` + `styleCheck: "unavailable"` or missing → styles not
+     compared: could be render noise or a stylesheet-only change. Do not call it
+     noise; compare the images before approving.
+   - `styleCheck: "mismatch"` + `changed: false` → style-only change (identical
+     DOM, different computed styles). Real, not noise; `styleChanges` lists the
+     elements.
+   - `changed: true` → real DOM change (any restyled elements are listed in
+     `styleChanges` too). Check `dom.summary` for what was added/removed.
 
 3. **Raise the threshold** if the diff is render noise across many snapshots:
    ```json

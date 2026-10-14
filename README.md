@@ -54,8 +54,9 @@ After changing any UI code, run `npx playwright test` (TestivAI captures
 screenshots automatically), then read `visual-report/results.json`.
 - `status: "changed"` with `dom.changed: true` → describe the DOM summary and
   ask whether the change is intended before approving.
-- `status: "changed"` with `dom.styleCheck: "mismatch"` → style-only change;
-  real, not noise. Compare `dom.styleChanges` with what you intended.
+- `status: "changed"` with `dom.changed: false` and `dom.styleCheck: "mismatch"`
+  → style-only change; real, not noise. Compare `dom.styleChanges` with what
+  you intended.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck: "match"`
   → likely render noise; mention it but don't block.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck`

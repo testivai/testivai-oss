@@ -275,7 +275,7 @@ If your agent isn't MCP-capable, paste into `AGENTS.md` / `CLAUDE.md` /
 ## Visual verification
 After changing UI code, run the visual tests, then read visual-report/results.json:
 - status "changed" + dom.changed true → real structural change; compare against intent
-- status "changed" + dom.styleCheck "mismatch" → style-only change; real, not noise
+- status "changed" + dom.changed false + dom.styleCheck "mismatch" → style-only change; real, not noise
 - status "changed" + dom.noiseHint true + dom.styleCheck "match" → likely render noise; mention, don't block
 - status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
 - status "new" → no baseline yet; tell the human
