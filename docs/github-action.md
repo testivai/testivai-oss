@@ -228,6 +228,118 @@ git push
 
 The next CI run shows the snapshot back in the `passed` bucket. Approve everything at once with `npx testivai approve --all`; undo with `npx testivai approve --undo "checkout-page"`.
 
+## AI triage of every diff
+
+The reporter says *what kind* of change each snapshot is, deterministically.
+The companion `testivai/testivai-oss/review@v1` action adds a second opinion
+on every pull request run that has a changed or new snapshot: Claude
+([`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action))
+reads the report through [`@testivai/mcp`](./mcp.md), looks at the baseline,
+current and diff images, reads the pull request's diff and description, and
+sorts each snapshot into one of four verdicts:
+
+| Verdict | Meaning |
+|---|---|
+| 🔴 bug | The page changed in a way the pull request did not mean to make, or the result looks broken |
+| 🟠 possible bug | The page really changed, but the evidence cannot settle whether that was meant; the comment says what to check |
+| 🟢 intended change | The page changed, and it matches what the pull request meant to do |
+| ⚪ glitch | The page did not change: render noise, a bad capture (either one), or a resource that failed to load |
+
+The rules are the MCP server's [`triage-visual-diff`](./mcp.md#triage-a-diff-glitch-intended-change-bug-or-possible-bug)
+prompt, so an agent on your machine and CI judge the same way. A changed DOM
+or changed computed styles is never a glitch, and an identical DOM whose
+styles were not compared is not called one from the DOM alone.
+
+The result is one PR comment, updated on each push:
+
+| Snapshot | Verdict | Confidence | Evidence | Next step |
+|---|---|---|---|---|
+| `home` | 🔴 bug | high | DOM changed: `footer.site-footer` removed; the PR only touches `button.btn` in `site/styles.css`. | Restore the footer in `site/index.html`. |
+
+It is advisory. It never changes the visual check or a baseline, and Claude
+gets read-only tools (the TestivAI MCP tools without `approve_snapshot` and
+`approve_all`, plus `Read`, `Glob` and `Grep`; no commands, edits or network).
+Approving stays a human `/testivai approve <name>`.
+
+### Setup
+
+Add a repository secret, `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN`
+(from `claude setup-token`, to use a Claude subscription), and a job after
+your visual job:
+
+```yaml
+jobs:
+  # ...your visual job (here `visual-regression`), with the
+  # testivai/testivai-oss@v1 reporter step...
+
+  ai-triage:
+    name: AI triage
+    needs: visual-regression
+    # !cancelled(): a changed snapshot fails the visual job, which is exactly
+    # when the triage is useful.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read         # check out the code Claude may read
+      pull-requests: write   # read the PR's diff, post the comment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: testivai-visual-report   # the reporter's artifact-name
+          path: visual-report
+      - uses: testivai/testivai-oss/review@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # enabled: false   # turn it off: Claude does not run, no tokens are used
+```
+
+The step can also go in the visual job itself, after the reporter, with
+`if: ${{ !cancelled() }}`; a separate job keeps the Claude step away from that
+job's write permissions.
+
+### When it runs, and what it costs
+
+It uses tokens only when **all** of these hold, and otherwise skips in
+seconds:
+
+1. `enabled` is not `false`.
+2. The run is for a pull request (`pull_request` event).
+3. At least one snapshot is changed or new. Passed snapshots and missing
+   baselines are never sent.
+4. A Claude credential is set. Pull requests from forks get no secrets, so
+   they are skipped.
+
+Each triage is one Claude Code session that calls the MCP tools and looks at
+images, so its cost grows with the number of changed snapshots. `max-turns`
+caps it (a run that hits the cap posts no triage and does not fail the job),
+and `model` picks a smaller model. We have not measured typical token counts;
+check your usage after the first few runs.
+
+To turn it off, set `enabled: false` (or remove the job). Claude does not
+start, and an earlier triage comment on the PR is replaced with a note that
+the triage is off.
+
+### Inputs
+
+| Input | Default | Description |
+|---|---|---|
+| `anthropic-api-key` | `''` | Anthropic API key. Set this or `claude-code-oauth-token`; with neither, the triage is skipped with a notice |
+| `claude-code-oauth-token` | `''` | Claude Code OAuth token (`claude setup-token`), to use a Claude subscription |
+| `enabled` | `true` | `false` turns it off: Claude does not run and no tokens are used. Anything but `true`/`false` fails the step |
+| `report-dir` | `visual-report` | Directory with `results.json`, the same as the reporter's. The PR diff is written to `<report-dir>/triage/pr.diff` |
+| `model` | `''` | Claude model, for example a smaller one to spend fewer tokens. Empty uses Claude Code's default |
+| `max-turns` | `30` | Most agent turns Claude may take (1 to 200) |
+| `github-token` | `${{ github.token }}` | Reads the PR diff and posts the comment; needs `pull-requests: write` |
+
+The triage is a model's reading of deterministic evidence, and it can be
+wrong. The pull request's description and diff and the page content reach the
+model as data; a pull request that tries to talk the model into a verdict can
+still mislead the comment, which is one more reason approving stays a human
+decision.
+
 ## Caveats
 
 - The Action assumes the local HTML report has already been generated by a framework adapter run. It does not run tests itself.

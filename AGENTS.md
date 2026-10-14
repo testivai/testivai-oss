@@ -50,6 +50,7 @@ packages/
 
 action/         testivai/testivai-oss@v1     GitHub Action: post PR comment + commit status
 approve/        testivai/testivai-oss/approve@v1  GitHub Action: /testivai approve command handler
+review/         testivai/testivai-oss/review@v1   GitHub Action: Claude triages each diff (advisory; enabled: false turns it off)
 
 examples/       minimal working examples per framework
 docs/           public Markdown documentation
@@ -131,8 +132,8 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `src/server.ts` | Registers the tools and the `review-visual-changes` prompt; starts the stdio server on import |
-| `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool) |
+| `src/server.ts` | Registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import |
+| `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool), and the prompt texts; `TRIAGE_PROMPT.rubric()` is shared with the review action |
 | `src/lib.ts` | `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore) |
 
 ### GitHub Action reporter (`action/`)
@@ -143,7 +144,14 @@ CI — GitHub Actions
 | `src/comment.ts` | Builds PR comment markdown |
 | `src/status.ts` | Determines pass/fail commit status |
 | `src/types.ts` | Shared TypeScript interfaces |
-| `dist/index.js` | Bundled output (esbuild) — **must be committed after every src change** |
+| `src/review.ts` | The review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment |
+| `dist/index.js`, `dist/review.cjs` | Bundled output (esbuild) — **must be committed after every src change** |
+
+### GitHub Action AI triage (`review/`)
+
+| File | Responsibility |
+|---|---|
+| `action.yml` | Composite action: prepare → `anthropics/claude-code-action@v1` → post; loads `action/dist/review.cjs` |
 
 ### GitHub Action approver (`approve/`)
 

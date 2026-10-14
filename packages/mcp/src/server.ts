@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
 import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines } from './lib';
-import { REVIEW_PROMPT, toolMetaFor } from './tool-meta';
+import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
 
@@ -199,6 +199,28 @@ server.registerPrompt(
           type: 'text' as const,
           text: REVIEW_PROMPT.text,
         },
+      },
+    ],
+  })
+);
+
+// Glitch, intended change, bug or possible bug for one snapshot or all of
+// them. The arguments are optional; the text quotes them (tool-meta.ts).
+server.registerPrompt(
+  TRIAGE_PROMPT.name,
+  {
+    title: TRIAGE_PROMPT.title,
+    description: TRIAGE_PROMPT.description,
+    argsSchema: {
+      snapshot: z.string().optional().describe(TRIAGE_PROMPT.args.snapshot),
+      intent: z.string().optional().describe(TRIAGE_PROMPT.args.intent),
+    },
+  },
+  async ({ snapshot, intent }) => ({
+    messages: [
+      {
+        role: 'user' as const,
+        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent }) },
       },
     ],
   })

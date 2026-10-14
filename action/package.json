@@ -5,7 +5,7 @@
   "description": "GitHub Action to post TestivAI visual regression results to PRs",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js && esbuild src/review.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/review.cjs",
     "test": "jest"
   },
   "repository": {

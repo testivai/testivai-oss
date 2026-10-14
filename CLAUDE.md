@@ -15,6 +15,7 @@ packages/
 
 action/        testivai/testivai-oss@v1      — GitHub Action: post PR comment + commit status
 approve/       testivai/testivai-oss/approve@v1 — GitHub Action: /testivai approve command handler
+review/        testivai/testivai-oss/review@v1  — GitHub Action: Claude triages each diff (glitch / intended change / bug / possible bug); advisory, `enabled: false` turns it off
 
 examples/      minimal working examples per framework
 docs/          public Markdown documentation
@@ -82,8 +83,8 @@ CI (GitHub Actions):
 - `src/reporter.ts`          — Playwright reporter (reads config, calls compare, generates report)
 
 ### @testivai/mcp (`packages/mcp/`)
-- `src/server.ts`            — registers the tools and the `review-visual-changes` prompt; starts the stdio server on import
-- `src/tool-meta.ts`         — every tool's title and description (what the model reads before calling a tool)
+- `src/server.ts`            — registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import
+- `src/tool-meta.ts`         — every tool's title and description (what the model reads before calling a tool), and the prompt texts; `TRIAGE_PROMPT.rubric()` is shared with the review action
 - `src/lib.ts`               — `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore)
 
 ### GitHub Action reporter (`action/`)
@@ -91,7 +92,11 @@ CI (GitHub Actions):
 - `src/comment.ts`           — builds PR comment markdown (with DOM noise hint)
 - `src/status.ts`            — determines pass/fail commit status
 - `src/types.ts`             — shared TypeScript interfaces
-- `dist/index.js`            — bundled output (esbuild); **must be committed**; rebuild with `npm run build` inside `action/`
+- `src/review.ts`            — the review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment
+- `dist/index.js`, `dist/review.cjs` — bundled output (esbuild); **must be committed**; rebuild with `npm run build` inside `action/`
+
+### GitHub Action AI triage (`review/`)
+- `action.yml`               — composite action: github-script prepare → `anthropics/claude-code-action@v1` → github-script post; loads `action/dist/review.cjs`, so it ships with the action's dist at the same `v1` tag
 
 ### GitHub Action approver (`approve/`)
 - `action.yml`               — composite action; no build step needed (pure shell + github-script)
@@ -111,7 +116,7 @@ The GitHub Action (`action.yml` at repo root → `action/dist/index.js`) uses a 
 - The `v1` major tag is rolled automatically by `.github/workflows/release-action.yml` on every clean semver tag push
 - After any change to `action/src/`, rebuild dist AND push a new semver tag to roll `v1`
 
-The approve action (`approve/action.yml`) is a composite action — no build step, no dist. It ships automatically at the same `v1` tag.
+The approve action (`approve/action.yml`) is a composite action — no build step, no dist. It ships automatically at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles).
 
 ## .testivai/ directory layout (on-disk contract)
 

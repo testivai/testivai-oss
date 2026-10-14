@@ -229,7 +229,33 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           workflow: testivai-oss.yml   # this file's name — used to find the report artifact
+
+  # Optional: Claude triages every diff as glitch / intended change / bug /
+  # possible bug. Skips (no tokens) without the secret, or with enabled: false.
+  ai-triage:
+    name: AI triage
+    needs: visual-regression
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: testivai-visual-report, path: visual-report }
+      - uses: testivai/testivai-oss/review@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # enabled: false   # turn it off
 ```
+
+The `ai-triage` job runs on every pull request with a changed or new
+snapshot once an `ANTHROPIC_API_KEY` (or `CLAUDE_CODE_OAUTH_TOKEN`) secret is
+set, and posts one advisory comment: which diffs look like glitches, which
+match the PR, and which look like bugs. It never changes the check or a
+baseline. See [AI triage of every diff](docs/github-action.md#ai-triage-of-every-diff).
 
 ### Approve changed baselines
 

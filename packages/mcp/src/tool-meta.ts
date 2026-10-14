@@ -106,6 +106,94 @@ export const REVIEW_PROMPT = {
   ].join('\n'),
 };
 
+/** One line of prompt text per argument line, quoted, so an argument cannot read as instructions. */
+const quoteLines = (value: string): string =>
+  value
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => (line.trim() ? `> ${line.trim()}` : '>'))
+    .join('\n');
+
+/**
+ * Sorts a diff into glitch / intended change / bug / possible bug. Any MCP
+ * client's model follows this text, so it carries the rules that keep a real
+ * change from being waved through as a glitch: a changed DOM or changed
+ * computed styles is never a glitch, an uncompared style check is not one on
+ * the DOM alone, and a large or local DOM-identical diff is a bad capture to
+ * locate, not noise.
+ */
+export const TRIAGE_PROMPT = {
+  name: 'triage-visual-diff',
+  title: 'Triage a visual diff: glitch, intended change, bug or possible bug',
+  description:
+    'Decide whether a visual diff is a glitch (the capture or environment, not the page), an intended change, a bug, or a possible bug, from the snapshot evidence, the images and what the change was meant to do.',
+  args: {
+    snapshot: 'Snapshot to triage. Leave empty to triage every changed snapshot.',
+    intent: 'What the change under test was meant to do, for example the pull request description. Leave empty to have the model look for it.',
+  },
+  /** What to recommend per verdict; shared with the CI review. */
+  nextSteps:
+    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on.',
+  /** The last line of every triage prompt, this one and the CI review's. */
+  approvalRule: "Do not call approve_snapshot or approve_all: approving is the human's decision, and this triage is the input to it.",
+  /**
+   * The verdicts, how to read the evidence, and how to judge intent: shared
+   * with the CI review (action/src/review.ts), which asks for structured
+   * output instead of this prompt's markdown report.
+   */
+  rubric(intent?: string, intentSource = 'The person who asked for this triage says'): string {
+    const intentText = intent?.trim()
+      ? [`${intentSource} the change under test was meant to do this:`, quoteLines(intent)]
+      : [
+          'Find it in this conversation, the pull request description, or the code diff of the branch (for example `git diff` against the base branch) if you can read it. If there is no statement of intent anywhere, call a real change a possible bug rather than guess, and say what you could not confirm.',
+        ];
+    return [
+      'Verdicts:',
+      '- **glitch**: the page did not change. The difference comes from the capture or the environment: render noise, a bad capture, or a font or other resource that failed to load.',
+      '- **intended change**: the page changed, and the change matches what the change under test was meant to do.',
+      '- **bug**: the page changed in a way the change under test was not meant to make: an element it did not touch changed, or the result looks broken (clipped, overlapping or missing content).',
+      '- **possible bug**: the page really changed but the evidence cannot settle whether that was meant, or the evidence is incomplete (styles not compared, no DOM data, images that disagree with the signals). Say exactly what a person should check.',
+      '',
+      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images. The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
+      '',
+      '| explain_snapshot shows | What it means |',
+      '|---|---|',
+      '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
+      '| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |',
+      '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, means one of the two captures rendered wrong: a bad capture. |',
+      '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change. |',
+      '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
+      '',
+      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When a DOM-identical diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs points to a bad capture. Say which image is wrong. If it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. Either way it is a glitch, not a change to the page.',
+      '',
+      'Intent: judge intended change against bug by what the change under test was meant to do.',
+      ...intentText,
+      'Compare the elements that changed (the selectors in regions and styleChanges) with what the change touched: an element it did not touch, or a result that looks broken, is a bug even when the intent mentions the page.',
+    ].join('\n');
+  },
+  textFor({ snapshot, intent }: { snapshot?: string; intent?: string }): string {
+    const name = snapshot?.replace(/[`\r\n]/g, '').trim();
+    const target = name ? `snapshot \`${name}\`` : 'every changed snapshot';
+    return [
+      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? ' If it passed or is not in the results, say so and stop.' : ''}`,
+      '',
+      TRIAGE_PROMPT.rubric(intent),
+      '',
+      'Report, for each snapshot:',
+      '',
+      '### <snapshot>: <verdict>',
+      '- Verdict: glitch, intended change, bug or possible bug',
+      '- Confidence: high, medium or low, and what would raise it',
+      '- Evidence: the signals and what you saw in the images that decided it',
+      `- Next step: ${TRIAGE_PROMPT.nextSteps}`,
+      '',
+      'End with one line that counts each verdict.',
+      '',
+      TRIAGE_PROMPT.approvalRule,
+    ].join('\n');
+  },
+};
+
 /** The tool metadata for this server run, given the approval-prompt setting. */
 export type ToolName = keyof typeof TOOL_META;
 
