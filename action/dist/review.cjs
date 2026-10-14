@@ -39,12 +39,14 @@ __export(review_exports, {
   buildPrompt: () => buildPrompt,
   claudeArgs: () => claudeArgs,
   decide: () => decide,
+  isAllowedBot: () => isAllowedBot,
   parseEnabled: () => parseEnabled,
   parseTriage: () => parseTriage,
   post: () => post,
   prepare: () => prepare,
   renderComment: () => renderComment,
   renderSkipped: () => renderSkipped,
+  resolveReportDir: () => resolveReportDir,
   syncComment: () => syncComment,
   toTriage: () => toTriage
 });
@@ -113,11 +115,11 @@ var TRIAGE_PROMPT = {
       "|---|---|",
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       "| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |",
-      '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, means one of the two captures rendered wrong: a bad capture. |',
-      '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change. |',
+      '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, is either a bad capture or a change the style check cannot see: it compares colors, fonts, borders, spacing, display, opacity, visibility and shadows, and does not cover size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets. See "Bad captures" below. |',
+      '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change, and the signs of a bad capture listed below can also come from a stylesheet change here. |',
       '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
       "",
-      "Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When a DOM-identical diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs points to a bad capture. Say which image is wrong. If it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. Either way it is a glitch, not a change to the page.",
+      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When the DOM is unchanged and styleCheck is "match" but the diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs can be a bad capture, or a change to something the style check does not cover. Look at what the change under test touched: if it changed CSS, an image, a font or another asset that could reach that area, judge it as a real change (intended change, bug or possible bug). Call it a glitch only when nothing in the change could have caused it, and say which image is wrong: if it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. If you cannot see what the change touched, say so, and call it a glitch only if the images clearly show a broken capture (a torn, half-drawn or partly blank render); otherwise a possible bug.',
       "",
       "Intent: judge intended change against bug by what the change under test was meant to do.",
       ...intentText,
@@ -128,7 +130,7 @@ var TRIAGE_PROMPT = {
     const name = snapshot?.replace(/[`\r\n]/g, "").trim();
     const target = name ? `snapshot \`${name}\`` : "every changed snapshot";
     return [
-      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? " If it passed or is not in the results, say so and stop." : ""}`,
+      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? " If it is not in the results, or it passed without an auto-pass, say so and stop. If it auto-passed, say which criterion passed it, and triage it anyway when its verdict says the styles were not compared." : ""}`,
       "",
       TRIAGE_PROMPT.rubric(intent),
       "",
@@ -160,9 +162,9 @@ var ALLOWED_TOOLS = [
   "mcp__testivai__get_diff",
   "mcp__testivai__get_report",
   "mcp__testivai__list_baselines",
-  "Read",
-  "Glob",
-  "Grep"
+  // Workspace only: a bare Read would also pre-approve reads outside it.
+  // Glob and Grep inside the workspace need no rule (read-only tools).
+  "Read(./**)"
 ];
 var DISALLOWED_TOOLS = [
   "mcp__testivai__approve_snapshot",
@@ -172,7 +174,10 @@ var DISALLOWED_TOOLS = [
   "Write",
   "NotebookEdit",
   "WebFetch",
-  "WebSearch"
+  "WebSearch",
+  "Read(./.git/**)",
+  "Read(//proc/**)",
+  "Read(//sys/**)"
 ];
 var VERDICTS = ["glitch", "intended-change", "bug", "possible-bug"];
 var CONFIDENCE = ["high", "medium", "low"];
@@ -204,6 +209,21 @@ var TRIAGE_SCHEMA = {
 };
 function toTriage(results) {
   return (results.snapshots ?? []).filter((s) => s.status === "changed" || s.status === "new").map((s) => s.name);
+}
+function resolveReportDir(root) {
+  let reportDir = "visual-report";
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(root, ".testivai", "config.json"), "utf8"));
+    if (typeof config.reportDir === "string" && config.reportDir.length > 0) reportDir = config.reportDir;
+  } catch {
+  }
+  return path.join(root, reportDir);
+}
+function isAllowedBot(actor, allowedBots) {
+  const list = allowedBots.trim();
+  if (list === "*") return true;
+  const name = (s) => s.trim().toLowerCase().replace(/\[bot\]$/, "");
+  return list.split(",").map(name).filter(Boolean).includes(name(actor));
 }
 function parseEnabled(value) {
   const v = value.trim();
@@ -303,36 +323,64 @@ var COUNTED = [
   ["glitch", "glitch", "glitches"],
   ["untriaged", "not triaged", "not triaged"]
 ];
-var clean = (s) => s.split(MARKER).join("").replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim();
+var SECRETS = [
+  /x-access-token:[^@\s]+@/g,
+  /\bgh[opsur]_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /\bsk-ant-[A-Za-z0-9_-]{10,}/g
+];
+var clean = (s, max) => {
+  let t = s.split(MARKER).join("");
+  for (const re of SECRETS) t = t.replace(re, (m) => m.startsWith("x-access-token:") ? "x-access-token:[redacted]@" : "[redacted]");
+  t = t.replace(/</g, "&lt;").replace(/@(?=[A-Za-z0-9])/g, "@\u200B").replace(/\]\(/g, "] (").replace(/!\[/g, "! [").replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}\u2026` : t;
+};
 var runLink = (runUrl) => runUrl ? ` \xB7 [run](${runUrl})` : "";
-function renderComment(results, triage, { runUrl } = {}) {
+var commitNote = (sha) => sha ? ` \xB7 commit \`${sha.slice(0, 7)}\`` : "";
+var ROW_BUDGET = 55e3;
+var WORST_FIRST = ["bug", "possible-bug", "untriaged", "intended-change", "glitch"];
+function renderComment(results, triage, { runUrl, sha } = {}) {
   const byName = new Map(triage.snapshots.map((s) => [s.name, s]));
   const counts = /* @__PURE__ */ new Map();
   const rows = toTriage(results).map((name) => {
-    const cell = `\`${clean(codeName(name))}\``;
+    const cell = `\`${clean(codeName(name), 200)}\``;
     const t = byName.get(name);
-    counts.set(t?.verdict ?? "untriaged", (counts.get(t?.verdict ?? "untriaged") ?? 0) + 1);
-    if (!t) return `| ${cell} | not triaged | \u2014 | Claude returned no verdict for this snapshot. | Look at it in the report. |`;
-    return `| ${cell} | ${LABEL[t.verdict]} | ${t.confidence} | ${clean(t.evidence)} | ${clean(t.nextStep)} |`;
+    const kind = t?.verdict ?? "untriaged";
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    const text = t ? `| ${cell} | ${LABEL[t.verdict]} | ${t.confidence} | ${clean(t.evidence, 600)} | ${clean(t.nextStep, 300)} |` : `| ${cell} | not triaged | \u2014 | Claude returned no verdict for this snapshot. | Look at it in the report. |`;
+    return { kind, text };
   });
+  let shown = rows;
+  if (rows.reduce((n, r) => n + r.text.length + 1, 0) > ROW_BUDGET) {
+    const ranked = [...rows].sort((a, b) => WORST_FIRST.indexOf(a.kind) - WORST_FIRST.indexOf(b.kind));
+    shown = [];
+    let used = 0;
+    for (const r of ranked) {
+      used += r.text.length + 1;
+      if (used > ROW_BUDGET) break;
+      shown.push(r);
+    }
+  }
+  const hidden = rows.length - shown.length;
   const tally = COUNTED.filter(([k]) => counts.get(k)).map(([k, one, many]) => `${counts.get(k)} ${counts.get(k) === 1 ? one : many}`).join(" \xB7 ");
   return [
     MARKER,
     "### \u{1F916} AI triage of the visual changes",
     "",
-    clean(triage.summary),
+    clean(triage.summary, 1500),
     "",
     `**${tally}**`,
     "",
     "| Snapshot | Verdict | Confidence | Evidence | Next step |",
     "|---|---|---|---|---|",
-    ...rows,
+    ...shown.map((r) => r.text),
+    ...hidden > 0 ? ["", `${hidden} more snapshot${hidden === 1 ? "" : "s"} not shown here (the comment has a size limit): see the run log and the report.`] : [],
     "",
-    "> Claude triaged each changed or new snapshot through [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/mcp.md) (`get_visual_results`, `explain_snapshot`, `get_diff`) and this pull request's diff. TestivAI's verdicts and the visual check come from deterministic comparison; this triage is a model's reading of them and changes neither. Approving is a human decision: `/testivai approve <name>`. To stop spending tokens on this, set `enabled: false` on the `testivai/testivai-oss/review` step." + runLink(runUrl)
+    "> Claude triaged each changed or new snapshot through [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/mcp.md) (`get_visual_results`, `explain_snapshot`, `get_diff`) and this pull request's diff. TestivAI's verdicts and the visual check come from deterministic comparison; this triage is a model's reading of them and changes neither. Approving is a human decision: `/testivai approve <name>`. To stop spending tokens on this, set `enabled: false` on the `testivai/testivai-oss/review` step." + commitNote(sha) + runLink(runUrl)
   ].join("\n");
 }
-function renderSkipped(reason, { runUrl } = {}) {
-  return [MARKER, "### \u{1F916} AI triage of the visual changes", "", `${reason}${runLink(runUrl)}`].join("\n");
+function renderSkipped(reason, { runUrl, sha } = {}) {
+  return [MARKER, "### \u{1F916} AI triage of the visual changes", "", `${reason}${commitNote(sha)}${runLink(runUrl)}`].join("\n");
 }
 async function syncComment({
   github,
@@ -360,26 +408,62 @@ function readResults(reportDir) {
   const file = path.join(reportDir, "results.json");
   return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
 }
+async function write({
+  github,
+  context,
+  core,
+  body,
+  onlyIfExists = false
+}) {
+  const pr = context.payload.pull_request;
+  if (!pr) return;
+  try {
+    const sha = pr.head?.sha;
+    if (sha) {
+      const { owner, repo } = context.repo;
+      const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+      if (data.head?.sha && data.head.sha !== sha) {
+        core.info(`A newer push (${data.head.sha.slice(0, 7)}) superseded this run; leaving the triage comment to its run.`);
+        return;
+      }
+    }
+    await syncComment({ github, context, body, onlyIfExists });
+  } catch (err) {
+    core.warning(`Could not write the AI triage comment: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+var workspaceOf = (env) => env.GITHUB_WORKSPACE || process.cwd();
 async function prepare({ github, context, core, env }) {
   const enabled = parseEnabled(env.ENABLED ?? "");
-  const reportDir = env.REPORT_DIR || "visual-report";
   const pr = context.eventName === "pull_request" ? context.payload.pull_request : void 0;
+  const sha = pr?.head?.sha;
   const skip = async ({ reason, clearStale, level }) => {
     core[level](reason);
     core.setOutput("run", "false");
-    if (pr && clearStale) await syncComment({ github, context, body: renderSkipped(reason), onlyIfExists: true });
+    if (pr && clearStale) await write({ github, context, core, body: renderSkipped(reason, { sha }), onlyIfExists: true });
   };
   if (!enabled) return skip({ reason: OFF, clearStale: true, level: "info" });
   const args = claudeArgs({ model: env.MODEL ?? "", maxTurns: env.MAX_TURNS ?? "30" });
+  const root = workspaceOf(env);
+  const reportDir = resolveReportDir(root);
   const results = readResults(reportDir);
   if (!results) {
-    core.warning(`No results.json in ${reportDir}: did the visual tests run? The AI triage was skipped.`);
-    core.setOutput("run", "false");
-    return;
+    return skip({
+      reason: `No results.json in ${path.relative(root, reportDir) || "."} (the reportDir in .testivai/config.json, else visual-report): did the visual tests run? The AI triage was skipped.`,
+      clearStale: true,
+      level: "warning"
+    });
   }
   const d = decide({ enabled, hasCredentials: env.HAS_CREDENTIALS === "true", isPullRequest: !!pr, eventName: context.eventName, results });
   if (!d.run) return skip(d);
   const { number, title, body } = pr;
+  if (/\[bot\]$/i.test(context.actor ?? "") && !isAllowedBot(context.actor, env.ALLOWED_BOTS ?? "")) {
+    return skip({
+      reason: `This run was started by ${context.actor}, and claude-code-action only runs for bots listed in the allowed-bots input, so the AI triage was skipped.`,
+      clearStale: true,
+      level: "notice"
+    });
+  }
   const diffPath = path.join(reportDir, "triage", "pr.diff");
   fs.mkdirSync(path.dirname(diffPath), { recursive: true });
   let diff;
@@ -400,30 +484,32 @@ async function prepare({ github, context, core, env }) {
       pr: number,
       title: title ?? "",
       body: body ?? "",
-      diffPath,
-      reportDir,
+      // Relative: Claude's Read tool works from the workspace.
+      diffPath: path.relative(root, diffPath),
+      reportDir: path.relative(root, reportDir),
       snapshots: toTriage(results)
     })
   );
   core.setOutput("claude_args", args);
 }
 async function post({ github, context, core, env }) {
-  const reportDir = env.REPORT_DIR || "visual-report";
-  const results = readResults(reportDir);
+  const results = readResults(resolveReportDir(workspaceOf(env)));
   const triage = env.OUTCOME === "success" ? parseTriage(env.TRIAGE ?? "") : null;
   const runUrl = runUrlOf(context);
+  const sha = context.payload.pull_request?.head?.sha;
   if (results && triage) {
-    await syncComment({ github, context, body: renderComment(results, triage, { runUrl }) });
-    core.info(`Posted the AI triage of ${toTriage(results).length} snapshot(s).`);
+    await write({ github, context, core, body: renderComment(results, triage, { runUrl, sha }) });
+    core.info(`AI triage of ${toTriage(results).length} snapshot(s) done.`);
     return;
   }
   core.warning(
     `The AI triage did not finish (Claude step: ${env.OUTCOME || "not run"}${env.OUTCOME === "success" ? ", no usable structured output" : ""}); see that step's log. The visual check is not affected.`
   );
-  await syncComment({
+  await write({
     github,
     context,
-    body: renderSkipped("The AI triage did not finish on the latest push; see the run log. The visual check is not affected.", { runUrl }),
+    core,
+    body: renderSkipped("The AI triage did not finish on the latest push; see the run log. The visual check is not affected.", { runUrl, sha }),
     onlyIfExists: true
   });
 }
@@ -438,12 +524,14 @@ async function post({ github, context, core, env }) {
   buildPrompt,
   claudeArgs,
   decide,
+  isAllowedBot,
   parseEnabled,
   parseTriage,
   post,
   prepare,
   renderComment,
   renderSkipped,
+  resolveReportDir,
   syncComment,
   toTriage
 });

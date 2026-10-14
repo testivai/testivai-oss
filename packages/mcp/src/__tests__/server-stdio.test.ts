@@ -130,8 +130,10 @@ describe('built server over stdio', () => {
       ['intent', false],
       ['snapshot', false],
     ]);
-    // Clients send an arguments object even when nothing was filled in: empty,
-    // or with empty strings. (The SDK rejects a request with no object at all.)
+    // MCP makes `arguments` optional: no object, an empty one, and empty
+    // strings all mean "not given".
+    const omitted = await client.getPrompt({ name: 'triage-visual-diff' });
+    expect((omitted.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
     const all = await client.getPrompt({ name: 'triage-visual-diff', arguments: {} });
     expect((all.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
     const blank = await client.getPrompt({ name: 'triage-visual-diff', arguments: { snapshot: '', intent: '' } });

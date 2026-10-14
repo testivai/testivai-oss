@@ -134,6 +134,24 @@ describe('triage-visual-diff prompt', () => {
     expect(text).toMatch(/styles not compared[^.]*not a glitch on the DOM evidence alone/i);
   });
 
+  it('does not equate "styles match" with "nothing changed": the style check has blind spots', () => {
+    // The style digest covers a fixed property list (element-map.ts STYLE_PROPS).
+    expect(text).toMatch(/style check (cannot see|does not cover)[^.]*\bsize\b[^.]*overflow[^.]*transform/i);
+    expect(text).not.toMatch(/means one of the two captures rendered wrong/i);
+  });
+
+  it('calls a large or local DOM-identical diff a glitch only when nothing in the change could cause it', () => {
+    expect(text).toMatch(/glitch only when nothing in the change (under test )?could have caused it/i);
+    expect(text).toMatch(/CSS, an image, a font or (an)?other asset/i);
+    // and with no view of the change, only a clearly broken render is a glitch
+    expect(text).toMatch(/cannot see what the change touched[^.]*glitch only if the images clearly show a broken capture[^.]*otherwise a possible bug/i);
+  });
+
+  it('keeps the bad-capture reading to the case where styles were compared and match', () => {
+    expect(text).toMatch(/Bad captures:[^\n]*styleCheck is "match"/);
+    expect(text).toMatch(/"unavailable" or missing \|[^\n]*signs of a bad capture[^\n]*can also come from a stylesheet change/i);
+  });
+
   it('tells a bad capture from render noise, and says which image to distrust', () => {
     expect(text).toMatch(/render noise is small and scattered/i);
     expect(text).toMatch(/bad capture/i);
@@ -202,6 +220,13 @@ describe('triage-visual-diff prompt', () => {
   it('ends with the approval rule, which is exported for other triage prompts', () => {
     expect(TRIAGE_PROMPT.approvalRule).toMatch(/do not call approve_snapshot or approve_all/i);
     expect(text.trim().endsWith(TRIAGE_PROMPT.approvalRule)).toBe(true);
+  });
+
+  it('a named snapshot that auto-passed with uncompared styles is triaged, not dismissed', () => {
+    const named = TRIAGE_PROMPT.textFor({ snapshot: 'footer' });
+    expect(named).not.toMatch(/If it passed or is not in the results, say so and stop/);
+    expect(named).toMatch(/If it is not in the results, or it passed without an auto-pass, say so and stop/);
+    expect(named).toMatch(/auto-passed[^.]*say which criterion passed it[^.]*styles were not compared/i);
   });
 
   it('keeps an argument from breaking out of its quote', () => {

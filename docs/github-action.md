@@ -247,8 +247,10 @@ sorts each snapshot into one of four verdicts:
 
 The rules are the MCP server's [`triage-visual-diff`](./mcp.md#triage-a-diff-glitch-intended-change-bug-or-possible-bug)
 prompt, so an agent on your machine and CI judge the same way. A changed DOM
-or changed computed styles is never a glitch, and an identical DOM whose
-styles were not compared is not called one from the DOM alone.
+or changed computed styles is never a glitch, an identical DOM whose styles
+were not compared is not called one from the DOM alone, and a large or local
+diff is called a glitch only when nothing the pull request changed could have
+caused it (the style check does not cover every CSS property).
 
 The result is one PR comment, updated on each push:
 
@@ -257,9 +259,12 @@ The result is one PR comment, updated on each push:
 | `home` | 🔴 bug | high | DOM changed: `footer.site-footer` removed; the PR only touches `button.btn` in `site/styles.css`. | Restore the footer in `site/index.html`. |
 
 It is advisory. It never changes the visual check or a baseline, and Claude
-gets read-only tools (the TestivAI MCP tools without `approve_snapshot` and
-`approve_all`, plus `Read`, `Glob` and `Grep`; no commands, edits or network).
-Approving stays a human `/testivai approve <name>`.
+gets read-only tools: the TestivAI MCP tools without `approve_snapshot` and
+`approve_all`, and file reads inside the workspace except `.git` (and nothing
+under `/proc` or `/sys`). No commands, edits or network. Claude gets the job's
+own `github.token`, never a token you pass as `github-token`. Tokens or keys
+in its answer are redacted, and its text is posted with HTML, @mentions,
+links and images defanged. Approving stays a human `/testivai approve <name>`.
 
 ### Setup
 
@@ -278,6 +283,10 @@ jobs:
     # !cancelled(): a changed snapshot fails the visual job, which is exactly
     # when the triage is useful.
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    # A newer push cancels the triage of an older one, and the tokens with it.
+    concurrency:
+      group: ai-triage-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -286,15 +295,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+        # No artifact when the visual job failed before the tests ran: the
+        # triage then skips with a warning instead of failing this job.
+        continue-on-error: true
         with:
           name: testivai-visual-report   # the reporter's artifact-name
-          path: visual-report
+          path: visual-report            # the reportDir in .testivai/config.json
       - uses: testivai/testivai-oss/review@v1
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # enabled: false   # turn it off: Claude does not run, no tokens are used
 ```
+
+The action reads the report where the MCP server Claude uses reads it: the
+`reportDir` in `.testivai/config.json`, else `visual-report`. Download the
+artifact there.
 
 The step can also go in the visual job itself, after the reporter, with
 `if: ${{ !cancelled() }}`; a separate job keeps the Claude step away from that
@@ -308,19 +324,29 @@ seconds:
 1. `enabled` is not `false`.
 2. The run is for a pull request (`pull_request` event).
 3. At least one snapshot is changed or new. Passed snapshots and missing
-   baselines are never sent.
+   baselines alone never start a run and are not triaged (Claude still sees
+   each passed snapshot as one line of `get_visual_results`).
 4. A Claude credential is set. Pull requests from forks get no secrets, so
    they are skipped.
+5. The run was not started by a bot, unless that bot is in `allowed-bots`
+   (`claude-code-action` refuses other bots, so those runs skip with a notice).
 
 Each triage is one Claude Code session that calls the MCP tools and looks at
-images, so its cost grows with the number of changed snapshots. `max-turns`
-caps it (a run that hits the cap posts no triage and does not fail the job),
-and `model` picks a smaller model. We have not measured typical token counts;
-check your usage after the first few runs.
+images, so its cost grows with the number of changed snapshots. When we ran
+the same prompt on one to three changed snapshots, one triage took about 60k
+to 85k tokens (measured with Claude subagents, not inside the action, so
+treat it as a rough guide and check your usage after the first runs).
+`max-turns` caps a run (a run that hits the cap posts no triage and does not
+fail the job), and `model` picks a smaller model.
 
-To turn it off, set `enabled: false` (or remove the job). Claude does not
-start, and an earlier triage comment on the PR is replaced with a note that
-the triage is off.
+To turn it off, set `enabled: false`: Claude does not start, and an earlier
+triage comment on the PR is replaced with a note that the triage is off.
+Removing the job also stops it, but leaves the last triage comment as it was.
+
+The comment names the commit it triaged. A run that a newer push has
+superseded never touches it, and the `concurrency` group above cancels such a
+run early. A comment that cannot be written is a warning in the log, never a
+failed job.
 
 ### Inputs
 
@@ -329,10 +355,10 @@ the triage is off.
 | `anthropic-api-key` | `''` | Anthropic API key. Set this or `claude-code-oauth-token`; with neither, the triage is skipped with a notice |
 | `claude-code-oauth-token` | `''` | Claude Code OAuth token (`claude setup-token`), to use a Claude subscription |
 | `enabled` | `true` | `false` turns it off: Claude does not run and no tokens are used. Anything but `true`/`false` fails the step |
-| `report-dir` | `visual-report` | Directory with `results.json`, the same as the reporter's. The PR diff is written to `<report-dir>/triage/pr.diff` |
+| `allowed-bots` | `''` | Bots whose pull request runs may be triaged (comma-separated, or `*`), passed to `claude-code-action`'s `allowed_bots` |
 | `model` | `''` | Claude model, for example a smaller one to spend fewer tokens. Empty uses Claude Code's default |
 | `max-turns` | `30` | Most agent turns Claude may take (1 to 200) |
-| `github-token` | `${{ github.token }}` | Reads the PR diff and posts the comment; needs `pull-requests: write` |
+| `github-token` | `${{ github.token }}` | Reads the PR diff and posts the comment; needs `pull-requests: write`. Claude itself always gets the job's own `github.token` |
 
 The triage is a model's reading of deterministic evidence, and it can be
 wrong. The pull request's description and diff and the page content reach the

@@ -578,3 +578,16 @@ export function changeGroupLines(snapshots: SnapshotResult[]): string[] {
       : []),
   ];
 }
+
+/**
+ * MCP makes a prompts/get request's `arguments` optional, but the SDK
+ * validates a prompt's argument schema against the object itself and rejects
+ * a request without one, even when every argument is optional. Run on each
+ * incoming message, before the SDK sees it: a prompts/get with no arguments
+ * gets an empty object. Everything else is returned as it was.
+ */
+export function withPromptArguments<T>(message: T): T {
+  const m = message as { method?: unknown; params?: { arguments?: unknown } } | null;
+  if (!m || typeof m !== 'object' || m.method !== 'prompts/get' || !m.params || m.params.arguments !== undefined) return message;
+  return { ...m, params: { ...m.params, arguments: {} } } as T;
+}

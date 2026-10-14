@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { resolvePaths } from '../../../packages/mcp/src/lib';
 import { TOOL_META, TRIAGE_PROMPT } from '../../../packages/mcp/src/tool-meta';
 import * as review from '../review';
 import type { ResultsData, SnapshotResult } from '../types';
@@ -123,10 +124,23 @@ describe('decide', () => {
 describe('agent tools', () => {
   const mcp = (tools: string[]) => tools.filter((t) => t.startsWith('mcp__testivai__')).map((t) => t.replace('mcp__testivai__', ''));
 
-  it('can read the report, the images and the code', () => {
+  it('can read the report, the images and the code in the workspace', () => {
     expect(review.ALLOWED_TOOLS).toEqual(
-      expect.arrayContaining(['mcp__testivai__get_visual_results', 'mcp__testivai__explain_snapshot', 'mcp__testivai__get_diff', 'Read']),
+      expect.arrayContaining(['mcp__testivai__get_visual_results', 'mcp__testivai__explain_snapshot', 'mcp__testivai__get_diff', 'Read(./**)']),
     );
+  });
+
+  it('allows no unscoped file tool: a bare Read, Glob or Grep would reach outside the workspace', () => {
+    for (const t of review.ALLOWED_TOOLS.filter((x) => !x.startsWith('mcp__'))) expect(t).toMatch(/^(Read|Glob|Grep)\(\.\/\*\*\)$/);
+  });
+
+  it('cannot read where secrets live: the git credentials in .git and the process environments in /proc', () => {
+    // A hostile diff or page could ask the model to quote them into the comment.
+    for (const rule of ['Read(./.git/**)', 'Read(//proc/**)', 'Read(//sys/**)']) expect(review.DISALLOWED_TOOLS).toContain(rule);
+  });
+
+  it('does not deny the home directory: on GitHub runners the workspace is inside it', () => {
+    expect(review.DISALLOWED_TOOLS.some((t) => t.includes('~'))).toBe(false);
   });
 
   it('can never approve, run commands, edit files or reach the network', () => {
@@ -340,6 +354,56 @@ describe('renderComment', () => {
     expect(odd.split('\n').find((l) => l.startsWith('| `home`'))).toContain('a \\| b c');
   });
 
+  it('model text cannot hide the table, ping people, or add links and images', () => {
+    const odd = review.renderComment(R, {
+      summary: '<!-- hide the rest cc @acme/everyone see [here](https://evil.example) ![x](https://evil.example/p.png) <img src=x>',
+      snapshots: [entry('home', 'bug', { evidence: 'ask @octocat' })],
+    });
+    expect(odd).not.toContain('<!-- hide');
+    expect(odd).not.toContain('<img');
+    expect(odd).not.toMatch(/@acme\/everyone|@octocat/);
+    expect(odd).toContain('@\u200bacme/everyone');
+    expect(odd).not.toContain('](https://evil.example');
+    expect(odd).not.toContain('![x]');
+    expect(odd.split(review.MARKER).length - 1).toBe(1);
+  });
+
+  it('redacts tokens and keys, should the model quote one', () => {
+    const odd = review.renderComment(R, {
+      summary: 'found sk-ant-api03-AbCdEf0123456789xyz and https://x-access-token:ghs_abcdefghijklmnopqrstuvwxyz0123@github.com/o/r',
+      snapshots: [entry('home', 'bug', { evidence: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789 github_pat_11ABCDEFG0123456789_abcdefghijklmnop' })],
+    });
+    for (const secret of ['sk-ant-api03', 'ghs_abcdef', 'ghp_abcdef', 'github_pat_11ABC']) expect(odd).not.toContain(secret);
+    expect(odd).toContain('[redacted]');
+  });
+
+  it('stays under GitHub\'s comment limit with hundreds of snapshots, keeping the worst ones', () => {
+    const many = results([...Array.from({ length: 400 }, (_, i) => snap(`s${i}`, 'changed')), snap('the-bug', 'changed')]);
+    const long = 'x'.repeat(2000);
+    const triage = {
+      summary: long,
+      snapshots: [
+        ...Array.from({ length: 400 }, (_, i) => entry(`s${i}`, 'glitch', { evidence: long, nextStep: long })),
+        entry('the-bug', 'bug', { evidence: long, nextStep: long }),
+      ],
+    };
+    const body = review.renderComment(many, triage);
+    expect(body.length).toBeLessThanOrEqual(65_536);
+    expect(body).toContain('| `the-bug` | 🔴 bug');
+    expect(body).toContain('**1 bug · 400 glitches**');
+    expect(body).toMatch(/\d+ more snapshots? not shown/);
+  });
+
+  it('caps each cell, so one long answer cannot crowd out the table', () => {
+    const body = review.renderComment(R, { summary: 's', snapshots: [entry('home', 'bug', { evidence: 'y'.repeat(5000) })] });
+    expect(body).not.toContain('y'.repeat(601));
+    expect(body).toContain('…');
+  });
+
+  it('names the commit it triaged', () => {
+    expect(review.renderComment(R, { summary: 's', snapshots: [] }, { sha: '0123456789abcdef' })).toContain('`0123456`');
+  });
+
   it('a snapshot name cannot break out of its code span or the table', () => {
     const odd = review.renderComment(results([snap('a`b|c', 'changed')]), { summary: 's', snapshots: [entry('a`b|c', 'bug')] });
     expect(odd).toContain('| `ab\\|c` | 🔴 bug');
@@ -361,21 +425,34 @@ interface Call {
   args: Record<string, unknown>;
 }
 
-function fakeGithub({ comments = [] as unknown[], diff = 'diff --git a/x b/x\n', diffError = null as Error | null } = {}) {
+function fakeGithub({
+  comments = [] as unknown[],
+  diff = 'diff --git a/x b/x\n',
+  diffError = null as Error | null,
+  headSha = 'abc1234def',
+  writeError = null as Error | null,
+} = {}) {
   const calls: Call[] = [];
+  const write = (op: string) => async (args: Record<string, unknown>) => {
+    calls.push({ op, args });
+    if (writeError) throw writeError;
+  };
   return {
     calls,
     rest: {
       issues: {
         listComments: async (args: Record<string, unknown>) => ({ data: comments, args }),
-        createComment: async (args: Record<string, unknown>) => calls.push({ op: 'create', args }),
-        updateComment: async (args: Record<string, unknown>) => calls.push({ op: 'update', args }),
+        createComment: write('create'),
+        updateComment: write('update'),
       },
       pulls: {
         get: async (args: Record<string, unknown>) => {
-          calls.push({ op: 'pulls.get', args });
-          if (diffError) throw diffError;
-          return { data: diff };
+          if (args.mediaType) {
+            calls.push({ op: 'diff', args });
+            if (diffError) throw diffError;
+            return { data: diff };
+          }
+          return { data: { head: { sha: headSha } } };
         },
       },
     },
@@ -398,16 +475,50 @@ function fakeCore() {
   };
 }
 
-const prContext = (eventName = 'pull_request') => ({
+const prContext = (eventName = 'pull_request', actor = 'alice') => ({
   eventName,
+  actor,
   repo: { owner: 'acme', repo: 'shop' },
   issue: { number: 42 },
   serverUrl: 'https://github.com',
   runId: 7,
-  payload: eventName === 'pull_request' ? { pull_request: { number: 42, title: 'Pill buttons', body: 'Rounds the buttons.' } } : {},
+  payload:
+    eventName === 'pull_request'
+      ? { pull_request: { number: 42, title: 'Pill buttons', body: 'Rounds the buttons.', head: { sha: 'abc1234def' } } }
+      : {},
 });
 
 const bot = (id: number, body: string) => ({ id, body, user: { login: 'github-actions[bot]' } });
+const REPORTER_COMMENT = '<!-- testivai-visual-report -->\n### TestivAI Visual Report';
+const writes = (calls: Call[]) => calls.filter((c) => c.op === 'create' || c.op === 'update');
+
+describe('resolveReportDir', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'review-dir-'));
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('reads the report from where the MCP server reads it: config.json reportDir, else visual-report', () => {
+    expect(review.resolveReportDir(dir)).toBe(resolvePaths(dir).reportDir);
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ reportDir: 'out/visual' }));
+    expect(review.resolveReportDir(dir)).toBe(path.join(dir, 'out/visual'));
+    expect(review.resolveReportDir(dir)).toBe(resolvePaths(dir).reportDir);
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), '{ not json');
+    expect(review.resolveReportDir(dir)).toBe(resolvePaths(dir).reportDir);
+  });
+});
+
+describe('isAllowedBot', () => {
+  it('matches claude-code-action: comma list, case and a [bot] suffix ignored, * allows all', () => {
+    expect(review.isAllowedBot('renovate[bot]', 'renovate')).toBe(true);
+    expect(review.isAllowedBot('Renovate[bot]', ' dependabot , RENOVATE[bot] ')).toBe(true);
+    expect(review.isAllowedBot('renovate[bot]', '*')).toBe(true);
+    expect(review.isAllowedBot('renovate[bot]', '')).toBe(false);
+    expect(review.isAllowedBot('renovate[bot]', 'dependabot')).toBe(false);
+  });
+});
 
 describe('syncComment', () => {
   const ctx = prContext();
@@ -422,6 +533,20 @@ describe('syncComment', () => {
     const gh = fakeGithub({ comments: [bot(9, `${review.MARKER}\nold`)] });
     await review.syncComment({ github: gh, context: ctx, body: `${review.MARKER}\nnew` });
     expect(gh.calls).toEqual([{ op: 'update', args: { owner: 'acme', repo: 'shop', comment_id: 9, body: `${review.MARKER}\nnew` } }]);
+  });
+
+  it("never touches the reporter's comment, which has the same author", async () => {
+    const only = fakeGithub({ comments: [bot(1, REPORTER_COMMENT)] });
+    await review.syncComment({ github: only, context: ctx, body: `${review.MARKER}\nnew` });
+    expect(only.calls.map((c) => c.op)).toEqual(['create']);
+
+    const both = fakeGithub({ comments: [bot(1, REPORTER_COMMENT), bot(9, `${review.MARKER}\nold`)] });
+    await review.syncComment({ github: both, context: ctx, body: `${review.MARKER}\nnew` });
+    expect(both.calls).toEqual([{ op: 'update', args: expect.objectContaining({ comment_id: 9 }) }]);
+
+    const skip = fakeGithub({ comments: [bot(1, REPORTER_COMMENT)] });
+    await review.syncComment({ github: skip, context: ctx, body: 'x', onlyIfExists: true });
+    expect(skip.calls).toEqual([]);
   });
 
   it("ignores someone else's comment that quotes the marker", async () => {
@@ -454,9 +579,10 @@ describe('prepare (the step before Claude runs)', () => {
   const env = (over: Record<string, string> = {}) => ({
     ENABLED: 'true',
     HAS_CREDENTIALS: 'true',
-    REPORT_DIR: path.join(dir, 'visual-report'),
     MODEL: '',
     MAX_TURNS: '30',
+    ALLOWED_BOTS: '',
+    GITHUB_WORKSPACE: dir,
     ...over,
   });
 
@@ -469,20 +595,30 @@ describe('prepare (the step before Claude runs)', () => {
     expect(core.outputs.run).toBe('true');
     const diffPath = path.join(dir, 'visual-report', 'triage', 'pr.diff');
     expect(fs.readFileSync(diffPath, 'utf8')).toContain('site/styles.css');
-    expect(gh.calls[0]).toEqual({ op: 'pulls.get', args: { owner: 'acme', repo: 'shop', pull_number: 42, mediaType: { format: 'diff' } } });
+    expect(gh.calls).toEqual([{ op: 'diff', args: { owner: 'acme', repo: 'shop', pull_number: 42, mediaType: { format: 'diff' } } }]);
     expect(core.outputs.prompt).toBe(
       review.buildPrompt({
         repo: 'acme/shop',
         pr: 42,
         title: 'Pill buttons',
         body: 'Rounds the buttons.',
-        diffPath,
-        reportDir: path.join(dir, 'visual-report'),
+        diffPath: path.relative(dir, diffPath),
+        reportDir: path.relative(dir, path.join(dir, 'visual-report')),
         snapshots: ['home', 'buttons', 'pricing'],
       }),
     );
     expect(core.outputs.claude_args).toBe(review.claudeArgs({ model: '', maxTurns: '30' }));
-    expect(gh.calls.filter((c) => c.op !== 'pulls.get')).toEqual([]);
+  });
+
+  it("reads the report dir from .testivai/config.json, like the MCP server Claude will use", async () => {
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ reportDir: 'out/visual' }));
+    fs.mkdirSync(path.join(dir, 'out', 'visual'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'out', 'visual', 'results.json'), JSON.stringify(R));
+    const core = fakeCore();
+    await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env() });
+    expect(core.outputs.run).toBe('true');
+    expect(core.outputs.prompt).toContain('out/visual/triage/pr.diff');
   });
 
   it('a diff GitHub will not serve (too large): Claude still runs, told to go by the description', async () => {
@@ -499,8 +635,8 @@ describe('prepare (the step before Claude runs)', () => {
     const core = fakeCore();
     await review.prepare({ github: gh, context: prContext(), core, env: env({ ENABLED: 'false' }) });
     expect(core.outputs.run).toBe('false');
-    expect(gh.calls.map((c) => c.op)).toEqual(['update']);
-    expect(String(gh.calls[0].args.body)).toMatch(/turned off/);
+    expect(writes(gh.calls).map((c) => c.op)).toEqual(['update']);
+    expect(String(writes(gh.calls)[0].args.body)).toMatch(/turned off/);
     expect(core.log.join('\n')).toMatch(/turned off/);
   });
 
@@ -517,7 +653,7 @@ describe('prepare (the step before Claude runs)', () => {
     const core = fakeCore();
     await review.prepare({ github: gh, context: prContext(), core, env: env() });
     expect(core.outputs.run).toBe('false');
-    expect(gh.calls).toEqual([]);
+    expect(writes(gh.calls)).toEqual([]);
   });
 
   it('no credential: no Claude, and a notice in the log', async () => {
@@ -526,6 +662,23 @@ describe('prepare (the step before Claude runs)', () => {
     await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env({ HAS_CREDENTIALS: 'false' }) });
     expect(core.outputs.run).toBe('false');
     expect(core.log.join('\n')).toMatch(/notice: .*anthropic-api-key/);
+  });
+
+  it('a run started by a bot that is not in allowed-bots: no Claude (it would refuse), a notice, stale comment replaced', async () => {
+    writeResults(R);
+    const gh = fakeGithub({ comments: [bot(3, `${review.MARKER}\nold`)] });
+    const core = fakeCore();
+    await review.prepare({ github: gh, context: prContext('pull_request', 'renovate[bot]'), core, env: env() });
+    expect(core.outputs.run).toBe('false');
+    expect(core.log.join('\n')).toMatch(/notice: .*renovate\[bot\].*allowed-bots/);
+    expect(String(writes(gh.calls)[0].args.body)).toMatch(/allowed-bots/);
+  });
+
+  it('a bot listed in allowed-bots runs', async () => {
+    writeResults(R);
+    const core = fakeCore();
+    await review.prepare({ github: fakeGithub(), context: prContext('pull_request', 'renovate[bot]'), core, env: env({ ALLOWED_BOTS: 'renovate' }) });
+    expect(core.outputs.run).toBe('true');
   });
 
   it('a push: no Claude and no comment calls', async () => {
@@ -537,13 +690,32 @@ describe('prepare (the step before Claude runs)', () => {
     expect(gh.calls).toEqual([]);
   });
 
-  it('no results file: no Claude, a warning, and nothing posted', async () => {
-    const gh = fakeGithub();
+  it('no results file: no Claude, a warning, and its own stale comment replaced', async () => {
+    const none = fakeGithub();
     const core = fakeCore();
-    await review.prepare({ github: gh, context: prContext(), core, env: env() });
+    await review.prepare({ github: none, context: prContext(), core, env: env() });
     expect(core.outputs.run).toBe('false');
     expect(core.log.join('\n')).toMatch(/warning: .*results\.json/);
-    expect(gh.calls).toEqual([]);
+    expect(writes(none.calls)).toEqual([]);
+
+    const stale = fakeGithub({ comments: [bot(3, `${review.MARKER}\nold`)] });
+    await review.prepare({ github: stale, context: prContext(), core: fakeCore(), env: env() });
+    expect(String(writes(stale.calls)[0].args.body)).toMatch(/results\.json/);
+  });
+
+  it('a newer push superseded this run: it never touches the comment', async () => {
+    const gh = fakeGithub({ comments: [bot(3, `${review.MARKER}\nnewer triage`)], headSha: 'fff9999' });
+    const core = fakeCore();
+    await review.prepare({ github: gh, context: prContext(), core, env: env({ ENABLED: 'false' }) });
+    expect(writes(gh.calls)).toEqual([]);
+    expect(core.log.join('\n')).toMatch(/newer push/);
+  });
+
+  it('a comment that cannot be written is a warning, never a failed job', async () => {
+    const gh = fakeGithub({ comments: [bot(3, `${review.MARKER}\nold`)], writeError: new Error('Resource not accessible by integration') });
+    const core = fakeCore();
+    await expect(review.prepare({ github: gh, context: prContext(), core, env: env({ ENABLED: 'false' }) })).resolves.toBeUndefined();
+    expect(core.log.join('\n')).toMatch(/warning: .*Resource not accessible/);
   });
 
   it('a bad max-turns or model fails the step before anything says run', async () => {
@@ -572,15 +744,31 @@ describe('post (the step after Claude runs)', () => {
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   const triage = JSON.stringify({ summary: 'All as intended.', snapshots: [entry('home', 'intended-change')] });
-  const env = (over: Record<string, string> = {}) => ({ REPORT_DIR: path.join(dir, 'visual-report'), OUTCOME: 'success', TRIAGE: triage, ...over });
+  const env = (over: Record<string, string> = {}) => ({ GITHUB_WORKSPACE: dir, OUTCOME: 'success', TRIAGE: triage, ...over });
 
-  it('posts the triage as one comment, with a link to the run', async () => {
+  it('posts the triage as one comment, with a link to the run and the commit', async () => {
     const gh = fakeGithub();
     await review.post({ github: gh, context: prContext(), core: fakeCore(), env: env() });
-    expect(gh.calls.map((c) => c.op)).toEqual(['create']);
-    expect(gh.calls[0].args.body).toBe(
-      review.renderComment(R, JSON.parse(triage), { runUrl: 'https://github.com/acme/shop/actions/runs/7' }),
+    expect(writes(gh.calls).map((c) => c.op)).toEqual(['create']);
+    expect(writes(gh.calls)[0].args.body).toBe(
+      review.renderComment(R, JSON.parse(triage), { runUrl: 'https://github.com/acme/shop/actions/runs/7', sha: 'abc1234def' }),
     );
+  });
+
+  it('a newer push superseded this run: it leaves the comment to that run', async () => {
+    const gh = fakeGithub({ comments: [bot(4, `${review.MARKER}\nnewer`)], headSha: 'fff9999' });
+    const core = fakeCore();
+    await review.post({ github: gh, context: prContext(), core, env: env() });
+    expect(writes(gh.calls)).toEqual([]);
+    expect(core.log.join('\n')).toMatch(/info: .*newer push/);
+  });
+
+  it('a comment GitHub rejects is a warning, never a failed job', async () => {
+    const core = fakeCore();
+    await expect(
+      review.post({ github: fakeGithub({ writeError: new Error('Validation Failed: body is too long') }), context: prContext(), core, env: env() }),
+    ).resolves.toBeUndefined();
+    expect(core.log.join('\n')).toMatch(/warning: .*body is too long/);
   });
 
   it('Claude failed or ran out of turns: a warning, and only its own stale comment is replaced', async () => {
@@ -593,13 +781,13 @@ describe('post (the step after Claude runs)', () => {
       const none = fakeGithub();
       const core = fakeCore();
       await review.post({ github: none, context: prContext(), core, env: env(over) });
-      expect(none.calls).toEqual([]);
+      expect(writes(none.calls)).toEqual([]);
       expect(core.log.join('\n')).toMatch(/warning: .*did not finish.*visual check is not affected/i);
 
       const stale = fakeGithub({ comments: [bot(4, `${review.MARKER}\nold`)] });
       await review.post({ github: stale, context: prContext(), core: fakeCore(), env: env(over) });
-      expect(stale.calls.map((c) => c.op)).toEqual(['update']);
-      expect(String(stale.calls[0].args.body)).toMatch(/did not finish/);
+      expect(writes(stale.calls).map((c) => c.op)).toEqual(['update']);
+      expect(String(writes(stale.calls)[0].args.body)).toMatch(/did not finish/);
     }
   });
 });

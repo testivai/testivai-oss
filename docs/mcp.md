@@ -148,8 +148,12 @@ The rules it gives the model:
 - An identical DOM whose styles were not compared (`styleCheck: "unavailable"`
   or missing) is not called a glitch from the DOM alone; the images decide.
 - Render noise is small and scattered. A larger or local diff with an
-  identical DOM is a bad capture, and the model says which image is wrong. A
-  bad baseline has to be replaced from a capture two runs agree on.
+  identical DOM and matching styles is a bad capture or a change the style
+  check cannot see (it does not cover size, overflow, position, transform and
+  some other properties, or images). The model calls it a glitch only when
+  nothing the change touched could have caused it, and then says which image
+  is wrong. A bad baseline has to be replaced from a capture two runs agree
+  on.
 - It reports a verdict, confidence, evidence and next step per snapshot, and
   never calls `approve_snapshot` or `approve_all`.
 

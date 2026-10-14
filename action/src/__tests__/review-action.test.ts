@@ -52,9 +52,13 @@ describe('inputs', () => {
     expect(ACTION.inputs['anthropic-api-key'].default).toBe('');
     expect(ACTION.inputs['claude-code-oauth-token'].default).toBe('');
     expect(ACTION.inputs['github-token'].default).toBe('${{ github.token }}');
-    expect(ACTION.inputs['report-dir'].default).toBe('visual-report');
+    expect(ACTION.inputs['allowed-bots'].default).toBe('');
     expect(ACTION.inputs.model.default).toBe('');
     expect(ACTION.inputs['max-turns'].default).toBe('30');
+  });
+
+  it('has no report-dir: it reads the report where the MCP server does, so the two cannot disagree', () => {
+    expect(ACTION.inputs['report-dir']).toBeUndefined();
   });
 
   it('says in the enabled description that turning it off uses no tokens', () => {
@@ -75,10 +79,20 @@ describe('steps', () => {
     expect(claude.with).toEqual({
       anthropic_api_key: '${{ inputs.anthropic-api-key }}',
       claude_code_oauth_token: '${{ inputs.claude-code-oauth-token }}',
-      github_token: '${{ inputs.github-token }}',
+      github_token: '${{ github.token }}',
+      allowed_bots: '${{ inputs.allowed-bots }}',
       prompt: '${{ steps.prep.outputs.prompt }}',
       claude_args: '${{ steps.prep.outputs.claude_args }}',
     });
+  });
+
+  it("gives Claude the job's own short-lived token, never a token passed to github-token", () => {
+    // claude-code-action writes its token into .git/config, inside Claude's workspace.
+    expect(claude.with?.github_token).toBe('${{ github.token }}');
+  });
+
+  it('tells the prepare step which bots claude-code-action will allow', () => {
+    expect(prep.env?.ALLOWED_BOTS).toBe('${{ inputs.allowed-bots }}');
   });
 
   it('posts after Claude whenever Claude was meant to run, so a failure replaces a stale triage', () => {
@@ -130,21 +144,27 @@ async function runScript(step: Step, values: Record<string, string>, globals: { 
 
 describe('the scripts load dist/review.cjs and run', () => {
   let dir: string;
+  const savedWorkspace = process.env.GITHUB_WORKSPACE;
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'review-action-'));
+    process.env.GITHUB_WORKSPACE = dir;
     fs.mkdirSync(path.join(dir, 'visual-report'));
     fs.writeFileSync(
       path.join(dir, 'visual-report', 'results.json'),
       JSON.stringify({ timestamp: 0, summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 }, snapshots: [{ name: 'home', status: 'changed' }] }),
     );
   });
-  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (savedWorkspace === undefined) delete process.env.GITHUB_WORKSPACE;
+    else process.env.GITHUB_WORKSPACE = savedWorkspace;
+  });
 
   const values = (over: Record<string, string> = {}) => ({
     'github.action_path': REVIEW_DIR,
     'inputs.enabled': 'true',
     "inputs.anthropic-api-key != '' || inputs.claude-code-oauth-token != ''": 'true',
-    'inputs.report-dir': path.join(dir, 'visual-report'),
+    'inputs.allowed-bots': '',
     'inputs.model': '',
     'inputs.max-turns': '30',
     'steps.claude.outcome': 'success',
@@ -156,11 +176,12 @@ describe('the scripts load dist/review.cjs and run', () => {
   });
   const context = {
     eventName: 'pull_request',
+    actor: 'alice',
     repo: { owner: 'acme', repo: 'shop' },
     issue: { number: 42 },
     serverUrl: 'https://github.com',
     runId: 7,
-    payload: { pull_request: { number: 42, title: 'Footer tweak', body: '' } },
+    payload: { pull_request: { number: 42, title: 'Footer tweak', body: '', head: { sha: 'abc1234' } } },
   };
   const fakes = () => {
     const outputs: Record<string, string> = {};
@@ -172,7 +193,10 @@ describe('the scripts load dist/review.cjs and run', () => {
           createComment: async (a: { body: string }) => posted.push(a.body),
           updateComment: async (a: { body: string }) => posted.push(a.body),
         },
-        pulls: { get: async () => ({ data: 'diff --git a/site/index.html b/site/index.html\n' }) },
+        pulls: {
+          get: async (a: { mediaType?: unknown }) =>
+            a.mediaType ? { data: 'diff --git a/site/index.html b/site/index.html\n' } : { data: { head: { sha: 'abc1234' } } },
+        },
       },
       paginate: async (fn: () => Promise<{ data: unknown[] }>) => (await fn()).data,
     };

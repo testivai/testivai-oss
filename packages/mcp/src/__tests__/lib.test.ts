@@ -682,3 +682,25 @@ describe('@testivai/mcp explainSnapshot', () => {
     });
   });
 });
+describe('withPromptArguments', () => {
+  const { withPromptArguments } = require('../lib') as typeof import('../lib');
+
+  it('gives a prompts/get request with no arguments an empty arguments object (MCP makes it optional)', () => {
+    expect(withPromptArguments({ jsonrpc: '2.0', id: 1, method: 'prompts/get', params: { name: 'triage-visual-diff' } })).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'prompts/get',
+      params: { name: 'triage-visual-diff', arguments: {} },
+    });
+  });
+
+  it('leaves everything else exactly as it was', () => {
+    const withArgs = { jsonrpc: '2.0', id: 2, method: 'prompts/get', params: { name: 'x', arguments: { snapshot: 'home' } } };
+    expect(withPromptArguments(withArgs)).toBe(withArgs);
+    const other = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_report' } };
+    expect(withPromptArguments(other)).toBe(other);
+    const response = { jsonrpc: '2.0', id: 4, result: {} };
+    expect(withPromptArguments(response)).toBe(response);
+    expect(withPromptArguments(null)).toBeNull();
+  });
+});

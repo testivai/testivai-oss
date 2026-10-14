@@ -160,11 +160,11 @@ export const TRIAGE_PROMPT = {
       '|---|---|',
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       '| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |',
-      '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, means one of the two captures rendered wrong: a bad capture. |',
-      '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change. |',
+      '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, is either a bad capture or a change the style check cannot see: it compares colors, fonts, borders, spacing, display, opacity, visibility and shadows, and does not cover size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets. See "Bad captures" below. |',
+      '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change, and the signs of a bad capture listed below can also come from a stylesheet change here. |',
       '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
       '',
-      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When a DOM-identical diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs points to a bad capture. Say which image is wrong. If it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. Either way it is a glitch, not a change to the page.',
+      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When the DOM is unchanged and styleCheck is "match" but the diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs can be a bad capture, or a change to something the style check does not cover. Look at what the change under test touched: if it changed CSS, an image, a font or another asset that could reach that area, judge it as a real change (intended change, bug or possible bug). Call it a glitch only when nothing in the change could have caused it, and say which image is wrong: if it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. If you cannot see what the change touched, say so, and call it a glitch only if the images clearly show a broken capture (a torn, half-drawn or partly blank render); otherwise a possible bug.',
       '',
       'Intent: judge intended change against bug by what the change under test was meant to do.',
       ...intentText,
@@ -175,7 +175,7 @@ export const TRIAGE_PROMPT = {
     const name = snapshot?.replace(/[`\r\n]/g, '').trim();
     const target = name ? `snapshot \`${name}\`` : 'every changed snapshot';
     return [
-      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? ' If it passed or is not in the results, say so and stop.' : ''}`,
+      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? ' If it is not in the results, or it passed without an auto-pass, say so and stop. If it auto-passed, say which criterion passed it, and triage it anyway when its verdict says the styles were not compared.' : ''}`,
       '',
       TRIAGE_PROMPT.rubric(intent),
       '',

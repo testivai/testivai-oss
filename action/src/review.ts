@@ -37,13 +37,16 @@ export const ALLOWED_TOOLS = [
   'mcp__testivai__get_diff',
   'mcp__testivai__get_report',
   'mcp__testivai__list_baselines',
-  'Read',
-  'Glob',
-  'Grep',
+  // Workspace only: a bare Read would also pre-approve reads outside it.
+  // Glob and Grep inside the workspace need no rule (read-only tools).
+  'Read(./**)',
 ];
 
 // Approving is a human decision, and text in the diff or on the page is
-// untrusted: no commands, no edits, no network.
+// untrusted: no commands, no edits, no network, and no reading where secrets
+// live (claude-code-action writes the GitHub token into .git/config, and the
+// process environments in /proc hold the Claude credential). Claude Code
+// applies Read rules to Glob and Grep too. Not ~: the workspace is inside it.
 export const DISALLOWED_TOOLS = [
   'mcp__testivai__approve_snapshot',
   'mcp__testivai__approve_all',
@@ -53,6 +56,9 @@ export const DISALLOWED_TOOLS = [
   'NotebookEdit',
   'WebFetch',
   'WebSearch',
+  'Read(./.git/**)',
+  'Read(//proc/**)',
+  'Read(//sys/**)',
 ];
 
 export const VERDICTS = ['glitch', 'intended-change', 'bug', 'possible-bug'] as const;
@@ -102,6 +108,35 @@ export interface Triage {
 /** Snapshots with something on screen to judge: changed or new, in report order. */
 export function toTriage(results: ResultsData): string[] {
   return (results.snapshots ?? []).filter((s) => s.status === 'changed' || s.status === 'new').map((s) => s.name);
+}
+
+/**
+ * The report directory, found the way the MCP server Claude talks to finds it
+ * (packages/mcp/src/lib.ts resolvePaths): `.testivai/config.json` reportDir,
+ * else visual-report, under the workspace. Reading the same one means the
+ * decision to spend tokens and the evidence Claude gets always agree.
+ */
+export function resolveReportDir(root: string): string {
+  let reportDir = 'visual-report';
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(root, '.testivai', 'config.json'), 'utf8'));
+    if (typeof config.reportDir === 'string' && config.reportDir.length > 0) reportDir = config.reportDir;
+  } catch {
+    // no config, or an unreadable one: the server falls back to the default too
+  }
+  return path.join(root, reportDir);
+}
+
+/** claude-code-action's allowed_bots matching (src/github/validation/actor.ts). */
+export function isAllowedBot(actor: string, allowedBots: string): boolean {
+  const list = allowedBots.trim();
+  if (list === '*') return true;
+  const name = (s: string) => s.trim().toLowerCase().replace(/\[bot\]$/, '');
+  return list
+    .split(',')
+    .map(name)
+    .filter(Boolean)
+    .includes(name(actor));
 }
 
 /** The `enabled` input. Strict, like core.getBooleanInput: a typo must not keep spending tokens. */
@@ -246,21 +281,72 @@ const COUNTED: [Verdict | 'untriaged', string, string][] = [
   ['untriaged', 'not triaged', 'not triaged'],
 ];
 
-/** Model text in a table cell or paragraph: one line, no table break, no forged marker. */
-const clean = (s: string): string => s.split(MARKER).join('').replace(/\r?\n+/g, ' ').replace(/\|/g, '\\|').trim();
+// Tokens and keys the model could be talked into quoting.
+const SECRETS = [
+  /x-access-token:[^@\s]+@/g,
+  /\bgh[opsur]_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /\bsk-ant-[A-Za-z0-9_-]{10,}/g,
+];
+
+/**
+ * Model text in a table cell or paragraph. The model read untrusted text (the
+ * diff, the description, the page), so its answer is defanged: one line, no
+ * table break, no HTML (an unclosed `<!--` would hide the rest), no @mentions,
+ * links or images, no forged marker, no secrets, and at most `max` characters.
+ */
+const clean = (s: string, max: number): string => {
+  let t = s.split(MARKER).join('');
+  for (const re of SECRETS) t = t.replace(re, (m) => (m.startsWith('x-access-token:') ? 'x-access-token:[redacted]@' : '[redacted]'));
+  t = t
+    .replace(/</g, '&lt;')
+    .replace(/@(?=[A-Za-z0-9])/g, '@\u200b')
+    .replace(/\]\(/g, '] (')
+    .replace(/!\[/g, '! [')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\|/g, '\\|')
+    .trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+};
 
 const runLink = (runUrl?: string): string => (runUrl ? ` · [run](${runUrl})` : '');
+const commitNote = (sha?: string): string => (sha ? ` · commit \`${sha.slice(0, 7)}\`` : '');
 
-export function renderComment(results: ResultsData, triage: Triage, { runUrl }: { runUrl?: string } = {}): string {
+// GitHub rejects a comment over 65,536 characters; leave room for the rest.
+const ROW_BUDGET = 55_000;
+const WORST_FIRST: (Verdict | 'untriaged')[] = ['bug', 'possible-bug', 'untriaged', 'intended-change', 'glitch'];
+
+export function renderComment(
+  results: ResultsData,
+  triage: Triage,
+  { runUrl, sha }: { runUrl?: string; sha?: string } = {},
+): string {
   const byName = new Map(triage.snapshots.map((s) => [s.name, s]));
   const counts = new Map<string, number>();
   const rows = toTriage(results).map((name) => {
-    const cell = `\`${clean(codeName(name))}\``;
+    const cell = `\`${clean(codeName(name), 200)}\``;
     const t = byName.get(name);
-    counts.set(t?.verdict ?? 'untriaged', (counts.get(t?.verdict ?? 'untriaged') ?? 0) + 1);
-    if (!t) return `| ${cell} | not triaged | — | Claude returned no verdict for this snapshot. | Look at it in the report. |`;
-    return `| ${cell} | ${LABEL[t.verdict]} | ${t.confidence} | ${clean(t.evidence)} | ${clean(t.nextStep)} |`;
+    const kind: Verdict | 'untriaged' = t?.verdict ?? 'untriaged';
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    const text = t
+      ? `| ${cell} | ${LABEL[t.verdict]} | ${t.confidence} | ${clean(t.evidence, 600)} | ${clean(t.nextStep, 300)} |`
+      : `| ${cell} | not triaged | — | Claude returned no verdict for this snapshot. | Look at it in the report. |`;
+    return { kind, text };
   });
+
+  // Report order when everything fits; otherwise the worst verdicts first.
+  let shown = rows;
+  if (rows.reduce((n, r) => n + r.text.length + 1, 0) > ROW_BUDGET) {
+    const ranked = [...rows].sort((a, b) => WORST_FIRST.indexOf(a.kind) - WORST_FIRST.indexOf(b.kind));
+    shown = [];
+    let used = 0;
+    for (const r of ranked) {
+      used += r.text.length + 1;
+      if (used > ROW_BUDGET) break;
+      shown.push(r);
+    }
+  }
+  const hidden = rows.length - shown.length;
   const tally = COUNTED.filter(([k]) => counts.get(k))
     .map(([k, one, many]) => `${counts.get(k)} ${counts.get(k) === 1 ? one : many}`)
     .join(' · ');
@@ -269,23 +355,25 @@ export function renderComment(results: ResultsData, triage: Triage, { runUrl }: 
     MARKER,
     '### 🤖 AI triage of the visual changes',
     '',
-    clean(triage.summary),
+    clean(triage.summary, 1500),
     '',
     `**${tally}**`,
     '',
     '| Snapshot | Verdict | Confidence | Evidence | Next step |',
     '|---|---|---|---|---|',
-    ...rows,
+    ...shown.map((r) => r.text),
+    ...(hidden > 0 ? ['', `${hidden} more snapshot${hidden === 1 ? '' : 's'} not shown here (the comment has a size limit): see the run log and the report.`] : []),
     '',
     "> Claude triaged each changed or new snapshot through [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/mcp.md) (`get_visual_results`, `explain_snapshot`, `get_diff`) and this pull request's diff. " +
       "TestivAI's verdicts and the visual check come from deterministic comparison; this triage is a model's reading of them and changes neither. " +
       'Approving is a human decision: `/testivai approve <name>`. To stop spending tokens on this, set `enabled: false` on the `testivai/testivai-oss/review` step.' +
+      commitNote(sha) +
       runLink(runUrl),
   ].join('\n');
 }
 
-export function renderSkipped(reason: string, { runUrl }: { runUrl?: string } = {}): string {
-  return [MARKER, '### 🤖 AI triage of the visual changes', '', `${reason}${runLink(runUrl)}`].join('\n');
+export function renderSkipped(reason: string, { runUrl, sha }: { runUrl?: string; sha?: string } = {}): string {
+  return [MARKER, '### 🤖 AI triage of the visual changes', '', `${reason}${commitNote(sha)}${runLink(runUrl)}`].join('\n');
 }
 
 // The github-script `github` client and `context`, as far as this module uses them.
@@ -303,11 +391,12 @@ interface Github {
 
 interface Context {
   eventName: string;
+  actor: string;
   repo: { owner: string; repo: string };
   issue: { number: number };
   serverUrl: string;
   runId: number;
-  payload: { pull_request?: { number: number; title?: string; body?: string | null } };
+  payload: { pull_request?: { number: number; title?: string; body?: string | null; head?: { sha?: string } } };
 }
 
 interface Core {
@@ -361,15 +450,53 @@ function readResults(reportDir: string): ResultsData | null {
   return fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, 'utf8')) as ResultsData) : null;
 }
 
+/**
+ * Write the triage comment, unless a newer push has superseded this run (its
+ * own run owns the comment then), and never fail the job over it: the triage
+ * is advisory.
+ */
+async function write({
+  github,
+  context,
+  core,
+  body,
+  onlyIfExists = false,
+}: {
+  github: Github;
+  context: Context;
+  core: Core;
+  body: string;
+  onlyIfExists?: boolean;
+}): Promise<void> {
+  const pr = context.payload.pull_request;
+  if (!pr) return;
+  try {
+    const sha = pr.head?.sha;
+    if (sha) {
+      const { owner, repo } = context.repo;
+      const { data } = (await github.rest.pulls.get({ owner, repo, pull_number: pr.number })) as { data: { head?: { sha?: string } } };
+      if (data.head?.sha && data.head.sha !== sha) {
+        core.info(`A newer push (${data.head.sha.slice(0, 7)}) superseded this run; leaving the triage comment to its run.`);
+        return;
+      }
+    }
+    await syncComment({ github, context, body, onlyIfExists });
+  } catch (err) {
+    core.warning(`Could not write the AI triage comment: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+const workspaceOf = (env: Env): string => env.GITHUB_WORKSPACE || process.cwd();
+
 /** The step before Claude: decide whether it runs, and if so write the PR diff and build its prompt. */
 export async function prepare({ github, context, core, env }: { github: Github; context: Context; core: Core; env: Env }): Promise<void> {
   const enabled = parseEnabled(env.ENABLED ?? '');
-  const reportDir = env.REPORT_DIR || 'visual-report';
   const pr = context.eventName === 'pull_request' ? context.payload.pull_request : undefined;
-  const skip = async ({ reason, clearStale, level }: { reason: string; clearStale: boolean; level: 'info' | 'notice' }) => {
+  const sha = pr?.head?.sha;
+  const skip = async ({ reason, clearStale, level }: { reason: string; clearStale: boolean; level: 'info' | 'notice' | 'warning' }) => {
     core[level](reason);
     core.setOutput('run', 'false');
-    if (pr && clearStale) await syncComment({ github, context, body: renderSkipped(reason), onlyIfExists: true });
+    if (pr && clearStale) await write({ github, context, core, body: renderSkipped(reason, { sha }), onlyIfExists: true });
   };
 
   // Checked before anything is read, so `enabled: false` works on any run.
@@ -377,17 +504,30 @@ export async function prepare({ github, context, core, env }: { github: Github; 
   // Validates model and max-turns before anything says run.
   const args = claudeArgs({ model: env.MODEL ?? '', maxTurns: env.MAX_TURNS ?? '30' });
 
+  const root = workspaceOf(env);
+  const reportDir = resolveReportDir(root);
   const results = readResults(reportDir);
   if (!results) {
-    core.warning(`No results.json in ${reportDir}: did the visual tests run? The AI triage was skipped.`);
-    core.setOutput('run', 'false');
-    return;
+    return skip({
+      reason: `No results.json in ${path.relative(root, reportDir) || '.'} (the reportDir in .testivai/config.json, else visual-report): did the visual tests run? The AI triage was skipped.`,
+      clearStale: true,
+      level: 'warning',
+    });
   }
 
   const d = decide({ enabled, hasCredentials: env.HAS_CREDENTIALS === 'true', isPullRequest: !!pr, eventName: context.eventName, results });
   if (!d.run) return skip(d);
   // decide() only runs Claude on a pull request.
   const { number, title, body } = pr as NonNullable<typeof pr>;
+
+  // claude-code-action refuses runs started by a bot it was not told to allow.
+  if (/\[bot\]$/i.test(context.actor ?? '') && !isAllowedBot(context.actor, env.ALLOWED_BOTS ?? '')) {
+    return skip({
+      reason: `This run was started by ${context.actor}, and claude-code-action only runs for bots listed in the allowed-bots input, so the AI triage was skipped.`,
+      clearStale: true,
+      level: 'notice',
+    });
+  }
 
   const diffPath = path.join(reportDir, 'triage', 'pr.diff');
   fs.mkdirSync(path.dirname(diffPath), { recursive: true });
@@ -410,8 +550,9 @@ export async function prepare({ github, context, core, env }: { github: Github; 
       pr: number,
       title: title ?? '',
       body: body ?? '',
-      diffPath,
-      reportDir,
+      // Relative: Claude's Read tool works from the workspace.
+      diffPath: path.relative(root, diffPath),
+      reportDir: path.relative(root, reportDir),
       snapshots: toTriage(results),
     }),
   );
@@ -420,23 +561,24 @@ export async function prepare({ github, context, core, env }: { github: Github; 
 
 /** The step after Claude: post its triage, or say it did not finish. */
 export async function post({ github, context, core, env }: { github: Github; context: Context; core: Core; env: Env }): Promise<void> {
-  const reportDir = env.REPORT_DIR || 'visual-report';
-  const results = readResults(reportDir);
+  const results = readResults(resolveReportDir(workspaceOf(env)));
   const triage = env.OUTCOME === 'success' ? parseTriage(env.TRIAGE ?? '') : null;
   const runUrl = runUrlOf(context);
+  const sha = context.payload.pull_request?.head?.sha;
 
   if (results && triage) {
-    await syncComment({ github, context, body: renderComment(results, triage, { runUrl }) });
-    core.info(`Posted the AI triage of ${toTriage(results).length} snapshot(s).`);
+    await write({ github, context, core, body: renderComment(results, triage, { runUrl, sha }) });
+    core.info(`AI triage of ${toTriage(results).length} snapshot(s) done.`);
     return;
   }
   core.warning(
     `The AI triage did not finish (Claude step: ${env.OUTCOME || 'not run'}${env.OUTCOME === 'success' ? ', no usable structured output' : ''}); see that step's log. The visual check is not affected.`,
   );
-  await syncComment({
+  await write({
     github,
     context,
-    body: renderSkipped('The AI triage did not finish on the latest push; see the run log. The visual check is not affected.', { runUrl }),
+    core,
+    body: renderSkipped('The AI triage did not finish on the latest push; see the run log. The visual check is not affected.', { runUrl, sha }),
     onlyIfExists: true,
   });
 }
