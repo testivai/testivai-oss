@@ -4,12 +4,20 @@
  * `testivai witness <url>` must produce byte-identical screenshots of an
  * unchanged page, or every run reports false "changed" diffs. Chrome could
  * hand Page.captureScreenshot a stale frame, painted with styles resolved
- * against an earlier viewport (a collapsed 100vh hero, narrow-viewport
+ * against the wrong viewport (a collapsed 100vh hero, narrow-viewport
  * media rules), so identical pages flipped between two renders run to run.
  *
  * This serves one fixture page under four URLs, runs the published CLI
  * three times (a fresh Chrome each run), and asserts all twelve captures
  * are identical. Before the fix this failed on nearly every attempt.
+ *
+ * The server answers each page after RESPONSE_DELAY_MS, like a real one.
+ * A new tab shows about:blank, already readyState 'complete', until the
+ * response arrives; the CLI once took that for the loaded page and
+ * stabilized about:blank instead, so the capture raced the page's entry
+ * animation. An instant local server hid that except on the first page of
+ * a freshly launched Chrome, where it made this test flaky; with the delay
+ * every page would hit it.
  *
  * Needs a Chrome/Chromium: set TESTIVAI_CHROME_PATH, or have one installed
  * where the CLI looks. Without one the test is skipped, loudly, except in CI
@@ -27,6 +35,7 @@ import * as path from 'path';
 
 const RUNS = 3;
 const PAGES = ['/p1.html', '/p2.html', '/p3.html', '/p4.html'];
+const RESPONSE_DELAY_MS = 300;
 const FIXTURE = path.join(__dirname, '..', 'fixtures', 'viewport-page.html');
 // The package's main entry is dist/index.js; the bin sits next to it.
 const CLI = path.join(path.dirname(require.resolve('@testivai/witness')), 'bin', 'testivai.js');
@@ -35,8 +44,10 @@ function serveFixture(): Promise<http.Server> {
   const html = fs.readFileSync(FIXTURE);
   const server = http.createServer((req, res) => {
     if (PAGES.includes(req.url ?? '')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(html);
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        res.end(html);
+      }, RESPONSE_DELAY_MS);
     } else {
       res.writeHead(404);
       res.end();

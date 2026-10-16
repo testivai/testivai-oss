@@ -21,7 +21,8 @@ What happens:
 1. Launches a headless Chrome (or reuses a debuggable one — see `--port`).
 2. Resolves pages: `--pages` / config `pages` when set, otherwise crawls
    same-origin links from the start page (capped by `--max-pages`, default 10).
-3. Per page: applies capture stabilization and `ignoreSelectors`, takes a
+3. Per page: loads the page at the capture viewport and waits for it to finish
+   loading, applies capture stabilization and `ignoreSelectors`, takes a
    full-page screenshot + DOM snapshot, writes to `.testivai/temp/<name>/`.
 4. Diffs against `.testivai/baselines/` with your configured tolerances and
    writes the HTML report + `results.json`.

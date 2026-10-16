@@ -5,6 +5,10 @@
   layers (fixed nav with backdrop-filter, filter: blur orb), a masked grid,
   an entry animation, and styles that depend on the viewport (100vh hero,
   vw heading, a max-width media query). No external resources.
+
+  The spinner never stops on its own: it holds still only when the
+  stabilization CSS reached this page, so a capture of the page without it
+  can never match the others.
 -->
 <html>
 <head>
@@ -40,6 +44,12 @@
   h1 { font-size: clamp(3rem, 7vw, 6.5rem); margin: 0; }
   h1, .hero p { position: relative; z-index: 1; opacity: 0; animation: rise 0.6s ease 0.2s forwards; }
   @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+  .spinner {
+    position: absolute; top: 96px; right: 52px; width: 24px; height: 24px;
+    border: 3px solid rgba(232, 240, 255, 0.2); border-top-color: #00d4ff; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .content { max-width: 752px; margin: 0 auto; padding: 40px 0; line-height: 1.8; }
   @media (max-width: 900px) { nav { padding: 0 24px; } h1 { font-size: 2.2rem; } }
 </style>
@@ -49,6 +59,7 @@
   <section class="hero">
     <div class="orb"></div>
     <div class="grid"></div>
+    <div class="spinner"></div>
     <h1>Viewport fixture</h1>
     <p>min-height: 100vh hero with a vw-sized heading</p>
   </section>
