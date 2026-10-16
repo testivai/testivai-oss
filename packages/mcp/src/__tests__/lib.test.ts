@@ -1119,24 +1119,34 @@ describe('@testivai/mcp missing baselines', () => {
 
     // A --grep run or a matrix lane leaves most of the suite missing: the long
     // verdict once, not once per baseline.
-    it('several: the verdict once, then a short line per name, saying which ones are not where they should be', () => {
+    // Each group gets its own verdict once: a baseline that is not on this
+    // machine is never under the "committed, delete it" one.
+    it('several: one verdict per kind (committed here, not on this machine, name outside), then a short line per name', () => {
       commitBaseline('.testivai/baselines', 'products');
       commitBaseline('.testivai/baselines', 'faq');
       const lines = lib.missingBaselineLines(root, results({ missingBaselines: ['products', 'faq', '../x', 'gone'] }));
       expect(lines).toEqual([
-        `Missing baselines (4), each a ${lib.missingVerdict('.testivai/baselines/<name>')}:`,
-        '- products: missing baseline (see above)',
-        '- faq: missing baseline (see above)',
-        '- ../x: missing baseline (see above); the name does not resolve to a directory inside the baselines directory',
-        `- gone: missing baseline (see above); ${lib.notHere('.testivai/baselines/gone')}`,
+        `Missing baselines (2): ${lib.missingVerdict('.testivai/baselines/<name>')}`,
+        '- products',
+        '- faq',
+        `Missing baselines not on this machine (1): missing baseline — ${lib.notHere('.testivai/baselines/<name>')}`,
+        '- gone',
+        'Missing baselines whose name does not resolve to a directory inside the baselines directory (1): no baseline files were read for them',
+        '- ../x',
       ]);
     });
 
-    it('stays small with hundreds of missing baselines', () => {
+    it.each([
+      ['committed here', true],
+      ['not on this machine (stale results, another platform)', false],
+    ])('stays small with hundreds of missing baselines: %s', (_, committed) => {
       const names = Array.from({ length: 200 }, (_, i) => `page-${i}`);
-      for (const n of names) commitBaseline('.testivai/baselines', n);
-      const text = lib.missingBaselineLines(root, results({ missingBaselines: names })).join('\n');
-      expect(text.length).toBeLessThan(200 * 45);
+      if (committed) for (const n of names) commitBaseline('.testivai/baselines', n);
+      const lines = lib.missingBaselineLines(root, results({ missingBaselines: names }));
+      expect(lines.join('\n').length).toBeLessThan(200 * 15);
+      expect(lines.filter((l) => !l.startsWith('- '))).toHaveLength(1);
+      // No claim that it is committed, and no instruction to delete it.
+      if (!committed) expect(lines[0]).not.toMatch(/committed|delete its baseline|git rm/);
     });
   });
 

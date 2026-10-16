@@ -850,6 +850,17 @@ describe('prepare (the step before Claude runs)', () => {
     expect(core.outputs.prompt).toContain(`Read \`shots/${process.platform}/<name>/screenshot.png\``);
   });
 
+  it('a baselinesDir that is the workspace itself is `.`, never an absolute /<name>', async () => {
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: '.' }));
+    writeResults(results([snap('home', 'passed')], ['products']));
+    const core = fakeCore();
+    await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env() });
+    expect(core.outputs.prompt).toContain('committed files are in `./<name>/`');
+    expect(core.outputs.prompt).toContain('`git rm -r ./<name>`');
+    expect(core.outputs.prompt).not.toMatch(/`\/<name>/);
+  });
+
   it("reads the report dir from .testivai/config.json, like the MCP server Claude will use", async () => {
     fs.mkdirSync(path.join(dir, '.testivai'));
     fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ reportDir: 'out/visual' }));

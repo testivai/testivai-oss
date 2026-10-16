@@ -1,8 +1,9 @@
 name: 'TestivAI AI Triage'
 description: >
   On a pull request with visual changes, Claude triages each changed or new
-  snapshot and each missing baseline as a glitch, an intended change, a bug or
-  a possible bug, from the TestivAI report (through @testivai/mcp), the images
+  snapshot and each missing baseline (unless .testivai/config.json sets
+  failOnMissing: false) as a glitch, an intended change, a bug or a possible
+  bug, from the TestivAI report (through @testivai/mcp), the images
   and the pull request's diff, and posts one comment. Advisory: it never
   changes the visual check or a baseline. It runs, and uses tokens, only when
   there is something to triage and a Claude credential is set; enabled: false
@@ -42,8 +43,9 @@ inputs:
   enabled:
     description: >
       true (the default) triages every pull request run that has a changed or
-      new snapshot or a missing baseline. false turns it off: Claude does not
-      run and no tokens are used. Anything else fails the step.
+      new snapshot or a missing baseline (unless .testivai/config.json sets
+      failOnMissing: false). false turns it off: Claude does not run and no
+      tokens are used. Anything else fails the step.
     required: false
     default: 'true'
 

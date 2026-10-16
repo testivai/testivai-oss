@@ -137,6 +137,14 @@ describe('AI triage docs: missing baselines', () => {
     expect(doc).toMatch(/its cost grows with the number of changed, new and missing snapshots/);
   });
 
+  it('review/action.yml and README.md say a missing baseline is triaged unless failOnMissing is false', () => {
+    const action = parse(read('review/action.yml')) as { description: string; inputs: { enabled: { description: string } } };
+    const clause = /a missing baseline \(unless \.testivai\/config\.json sets failOnMissing: false\)/;
+    expect(action.description.replace(/\s+/g, ' ')).toMatch(/each missing baseline \(unless \.testivai\/config\.json sets failOnMissing: false\)/);
+    expect(action.inputs.enabled.description.replace(/\s+/g, ' ')).toMatch(clause);
+    expect(flat('README.md')).toMatch(clause);
+  });
+
   it('README.md: the ai-triage job runs for a missing baseline too', () => {
     expect(flat('README.md')).toMatch(/The `ai-triage` job runs on every pull request with a changed or new snapshot or a missing baseline/);
   });

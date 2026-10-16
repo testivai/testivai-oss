@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 import { BaselineStore, resolveBaselinesDir } from '@testivai/witness/baselines';
+import { shellArg } from './tool-meta';
 import {
   describeRegions,
   diffShape,
@@ -180,32 +181,40 @@ function locateMissing(
 
 /**
  * get_visual_results lines for the missing baselines. One is shaped like the
- * per-snapshot lines (`- <name>: <verdict>`); several get the verdict once and
- * a short line each, since a partial run (`--grep`, a matrix lane) can leave
- * most of the suite missing.
+ * per-snapshot lines (`- <name>: <verdict>`). Several are grouped by kind,
+ * each kind's verdict once and a short line per name, since a partial run
+ * (`--grep`, a matrix lane) can leave most of the suite missing: committed
+ * here, not on this machine (stale results, another platform's
+ * `{platform}`), or a name outside the baselines directory. A baseline that
+ * is not here is never under the "committed, delete it" verdict.
  */
 export function missingBaselineLines(root: string, results: ResultsFile): string[] {
   const names = missingBaselineNames(results);
   if (names.length <= 1) return names.map((name) => `- ${name}: ${locateMissing(root, results, name).verdict}`);
+  const committed: string[] = [];
+  const notOnThisMachine: string[] = [];
+  const unresolved: string[] = [];
+  for (const name of names) {
+    const { abs, present } = locateMissing(root, results, name);
+    (!abs ? unresolved : present ? committed : notOnThisMachine).push(name);
+  }
+  const template = `${baselinesDirFor(root)}/<name>`;
+  const group = (list: string[], header: string, verdict: string): string[] =>
+    list.length > 0 ? [`${header} (${list.length}): ${verdict}`, ...list.map((n) => `- ${n}`)] : [];
   return [
-    `Missing baselines (${names.length}), each a ${missingVerdict(`${baselinesDirFor(root)}/<name>`)}:`,
-    ...names.map((name) => {
-      const { abs, dir, present } = locateMissing(root, results, name);
-      const note = !abs
-        ? '; the name does not resolve to a directory inside the baselines directory'
-        : !present
-          ? `; ${notHere(dir as string)}`
-          : '';
-      return `- ${name}: missing baseline (see above)${note}`;
-    }),
+    ...group(committed, 'Missing baselines', missingVerdict(template)),
+    ...group(notOnThisMachine, 'Missing baselines not on this machine', `missing baseline — ${notHere(template)}`),
+    ...group(
+      unresolved,
+      'Missing baselines whose name does not resolve to a directory inside the baselines directory',
+      'no baseline files were read for them',
+    ),
   ];
 }
 
 /** The files a committed baseline can hold, in the order they are listed. */
 const BASELINE_FILES = ['screenshot.png', 'dom.html', 'metadata.json', 'elements.json'];
 
-/** Quoted for a shell when it holds anything but plain path characters. */
-const shellArg = (s: string): string => (/^[\w./@%+=:,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
 
 /** explain_snapshot for a missing baseline: no capture, so no layers; the committed files and what to check instead. */
 export interface MissingBaselineExplanation {

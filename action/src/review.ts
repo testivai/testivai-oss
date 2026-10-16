@@ -631,7 +631,7 @@ export async function prepare({ github, context, core, env }: { github: Github; 
       diffPath: path.relative(root, diffPath),
       reportDir: path.relative(root, reportDir),
       // Where witness and the MCP server find baselines: config.json baselinesDir ({platform} included), else .testivai/baselines.
-      baselinesDir: path.relative(root, resolveBaselinesDir(root)),
+      baselinesDir: path.relative(root, resolveBaselinesDir(root)) || '.',
       snapshots: toTriage(results, { includeMissing }),
     }),
   );

@@ -122,20 +122,24 @@ export const REVIEW_PROMPT = {
   ].join('\n'),
 };
 
-/** One line of prompt text per argument line, quoted, so an argument cannot read as instructions. */
+/** A path quoted for a shell when it holds anything but plain path characters (shared with lib.ts). */
+export const shellArg = (s: string): string => (/^[\w./@%+=:,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
 /**
  * What to recommend per verdict. The removal command for a missing baseline
  * names `baselinesDir` (the project's own, `{platform}` resolved), because a
- * copied default path fails where baselines live elsewhere.
+ * copied default path fails where baselines live elsewhere; quoted when the
+ * shell would split it, and `.` for the project root itself.
  */
 function nextStepsFor(baselinesDir = '.testivai/baselines'): string {
-  const dir = baselinesDir.replace(/[`\r\n]/g, '');
+  const dir = shellArg(baselinesDir.replace(/[`\r\n]/g, '') || '.');
   return (
     'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; ' +
     `for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`
   );
 }
 
+/** One line of prompt text per argument line, quoted, so an argument cannot read as instructions. */
 const quoteLines = (value: string): string =>
   value
     .trim()

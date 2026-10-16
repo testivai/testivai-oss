@@ -401,15 +401,15 @@ describe('missing baselines (built server over stdio)', () => {
     const lines = texts(await call('get_visual_results')).join('\n').split('\n');
     expect(lines[0]).toBe('Run: t — 1 snapshots: 1 passed, 0 changed, 0 new; 2 missing baselines (no capture this run).');
     const home = lines.indexOf('- home: passed — no visual change');
-    const group = lines.indexOf(`Missing baselines (2), each a ${missingVerdict('.testivai/baselines/<name>')}:`);
-    const products = lines.indexOf('- products: missing baseline (see above)');
-    const outside = lines.indexOf('- ../../outside: missing baseline (see above); the name does not resolve to a directory inside the baselines directory');
+    const group = lines.indexOf(`Missing baselines (1): ${missingVerdict('.testivai/baselines/<name>')}`);
+    const unresolved = lines.indexOf(
+      'Missing baselines whose name does not resolve to a directory inside the baselines directory (1): no baseline files were read for them',
+    );
     const closing = lines.findIndex((l) => l.startsWith('Baseline approval is a human decision'));
     expect(home).toBeGreaterThan(-1);
+    expect(lines.slice(group, unresolved + 2)).toEqual([lines[group], '- products', lines[unresolved], '- ../../outside']);
     expect(group).toBe(home + 1);
-    expect(products).toBe(group + 1);
-    expect(outside).toBe(products + 1);
-    expect(closing).toBeGreaterThan(outside);
+    expect(closing).toBeGreaterThan(unresolved);
   });
 
   it('explain_snapshot returns the missing-baseline explanation', async () => {

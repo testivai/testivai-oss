@@ -379,6 +379,10 @@ describe('triage-visual-diff prompt', () => {
       expect(TRIAGE_PROMPT.nextStepsFor('shots/linux')).toContain('(for example `git rm -r shots/linux/<name>`)');
       expect(TRIAGE_PROMPT.nextStepsFor('shots/linux')).not.toContain('.testivai/baselines');
       expect(TRIAGE_PROMPT.nextStepsFor('a`b\nc')).toContain('`git rm -r abc/<name>`');
+      // Quoted when the shell would split it, and never an absolute /<name>.
+      expect(TRIAGE_PROMPT.nextStepsFor('visual baselines')).toContain("`git rm -r 'visual baselines'/<name>`");
+      expect(TRIAGE_PROMPT.nextStepsFor("it's")).toContain("`git rm -r 'it'\\''s'/<name>`");
+      expect(TRIAGE_PROMPT.nextStepsFor('')).toContain('`git rm -r ./<name>`');
       expect(TRIAGE_PROMPT.textFor({ baselinesDir: 'shots/linux' })).toContain(`- Next step: ${TRIAGE_PROMPT.nextStepsFor('shots/linux')}`);
     });
 

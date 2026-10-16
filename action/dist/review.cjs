@@ -88,8 +88,9 @@ var REVIEW_PROMPT = {
     "   confirmed the changes are intended \u2014 baseline approval is a human decision."
   ].join("\n")
 };
+var shellArg = (s) => /^[\w./@%+=:,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 function nextStepsFor(baselinesDir = ".testivai/baselines") {
-  const dir = baselinesDir.replace(/[`\r\n]/g, "");
+  const dir = shellArg(baselinesDir.replace(/[`\r\n]/g, "") || ".");
   return `for an intended change, approve it once the human agrees (\`/testivai approve <name>\` on the pull request, or \`npx testivai approve <name>\` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`;
 }
 var quoteLines = (value) => value.trim().split(/\r?\n/).map((line) => line.trim() ? `> ${line.trim()}` : ">").join("\n");
@@ -560,7 +561,7 @@ async function prepare({ github, context, core, env }) {
       diffPath: path2.relative(root, diffPath),
       reportDir: path2.relative(root, reportDir),
       // Where witness and the MCP server find baselines: config.json baselinesDir ({platform} included), else .testivai/baselines.
-      baselinesDir: path2.relative(root, resolveBaselinesDir(root)),
+      baselinesDir: path2.relative(root, resolveBaselinesDir(root)) || ".",
       snapshots: toTriage(results, { includeMissing })
     })
   );
