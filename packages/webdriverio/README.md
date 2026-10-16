@@ -99,9 +99,12 @@ Approve writes the temp capture over the baseline and backs the previous baselin
 
 Alongside the screenshot the adapter writes `dom.html` and `elements.json`, the element map: each element's box and a digest of its computed styles, collected by the same function the Playwright and Selenium adapters use.
 
-- When pixels differ but the DOM is structurally identical and no computed style changed, the report flags the change as "likely render noise" (anti-aliasing, font hinting, sub-pixel layout).
+- When pixels differ but the DOM is structurally identical and the computed styles were compared and match, the report labels the change "likely render noise" (anti-aliasing, font hinting, sub-pixel layout): likely, not proven.
 - When the DOM is identical but computed styles differ, it reports a style-only change, which is real, and names the restyled elements.
+- When the DOM is identical but the computed styles could not be compared (no element map on one side: `skipElementMap`, a blocked collector script, or a baseline captured without one), it says "styles not compared": could be render noise or a stylesheet-only change. It does not call that noise, and `noiseAutoPass` never passes it.
 - When the DOM also differs, it shows added / removed / attribute-change counts so you can decide whether the change is intentional.
+
+These are labels on a `changed` snapshot. Nothing auto-passes unless you configure a pass criterion in `.testivai/config.json` (`maxDiffPercent`, `maxDiffPixels`, `noiseAutoPass`, `shiftTolerance`).
 
 The element map also powers region attribution (which selectors a diff region covers) and page-shift detection.
 

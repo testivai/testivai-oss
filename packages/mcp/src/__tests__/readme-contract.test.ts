@@ -23,6 +23,16 @@ describe('@testivai/mcp README', () => {
   it('describes the style-only verdict, not just DOM-identical noise', () => {
     expect(readme).toMatch(/style-only/i);
   });
+
+  // An identical DOM whose styles were not compared is unknown, not noise:
+  // the README must document that verdict and must not group it as noise.
+  it('describes the styles-not-compared verdict without calling it noise', () => {
+    const row = readme.split('\n').find((l) => l.startsWith('| `get_visual_results`'));
+    expect(row).toBeDefined();
+    expect(row).toMatch(/styles not compared[^/|]*could be render noise or a stylesheet-only change/i);
+    expect(row).not.toMatch(/the same kind of noise/i);
+    expect(readme).not.toMatch(/whether it's real or just render noise/i);
+  });
 });
 
 // approve_snapshot / approve_all exist so a human can approve in conversation;

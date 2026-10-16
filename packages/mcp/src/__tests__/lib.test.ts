@@ -46,16 +46,9 @@ describe('@testivai/mcp lib', () => {
   });
 
   describe('verdictFor', () => {
-    it('labels DOM-identical diffs as likely render noise', () => {
-      const verdict = verdictFor({
-        name: 'x',
-        status: 'changed',
-        diffPercent: 0.4,
-        dom: { changed: false, noiseHint: true, summary: null },
-      });
-      expect(verdict).toContain('likely render noise');
-      expect(verdict).toContain('0.40%');
-    });
+    // Words that tell an agent to wave a diff through as noise. They belong
+    // only to the case where the DOM AND the computed styles were compared.
+    const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
 
     // noiseHint fires when the DOM is identical and no style mismatch was
     // found. With styleCheck 'match' that means the DOM and the computed
@@ -67,22 +60,78 @@ describe('@testivai/mcp lib', () => {
         diffPercent: 0.4,
         dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
       });
-      expect(verdict).toContain('likely render noise');
-      expect(verdict).toContain('DOM and computed styles both match');
+      expect(verdict).toBe(
+        "changed (0.40% pixels differ) but the DOM and computed styles both match — likely render noise (font hinting, anti-aliasing); mention it, don't block",
+      );
     });
 
     // witness also sets noiseHint when no style digests were comparable
-    // (styleCheck 'unavailable'): styles were never compared, so the verdict
-    // must not claim they matched, and must say they were not compared.
-    it('does not claim styles matched when the style check was unavailable', () => {
+    // (styleCheck 'unavailable'): styles were never compared, so a
+    // stylesheet-only change is not ruled out. That is unknown, not noise:
+    // the verdict must not call it noise or tell the agent not to block.
+    it('does not call an identical-DOM diff noise when the style check was unavailable', () => {
       const verdict = verdictFor({
         name: 'x',
         status: 'changed',
         diffPercent: 0.4,
         dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
       });
+      expect(verdict).toBe(
+        'changed (0.40% pixels differ) but the DOM is structurally identical and styles were not compared (style check unavailable) — could be render noise or a stylesheet-only change; look at the diff before approving',
+      );
       expect(verdict).not.toMatch(/styles (both )?match/i);
-      expect(verdict).toContain('styles were not compared');
+      expect(verdict).not.toMatch(NOISE_ADVICE);
+    });
+
+    // Results written before the style check existed carry noiseHint with no
+    // styleCheck at all. That is the same unknown case, and the verdict must
+    // not claim a style check ran and came back unavailable.
+    it('does not call an identical-DOM diff noise when the results have no style check', () => {
+      const verdict = verdictFor({
+        name: 'x',
+        status: 'changed',
+        diffPercent: 0.4,
+        dom: { changed: false, noiseHint: true, summary: null },
+      });
+      expect(verdict).toBe(
+        'changed (0.40% pixels differ) but the DOM is structurally identical and styles were not compared (no style check in these results) — could be render noise or a stylesheet-only change; look at the diff before approving',
+      );
+      expect(verdict).not.toMatch(NOISE_ADVICE);
+    });
+
+    // Auto-pass turns a pixel diff into status 'passed'; the diff is still
+    // there, inside a configured tolerance. "No visual change" would hide it.
+    it('says an auto-passed snapshot had a pixel diff within tolerance, not no change', () => {
+      const verdict = verdictFor({
+        name: 'x',
+        status: 'passed',
+        diffPercent: 0.3,
+        autoPassed: 'noise',
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      });
+      expect(verdict).toBe(
+        "passed — auto-passed by the configured 'noise' criterion: 0.30% pixels differ, within its tolerance",
+      );
+      expect(verdict).not.toContain('no visual change');
+      expect(verdictFor({ name: 'x', status: 'passed', diffPercent: 0.02, autoPassed: 'threshold' })).toBe(
+        "passed — auto-passed by the configured 'threshold' criterion: 0.02% pixels differ, within its tolerance",
+      );
+      expect(verdictFor({ name: 'x', status: 'passed', diffPercent: 0 })).toBe('passed — no visual change');
+    });
+
+    // Results from a noiseAutoPass that did not yet require a style match can
+    // carry autoPassed 'noise' with styles never compared: say so.
+    it('flags a noise auto-pass whose styles were not compared', () => {
+      const verdict = verdictFor({
+        name: 'x',
+        status: 'passed',
+        diffPercent: 0.3,
+        autoPassed: 'noise',
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+      });
+      expect(verdict).toBe(
+        "passed — auto-passed by the configured 'noise' criterion: 0.30% pixels differ, within its tolerance; styles were not compared (style check unavailable), so a stylesheet-only change is not ruled out — look at the diff",
+      );
     });
 
     it('labels DOM changes as real with the change summary', () => {
@@ -411,22 +460,106 @@ describe('@testivai/mcp explainSnapshot', () => {
     }]);
     const e = explainSnapshot(root, 'home');
     expect(e.layers.dom.noiseHint).toBe(true);
-    expect(e.guidance.join(' ')).toMatch(/render noise/i);
+    expect(e.guidance).toContain(
+      'Pixels differ but the DOM is structurally identical and style digests match — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.',
+    );
     expect(e.guidance.join(' ')).toMatch(/human decision/i);
   });
 
   // The verdict and the guidance ship in the same explanation, so they must
-  // agree: with no comparable style digests, neither may claim styles matched.
-  it('noise case without a style check: guidance does not claim the style digests match', () => {
+  // agree: with no comparable style digests, neither may claim styles matched
+  // or call the diff noise. A stylesheet-only change is not ruled out, so the
+  // agent is told to look at the images instead.
+  const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
+
+  it.each([
+    ['unavailable', 'no comparable style digests on both sides'],
+    [undefined, 'these results have no style check'],
+  ])('styles not compared (styleCheck %s): guidance says look at the images, not noise', (styleCheck, why) => {
     const { explainSnapshot } = require('../lib');
     writeResults([{
       name: 'home', status: 'changed', diffPercent: 0.4,
+      dom: { changed: false, noiseHint: true, summary: null, ...(styleCheck ? { styleCheck } : {}) },
+    }]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance).toContain(
+      'Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is ' +
+        `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
+        'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
+    );
+    const guidance = e.guidance.join(' ');
+    expect(guidance).not.toMatch(/digests match/i);
+    expect(guidance).not.toMatch(NOISE_ADVICE);
+    // The verdict in the same bundle agrees.
+    expect(e.verdict).not.toMatch(NOISE_ADVICE);
+  });
+
+  // An auto-pass is a configured tolerance, not proof; when the noise
+  // auto-pass was applied without a style comparison, "no action needed"
+  // would hide an unverified diff.
+  it('noise auto-pass without a style comparison: guidance does not say no action is needed', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([{
+      name: 'home', status: 'passed', diffPercent: 0.4, autoPassed: 'noise',
       dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
     }]);
-    const guidance = explainSnapshot(root, 'home').guidance.join(' ');
-    expect(guidance).toMatch(/render noise/i);
-    expect(guidance).not.toMatch(/digests match/i);
-    expect(guidance).toMatch(/styles were not compared/i);
+    const guidance = explainSnapshot(root, 'home').guidance;
+    expect(guidance).toContain(
+      "This diff auto-passed via the 'noise' criterion although its styles were not compared, so a " +
+        'stylesheet-only change was not ruled out — compare the images (get_diff) before relying on it.',
+    );
+    expect(guidance.join(' ')).not.toMatch(/no action needed/i);
+    expect(guidance.join(' ')).not.toMatch(NOISE_ADVICE);
+  });
+
+  // witness computes the DOM signal before the pass criteria, so a passed
+  // snapshot can still carry noiseHint. A capture with no pixel above the
+  // per-pixel threshold passes with diffPercent 0 and no autoPassed: nothing
+  // differs and nothing is pending approval, so the guidance must not say
+  // pixels differ, ask for a review before approving, or call it noise.
+  it('passed with no pixel diff: no noise or review guidance even when the DOM signal is set', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([{
+      name: 'zero', status: 'passed', diffPercent: 0,
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+    }]);
+    const e = explainSnapshot(root, 'zero');
+    expect(e.verdict).toBe('passed — no visual change');
+    const guidance = e.guidance.join(' ');
+    expect(guidance).not.toMatch(/pixels differ|before approving|render noise|styles not compared/i);
+    expect(guidance).not.toMatch(NOISE_ADVICE);
+  });
+
+  // A threshold or shift auto-pass whose styles were not compared is a
+  // configured tolerance: the transparency line applies, and the guidance
+  // must not also ask for a review ("before approving") or call it noise.
+  it.each(['threshold', 'shift'])(
+    "'%s' auto-pass without a style comparison: transparency line only, no review request",
+    (criterion) => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([{
+        name: 'home', status: 'passed', diffPercent: 0.2, autoPassed: criterion,
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+      }]);
+      const e = explainSnapshot(root, 'home');
+      expect(e.guidance).toContain(
+        `This diff auto-passed via the '${criterion}' criterion — reported for transparency, no action needed.`,
+      );
+      const guidance = e.guidance.join(' ');
+      expect(guidance).not.toMatch(/before approving/i);
+      expect(guidance).not.toMatch(NOISE_ADVICE);
+    },
+  );
+
+  it('auto-pass with compared styles: reported for transparency', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([{
+      name: 'home', status: 'passed', diffPercent: 0.4, autoPassed: 'noise',
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+    }]);
+    expect(explainSnapshot(root, 'home').guidance).toContain(
+      "This diff auto-passed via the 'noise' criterion — reported for transparency, no action needed.",
+    );
   });
 
   it('style-mismatch case: flags a REAL stylesheet-only change with element names', () => {
@@ -443,6 +576,25 @@ describe('@testivai/mcp explainSnapshot', () => {
     expect(g).toMatch(/styles changed/i);
     expect(g).toContain('button.cta');
     expect(g).toMatch(/REAL/);
+  });
+
+  it('DOM changed and styles changed: never says the DOM stayed identical', () => {
+    const { explainSnapshot, verdictFor } = require('../lib');
+    const snapshot = {
+      name: 'cta', status: 'changed', diffPercent: 2.1,
+      dom: {
+        changed: true, noiseHint: false,
+        summary: { added: 0, removed: 0, attributeChanges: 1, textChanges: 0 },
+        styleCheck: 'mismatch', styleChanges: { count: 2, elements: ['button.cta', 'a.more'] },
+      },
+    };
+    writeResults([snapshot]);
+    const g = explainSnapshot(root, 'cta').guidance.join(' ');
+    expect(g).not.toMatch(/stayed identical|identical DOM|stylesheet-only/i);
+    expect(g).toContain('Computed styles also changed on 2 element(s) (button.cta, a.more)');
+    const v = verdictFor(snapshot);
+    expect(v).toMatch(/real structural change/);
+    expect(v).not.toMatch(/identical DOM|style-only/i);
   });
 
   it('injected-banner case: pageShift guidance points above the shift line', () => {
@@ -528,5 +680,27 @@ describe('@testivai/mcp explainSnapshot', () => {
       expect(() => describeMissingResults(root)).not.toThrow();
       expect(describeMissingResults(root)).toContain('capture(s)');
     });
+  });
+});
+describe('withPromptArguments', () => {
+  const { withPromptArguments } = require('../lib') as typeof import('../lib');
+
+  it('gives a prompts/get request with no arguments an empty arguments object (MCP makes it optional)', () => {
+    expect(withPromptArguments({ jsonrpc: '2.0', id: 1, method: 'prompts/get', params: { name: 'triage-visual-diff' } })).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'prompts/get',
+      params: { name: 'triage-visual-diff', arguments: {} },
+    });
+  });
+
+  it('leaves everything else exactly as it was', () => {
+    const withArgs = { jsonrpc: '2.0', id: 2, method: 'prompts/get', params: { name: 'x', arguments: { snapshot: 'home' } } };
+    expect(withPromptArguments(withArgs)).toBe(withArgs);
+    const other = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_report' } };
+    expect(withPromptArguments(other)).toBe(other);
+    const response = { jsonrpc: '2.0', id: 4, result: {} };
+    expect(withPromptArguments(response)).toBe(response);
+    expect(withPromptArguments(null)).toBeNull();
   });
 });

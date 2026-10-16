@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { TOOL_META } from '../tool-meta';
+import { REVIEW_PROMPT, TOOL_META, TRIAGE_PROMPT } from '../tool-meta';
 import { connectBuiltServer } from './stdio-harness';
 
 /**
@@ -109,6 +109,69 @@ describe('built server over stdio', () => {
     expect(closing).toBeGreaterThan(header);
     expect(lines).toContain(`- report: ${path.join(report, 'index.html')}`);
     expect(lines).toContain(`- card (diff): ${path.join(report, 'images', 'card', 'diff.png')}`);
+  });
+
+  // The prompt the client fetches is the one the model follows: it must not
+  // sort an identical-DOM diff whose styles were not compared into noise.
+  it('serves the review-visual-changes prompt with the styles-not-compared case', async () => {
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((p) => p.name).sort()).toEqual(['review-visual-changes', 'triage-visual-diff']);
+    const prompt = await client.getPrompt({ name: 'review-visual-changes' });
+    const text = (prompt.messages[0].content as { type: string; text: string }).text;
+    expect(text).toMatch(/styles not compared[^.]*could be render noise or a stylesheet-only change/i);
+    expect(text).not.toMatch(/ignore-as-noise/i);
+    expect(text).toBe(REVIEW_PROMPT.text);
+  });
+
+  it('serves triage-visual-diff with optional snapshot and intent arguments', async () => {
+    const { prompts } = await client.listPrompts();
+    const triage = prompts.find((p) => p.name === 'triage-visual-diff');
+    expect(triage?.arguments?.map((a) => [a.name, a.required ?? false]).sort()).toEqual([
+      ['intent', false],
+      ['snapshot', false],
+    ]);
+    // MCP makes `arguments` optional: no object, an empty one, and empty
+    // strings all mean "not given".
+    const omitted = await client.getPrompt({ name: 'triage-visual-diff' });
+    expect((omitted.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const all = await client.getPrompt({ name: 'triage-visual-diff', arguments: {} });
+    expect((all.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const blank = await client.getPrompt({ name: 'triage-visual-diff', arguments: { snapshot: '', intent: '' } });
+    expect((blank.messages[0].content as { text: string }).text).toBe(TRIAGE_PROMPT.textFor({}));
+    const one = await client.getPrompt({ name: 'triage-visual-diff', arguments: { snapshot: 'home', intent: 'Add a promo banner.' } });
+    const text = (one.messages[0].content as { text: string }).text;
+    expect(text).toBe(TRIAGE_PROMPT.textFor({ snapshot: 'home', intent: 'Add a promo banner.' }));
+    expect(text).toMatch(/snapshot `home`/);
+  });
+
+  it('get_visual_results never calls identical-DOM diffs whose styles were not compared noise', async () => {
+    const report = path.join(root, 'visual-report');
+    fs.mkdirSync(report, { recursive: true });
+    const notCompared = (name: string) => ({
+      name,
+      status: 'changed',
+      diffPercent: 0.5,
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'unavailable' },
+    });
+    fs.writeFileSync(
+      path.join(report, 'results.json'),
+      JSON.stringify({
+        version: '2.3.0',
+        timestamp: 't',
+        summary: { total: 2, passed: 0, changed: 2, newSnapshots: 0 },
+        snapshots: [notCompared('home'), notCompared('about')],
+      }),
+    );
+
+    const text = textOf(await client.callTool({ name: 'get_visual_results', arguments: {} }));
+
+    expect(text).toContain(
+      '- about, home (2): identical DOM, styles not compared (style check unavailable): render noise or a stylesheet-only change, not ruled out',
+    );
+    expect(text).toContain(
+      '- home: changed (0.50% pixels differ) but the DOM is structurally identical and styles were not compared (style check unavailable) — could be render noise or a stylesheet-only change; look at the diff before approving',
+    );
+    expect(text).not.toMatch(/likely render noise|don't block/i);
   });
 
   it('get_visual_results offers in-conversation approval once the human confirms', async () => {

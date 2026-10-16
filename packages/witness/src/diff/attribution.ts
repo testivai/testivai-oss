@@ -191,8 +191,10 @@ export interface StyleComparison {
  *
  * Only paths present on BOTH sides are compared — structural additions
  * and removals are the DOM diff's job, not the style fingerprint's.
- * Either side missing a map → 'unavailable' (the noise hint falls back
- * to its legacy DOM-only behavior, visibly labeled).
+ * Either side missing a map → 'unavailable': the noise hint stays
+ * DOM-only, so a stylesheet-only change is not ruled out. The report labels
+ * it "styles not compared" (never "likely render noise") and noiseAutoPass
+ * does not pass it.
  *
  * A digest is only meaningful when BOTH sides actually carry one.
  * `parseElementMap` deliberately tolerates an absent `styleHash` (it

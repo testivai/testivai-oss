@@ -151,7 +151,9 @@ describe('buildComment', () => {
   });
 
   describe('DOM noise hint in PR comment', () => {
-    it('renders "DOM unchanged" hint when noiseHint is true', () => {
+    // No styleCheck (an older results.json): the styles were never compared,
+    // so an identical DOM alone does not make this likely noise.
+    it('renders "DOM unchanged, styles not compared" when noiseHint is true without a style check', () => {
       const results: ResultsData = {
         timestamp: Date.now(),
         summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
@@ -167,8 +169,9 @@ describe('buildComment', () => {
         ],
       };
       const comment = buildComment(results);
-      expect(comment).toContain('DOM unchanged');
-      expect(comment).toContain('likely render noise');
+      expect(comment).toContain('**DOM unchanged, styles not compared**');
+      expect(comment).toContain('could be render noise or a stylesheet-only change');
+      expect(comment).not.toContain('likely render noise');
     });
 
     it('renders "DOM changed" hint with counts when noiseHint is false', () => {
@@ -205,7 +208,7 @@ describe('buildComment', () => {
         ],
       };
       const comment = buildComment(results);
-      expect(comment).not.toContain('**DOM unchanged**');
+      expect(comment).not.toContain('DOM unchanged');
       expect(comment).not.toContain('**DOM changed**');
     });
 
@@ -244,9 +247,35 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
     expect(comment).not.toContain('DOM unchanged');
   });
 
+  it('a DOM change that also restyles elements reads as a DOM change, never "identical DOM"', () => {
+    // A class or style attribute change: the DOM diff sees the attribute and
+    // the style check, which runs whenever DOM data exists, sees a mismatch.
+    const comment = buildComment({
+      ...base,
+      snapshots: [{
+        name: 'cta', status: 'changed', diffPercent: 2.1,
+        dom: {
+          changed: true, noiseHint: false,
+          summary: { added: 0, removed: 0, attributeChanges: 1, textChanges: 0 },
+          styleCheck: 'mismatch', styleChanges: { count: 2, elements: ['main > button.cta', 'main > a.more'] },
+        },
+      }],
+    } as any);
+    // The snapshot's own block; the static footer explains identical-DOM hints in general.
+    const block = comment.slice(comment.indexOf('<details>'), comment.indexOf('</details>'));
+    expect(block).toContain('<code>cta</code>');
+    expect(block).not.toContain('Style-only change');
+    expect(block).not.toContain('identical DOM');
+    expect(block).toContain('> **DOM changed** — 1 attribute change. Computed styles also changed on 2 elements (`button.cta`, `a.more`).');
+  });
+
   // An identical DOM alone cannot tell render noise from a stylesheet-only
-  // change; only a compared style check rules that out. The notes are the
-  // witness HTML report's, so both surfaces say the same thing.
+  // change; only a compared style check rules that out. Three cases when the
+  // pixels differ and the DOM is identical:
+  //   'match'        → likely render noise (still not proof)
+  //   'mismatch'     → a real style-only change (covered above)
+  //   'unavailable' or no styleCheck (older results.json) → styles not
+  //                    compared: render noise or a stylesheet-only change
   const noiseComment = (styleCheck?: 'match' | 'unavailable') =>
     buildComment({
       ...base,
@@ -256,31 +285,48 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
       }],
     } as any);
   const lineStarting = (comment: string, prefix: string) => comment.split('\n').find(l => l.startsWith(prefix));
+  const NOT_COMPARED_LINE =
+    '> **DOM unchanged, styles not compared** — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.';
 
   it('noise hint says the styles were verified when the style check matched', () => {
-    expect(lineStarting(noiseComment('match'), '> **DOM unchanged**')).toBe(
+    const comment = noiseComment('match');
+    expect(lineStarting(comment, '> **DOM unchanged')).toBe(
       '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.',
     );
+    expect(comment).not.toContain('styles not compared');
   });
 
   it('noise hint says the styles were not compared when the style check was unavailable', () => {
-    expect(lineStarting(noiseComment('unavailable'), '> **DOM unchanged**')).toBe(
-      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting). (Style check unavailable — no comparable style digests on both sides.)',
-    );
+    expect(lineStarting(noiseComment('unavailable'), '> **DOM unchanged')).toBe(NOT_COMPARED_LINE);
   });
 
-  it('noise hint from an older results.json (no styleCheck) is unchanged', () => {
-    expect(lineStarting(noiseComment(), '> **DOM unchanged**')).toBe(
-      '> **DOM unchanged** — pixel diff is likely render noise (anti-aliasing, font hinting).',
-    );
+  it('noise hint from an older results.json (no styleCheck) says the styles were not compared', () => {
+    expect(lineStarting(noiseComment(), '> **DOM unchanged')).toBe(NOT_COMPARED_LINE);
   });
 
-  it('footer says an identical DOM rules out a style-only change only when the styles were verified', () => {
-    const footer = lineStarting(noiseComment('match'), '> Pixel-exact comparison');
-    expect(footer).toContain(
-      'An identical DOM points to render noise, and rules out a stylesheet-only change only when the hint also says "Styles verified unchanged".',
+  it.each([['unavailable' as const], [undefined]])(
+    'never calls an identical-DOM diff noise when styles were not compared (styleCheck %s)',
+    (styleCheck) => {
+      const comment = noiseComment(styleCheck);
+      expect(comment).not.toMatch(/likely (render )?noise/i);
+      expect(comment).not.toMatch(/worth a glance|not a block|don.t block|do not block|dismiss/i);
+      expect(comment).not.toContain('Styles verified unchanged.');
+    },
+  );
+
+  it('footer ties render noise to a verified style check and points dynamic content at ignoreSelectors/mask', () => {
+    const footerLine = noiseComment('match').split('\n').find(l => l.includes('[`@testivai/mcp`]'));
+    expect(footerLine).toBeDefined();
+    expect(footerLine).toContain(
+      'An identical DOM points to render noise only when the hint also says "Styles verified unchanged"; without that, a stylesheet-only change is not ruled out.',
     );
-    expect(footer).toContain('[`@testivai/mcp`]');
+    expect(footerLine).toContain(
+      'Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with `ignoreSelectors` or exclude it with `mask`.',
+    );
+    // The comparison is tolerant (per-pixel color threshold), not pixel-exact,
+    // and an identical DOM alone is not evidence of noise.
+    expect(footerLine).not.toContain('Pixel-exact');
+    expect(footerLine).not.toContain('An identical DOM points to render noise,');
   });
 
   it('pageShift renders the look-above guidance', () => {
@@ -317,6 +363,6 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
         dom: { changed: false, noiseHint: true, summary: null },
       }],
     } as any);
-    expect(comment).toContain('DOM unchanged');
+    expect(comment).toContain('DOM unchanged, styles not compared');
   });
 });

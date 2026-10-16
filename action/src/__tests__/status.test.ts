@@ -110,6 +110,18 @@ describe('determineStatus', () => {
       expect(s.state).toBe('success');
     });
 
+    // summary.passed counts snapshots that witness auto-passed through a
+    // configured pass criterion (maxDiffPercent / maxDiffPixels /
+    // shiftTolerance / noiseAutoPass), so a real pixel diff may be among
+    // them: "nothing detected" would be false.
+    it('all-passed summary does not claim nothing was detected', () => {
+      const s = determineStatus(results({}), { failOnDiff: false });
+      expect(s.summary).toBe(
+        'No visual changes need review (diffs within your configured pass criteria count as passed).',
+      );
+      expect(s.summary).not.toMatch(/detected/i);
+    });
+
     it('is neutral for changes when not gating — not a green tick', () => {
       const s = determineStatus(results({ passed: 1, changed: 3 }), { failOnDiff: false });
       expect(s.conclusion).toBe('neutral');

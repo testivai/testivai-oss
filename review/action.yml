@@ -1,0 +1,127 @@
+name: 'TestivAI AI Triage'
+description: >
+  On a pull request with visual changes, Claude triages each changed or new
+  snapshot as a glitch, an intended change, a bug or a possible bug, from the
+  TestivAI report (through @testivai/mcp), the images and the pull request's
+  diff, and posts one comment. Advisory: it never changes the visual check or
+  a baseline. It runs, and uses tokens, only when there is something to triage
+  and a Claude credential is set; enabled: false turns it off.
+author: 'TestivAI'
+
+branding:
+  icon: 'cpu'
+  color: 'purple'
+
+inputs:
+  anthropic-api-key:
+    description: >
+      Anthropic API key (usually secrets.ANTHROPIC_API_KEY). Set this or
+      claude-code-oauth-token; with neither, the triage is skipped with a
+      notice. Pull requests from forks get no secrets, so they are skipped.
+    required: false
+    default: ''
+
+  claude-code-oauth-token:
+    description: >
+      Claude Code OAuth token from `claude setup-token`, to use a Claude
+      subscription instead of an API key (usually
+      secrets.CLAUDE_CODE_OAUTH_TOKEN).
+    required: false
+    default: ''
+
+  github-token:
+    description: >
+      Token for reading the pull request's diff and posting the comment. Needs
+      pull-requests:write. The default comments as github-actions[bot], which
+      is the author the action looks for when it updates its comment. Claude
+      itself always gets the job's own github.token, not this one.
+    required: false
+    default: ${{ github.token }}
+
+  enabled:
+    description: >
+      true (the default) triages every pull request run that has a changed or
+      new snapshot. false turns it off: Claude does not run and no tokens are
+      used. Anything else fails the step.
+    required: false
+    default: 'true'
+
+  allowed-bots:
+    description: >
+      Bots whose pull request runs may be triaged (comma-separated, or '*'),
+      passed to claude-code-action's allowed_bots. claude-code-action refuses
+      a run started by any other bot, so those runs are skipped with a notice.
+      Empty (the default) allows none.
+    required: false
+    default: ''
+
+  model:
+    description: >
+      Claude model to use, for example a smaller one to spend fewer tokens.
+      Empty uses Claude Code's default.
+    required: false
+    default: ''
+
+  max-turns:
+    description: >
+      Most agent turns Claude may take (1 to 200). It caps the tokens one run
+      can spend; a run that hits it posts no triage and does not fail the job.
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    # Decides whether Claude runs at all (enabled, a pull request, something
+    # changed, a credential, not a disallowed bot), and if so writes the PR
+    # diff and the prompt. The report is read where @testivai/mcp reads it:
+    # .testivai/config.json reportDir, else visual-report.
+    - name: Anything to triage?
+      id: prep
+      uses: actions/github-script@v7
+      env:
+        TESTIVAI_REVIEW_LIB: ${{ github.action_path }}/../action/dist/review.cjs
+        ENABLED: ${{ inputs.enabled }}
+        HAS_CREDENTIALS: ${{ inputs.anthropic-api-key != '' || inputs.claude-code-oauth-token != '' }}
+        ALLOWED_BOTS: ${{ inputs.allowed-bots }}
+        MODEL: ${{ inputs.model }}
+        MAX_TURNS: ${{ inputs.max-turns }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const review = require(process.env.TESTIVAI_REVIEW_LIB);
+          await review.prepare({ github, context, core, env: process.env });
+
+    # Read-only tools only (see action/src/review.ts): the TestivAI MCP
+    # server, and reads inside the workspace but not .git or /proc. No approve
+    # tools, commands, edits or network. github_token is the job's own token:
+    # claude-code-action writes it into .git/config, so a token passed to
+    # github-token (a PAT) never reaches Claude's workspace.
+    - name: Claude triages the visual changes
+      id: claude
+      if: steps.prep.outputs.run == 'true'
+      continue-on-error: true
+      uses: anthropics/claude-code-action@v1
+      with:
+        anthropic_api_key: ${{ inputs.anthropic-api-key }}
+        claude_code_oauth_token: ${{ inputs.claude-code-oauth-token }}
+        github_token: ${{ github.token }}
+        allowed_bots: ${{ inputs.allowed-bots }}
+        prompt: ${{ steps.prep.outputs.prompt }}
+        claude_args: ${{ steps.prep.outputs.claude_args }}
+
+    # Posts the triage, or, when Claude failed, replaces an older triage
+    # comment so it never describes an earlier push.
+    - name: Post the triage
+      id: post
+      if: steps.prep.outputs.run == 'true'
+      uses: actions/github-script@v7
+      env:
+        TESTIVAI_REVIEW_LIB: ${{ github.action_path }}/../action/dist/review.cjs
+        OUTCOME: ${{ steps.claude.outcome }}
+        TRIAGE: ${{ steps.claude.outputs.structured_output }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const review = require(process.env.TESTIVAI_REVIEW_LIB);
+          await review.post({ github, context, core, env: process.env });

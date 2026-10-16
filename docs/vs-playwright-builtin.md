@@ -55,10 +55,15 @@ and yours begins.
 TestivAI captures the DOM and an element map alongside the screenshot, so the
 report answers the next question for you:
 
-- **DOM identical, pixels differ** → render noise (font hinting, anti-aliasing),
-  flagged as such instead of demanding review
+- **DOM and computed styles identical, pixels differ** → *likely* render noise
+  (font hinting, anti-aliasing), labeled as such so it is quick to triage. It
+  still reports `changed` unless you enable `noiseAutoPass`
 - **DOM identical, computed styles differ** → a style-only change, with the
-  changed properties listed
+  restyled elements listed
+- **DOM identical, styles not compared** (no element map on one side, e.g. a
+  baseline from a capture whose element-map script was blocked) → *styles not
+  compared*: could be render noise or a stylesheet-only change, so compare the
+  images before approving
 - **DOM differs** → a structural change, with added/removed/attribute/text counts
 - Each diff region is attributed to the **CSS selector** that produced it
 
@@ -127,7 +132,7 @@ we ship the evidence, not the inference.
 | DOM / style diff — *why* it changed | — | Yes |
 | Region → selector attribution | — | Yes |
 | Page-shift detection | — | Yes |
-| Noise vs. real change verdict | — | Yes |
+| Noise vs. real change verdict | — | Yes (DOM diff + computed-style check) |
 | Review-then-approve in a PR | — | Yes (write access verified) |
 | Missing-baseline detection | — | Yes (exit 3 by default) |
 | Shared baselines across frameworks | — | Yes |

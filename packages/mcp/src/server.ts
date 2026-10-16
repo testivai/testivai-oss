@@ -4,8 +4,8 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines } from './lib';
-import { toolMetaFor } from './tool-meta';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments } from './lib';
+import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
 
@@ -183,13 +183,13 @@ server.registerTool(
   }
 );
 
-// A reusable prompt that turns the evidence into a review narrative.
+// A reusable prompt that turns the evidence into a review narrative. Its text
+// lives in tool-meta.ts so tests can read it without starting the server.
 server.registerPrompt(
-  'review-visual-changes',
+  REVIEW_PROMPT.name,
   {
-    title: 'Review visual changes',
-    description:
-      'Walk the latest visual results and produce a human-quality review: what changed, why, and what to do.',
+    title: REVIEW_PROMPT.title,
+    description: REVIEW_PROMPT.description,
   },
   async () => ({
     messages: [
@@ -197,27 +197,41 @@ server.registerPrompt(
         role: 'user' as const,
         content: {
           type: 'text' as const,
-          text: [
-            'Review the latest TestivAI visual regression results in this project:',
-            '',
-            '1. Call get_report for the summary. If nothing changed and nothing is new, say so and stop.',
-            '2. For every changed snapshot, call explain_snapshot(name) and read its layers and guidance.',
-            '   When the evidence is ambiguous, call get_diff(name) and inspect the images.',
-            '3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),',
-            '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
-            '   and whether it is render noise, a style-only change, or a structural change.',
-            '4. End with a recommendation per snapshot: approve, investigate, or ignore-as-noise.',
-            '   Never call approve_snapshot/approve_all yourself unless the human has explicitly',
-            '   confirmed the changes are intended — baseline approval is a human decision.',
-          ].join('\n'),
+          text: REVIEW_PROMPT.text,
         },
       },
     ],
   })
 );
 
+// Glitch, intended change, bug or possible bug for one snapshot or all of
+// them. The arguments are optional; the text quotes them (tool-meta.ts).
+server.registerPrompt(
+  TRIAGE_PROMPT.name,
+  {
+    title: TRIAGE_PROMPT.title,
+    description: TRIAGE_PROMPT.description,
+    argsSchema: {
+      snapshot: z.string().optional().describe(TRIAGE_PROMPT.args.snapshot),
+      intent: z.string().optional().describe(TRIAGE_PROMPT.args.intent),
+    },
+  },
+  async ({ snapshot, intent }) => ({
+    messages: [
+      {
+        role: 'user' as const,
+        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent }) },
+      },
+    ],
+  })
+);
+
 async function main(): Promise<void> {
-  await server.connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  // After connect, which installs the server's handler: see withPromptArguments.
+  const handle = transport.onmessage;
+  transport.onmessage = (message) => handle?.(withPromptArguments(message));
 }
 
 main().catch((err) => {

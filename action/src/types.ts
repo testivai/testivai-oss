@@ -16,11 +16,24 @@ export interface SnapshotDomSignal {
   /** Per-bucket counts; null when changed is false. */
   summary: { added: number; removed: number; attributeChanges: number; textChanges?: number } | null;
   /**
-   * Pixel diff is non-zero but DOM is structurally unchanged — likely
-   * render noise (anti-aliasing, font hinting, sub-pixel layout).
+   * True when the pixels differ, the DOM is structurally unchanged and no
+   * style mismatch was found. It does NOT by itself mean render noise: it is
+   * likely noise (anti-aliasing, font hinting, sub-pixel layout) only when
+   * `styleCheck` is 'match'. With 'unavailable' or no `styleCheck`, the
+   * computed styles were not compared, so a stylesheet-only change is not
+   * ruled out.
    */
   noiseHint: boolean;
-  /** witness 1.4+: 'mismatch' = styles changed with identical DOM (a REAL change). */
+  /**
+   * witness 1.4+: computed-style digest comparison, baseline vs current.
+   *   - 'match': style digests compared and equal; with an identical DOM,
+   *     likely render noise (still not proof).
+   *   - 'mismatch': styles changed; with an identical DOM, a REAL
+   *     style-only change. witness then sets `noiseHint` to false.
+   *   - 'unavailable': no comparable style digests on both sides (e.g. a
+   *     capture without an element map), so styles were not compared.
+   * Absent in results.json from older witness versions: treat as 'unavailable'.
+   */
   styleCheck?: 'match' | 'mismatch' | 'unavailable';
   styleChanges?: { count: number; elements: string[] };
 }

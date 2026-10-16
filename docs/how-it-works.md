@@ -30,8 +30,8 @@ TestivAI integrates with your existing test framework via a single function call
 
 Three things happen per test that calls `witness(...)`:
 
-1. **Capture** — the SDK stabilizes the page (CSS animations/transitions frozen, caret hidden, web fonts awaited — disable with `stabilize: false`), then takes a full-page screenshot via the test framework's native screenshot API and writes it to `.testivai/temp/<name>/screenshot.png`.
-2. **Diff** — at the end of the run, the reporter (or `testivai run` for non-Playwright frameworks) compares each temp capture against `.testivai/baselines/<name>/screenshot.png`.
+1. **Capture** — the SDK stabilizes the page (CSS animations/transitions frozen, caret hidden, web fonts awaited — disable with `stabilize: false`), then takes a screenshot via the test framework's native screenshot API (full-page where the framework supports it; WebdriverIO captures the viewport) and writes it to `.testivai/temp/<name>/screenshot.png`, with the DOM snapshot (`dom.html`) and, from most adapters, the element map (`elements.json`) beside it.
+2. **Diff** — at the end of the run, the Playwright reporter, the WebdriverIO service or `npx testivai report` compares each temp capture against `.testivai/baselines/<name>/screenshot.png`.
 3. **Report** — a self-contained `visual-report/index.html` is generated with a summary table, side-by-side images, and a `results.json` for CI consumption.
 
 ---
@@ -56,13 +56,15 @@ No external Chrome remote-debugging port is needed.
 
 When you wrap your test command with `testivai run "..."`, the CLI:
 
-1. Boots Chrome with `--remote-debugging-port=9222`.
+1. Starts your test command and waits for its Chrome to open the remote debugging port (`--remote-debugging-port=9222` by default).
 2. Connects via Chrome DevTools Protocol (CDP).
 3. Listens for `witness(name)` calls from your test helper file.
 4. Captures the screenshot and metadata for each call.
-5. Writes the same on-disk layout as the Playwright SDK.
+5. Keeps each screenshot in memory, with no DOM snapshot and no element map (so these captures could get at most a pixel diff: no DOM diff, noise hint, style check, selector attribution or page-shift detection). Known gap: it does not yet write them to `.testivai/temp/`, so the report it generates at the end covers only captures already on disk.
 
 Frameworks supported by the `init` wizard: Cypress, Puppeteer, Robot Framework, and others without a dedicated adapter. Playwright, WebdriverIO, Selenium (JS / Python / Java) and Ruby (Capybara) have native adapters and do not use this path.
+
+Element maps (`elements.json`) come from the Playwright JS/TS, WebdriverIO, Selenium (JS / Python / Java) and Ruby adapters. playwright-python, playwright-java and the `testivai witness <url>` crawler capture the screenshot and the DOM without one, so computed styles are not compared for them (`styleCheck: "unavailable"`).
 
 ---
 
@@ -90,7 +92,19 @@ The threshold is configurable:
 }
 ```
 
-`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed, and with `noiseAutoPass` enabled, DOM-identical diffs (the noise hint) within `noiseMaxDiffPercent` pass too. Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
+`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) pass too (it never passes a diff whose styles were not compared or changed); with `shiftTolerance` set, diffs made only of small pure element shifts pass. Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
+
+### When pixels differ and the DOM is identical
+
+The DOM diff alone cannot tell render noise from a stylesheet-only change, so the computed-style check decides what the report says:
+
+| `dom.styleCheck` | Reading |
+|---|---|
+| `"match"` | **Likely render noise** (anti-aliasing, font hinting): the DOM and computed styles are identical. Likely, not proven; worth a glance, not a block. |
+| `"mismatch"` | **Style-only change**: a real change, with the restyled elements in `dom.styleChanges`. |
+| `"unavailable"`, or absent in older results | **Styles not compared**: could be render noise or a stylesheet-only change. No comparable style digests on both sides, so a stylesheet-only change is not ruled out. Compare the images before approving. |
+
+`dom.noiseHint` is `true` in both the first and the last row, so read it together with `dom.styleCheck`.
 
 ---
 
@@ -106,7 +120,7 @@ visual-report/
     └── <name>/
         ├── baseline.png
         ├── current.png
-        └── diff.png    (when status = changed)
+        └── diff.png    (when the PNGs differ: changed or auto-passed)
 ```
 
 `results.json` schema (excerpt):
@@ -115,7 +129,7 @@ visual-report/
 {
   "version": "2.3.0",
   "timestamp": "2026-04-30T...",
-  "summary": { "total": 2, "passed": 0, "changed": 2, "newSnapshots": 0 },
+  "summary": { "total": 2, "passed": 1, "changed": 1, "newSnapshots": 0 },
   "snapshots": [
     {
       "name": "homepage",
@@ -131,13 +145,14 @@ visual-report/
       "name": "hero",
       "status": "passed",
       "diffPercent": 0.3,
+      "dom": { "changed": false, "noiseHint": true, "summary": null, "styleCheck": "match" },
       "autoPassed": "noise"
     }
   ]
 }
 ```
 
-This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.noiseHint` vs `dom.changed` to decide whether a diff needs human attention (see "Eyes for your coding agent" in the README).
+This file is what your CI should fail on. See [CI/CD guide](./guides/ci-cd.md). It is also the contract for AI coding agents: an agent can run the tests, read `results.json`, and use `dom.changed`, `dom.styleCheck` and `dom.noiseHint` to decide whether a diff needs human attention: `dom.changed: true` is a structural change, `styleCheck: "mismatch"` with `dom.changed: false` is a real style-only change, and `noiseHint: true` is likely render noise only when `styleCheck` is `"match"` (with `"unavailable"`, styles were not compared). See "Eyes for your coding agent" in the README.
 
 ---
 

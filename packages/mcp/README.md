@@ -3,22 +3,29 @@
 MCP (Model Context Protocol) server that gives AI coding agents eyes on your
 visual regression results. The agent changes UI code, runs your test suite,
 then uses these tools to find out **what actually changed on screen** — and
-whether it's real or just render noise.
+whether it is a real change, likely render noise, or a case the DOM and style
+signals cannot settle.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed / likely render noise (the DOM and computed styles both match) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary). Snapshots that share an identical signal (style-only change on the same elements, the same page shift, the same kind of noise) are grouped first; it ends with the paths to open the HTML report and each diff image |
+| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed (an auto-passed diff says which configured criterion passed it) / likely render noise (the DOM and computed styles both match; still not proof) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary) / styles not compared (identical DOM, style check unavailable: could be render noise or a stylesheet-only change, so compare the images before approving). Snapshots that share an identical signal (style-only change on the same elements, the same page shift, identical DOM with styles not compared, likely render noise) are grouped first; it ends with the paths to open the HTML report and each diff image |
 | `explain_snapshot` | Layered evidence for one snapshot: pixel regions, element attribution (which selectors shifted vs changed, whole-page shift), the DOM/style signal, and interpretation guidance |
 | `get_report` | The raw `results.json` payload, for agents that parse structured data |
 | `get_diff` (alias `get_snapshot_diff`) | Returns the baseline, current, and diff **images** for one snapshot, downscaled to fit model context, so the agent can see the change |
 | `list_baselines` | Lists the committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed captures to committed baselines (same as `testivai approve`), **only after a human confirms** |
 
-The server also ships a prompt, `review-visual-changes`, that walks the agent
+The server also ships two prompts. `review-visual-changes` walks the agent
 through a full review: summary, `explain_snapshot` per change, diff images when
 the evidence is ambiguous, and a recommendation per snapshot.
+`triage-visual-diff` (optional `snapshot` and `intent` arguments) sorts each
+diff into glitch, intended change, bug or possible bug, with the evidence and
+a next step; a changed DOM or changed computed styles is never a glitch. The
+same rules run in CI with the
+[`testivai/testivai-oss/review@v1`](https://github.com/testivai/testivai-oss/blob/main/docs/github-action.md#ai-triage-of-every-diff)
+action.
 
 ### Approval is a human decision
 

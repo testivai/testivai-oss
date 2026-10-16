@@ -50,6 +50,7 @@ packages/
 
 action/         testivai/testivai-oss@v1     GitHub Action: post PR comment + commit status
 approve/        testivai/testivai-oss/approve@v1  GitHub Action: /testivai approve command handler
+review/         testivai/testivai-oss/review@v1   GitHub Action: Claude triages each diff (advisory; enabled: false turns it off)
 
 examples/       minimal working examples per framework
 docs/           public Markdown documentation
@@ -80,12 +81,13 @@ pnpm release          # publish to npm (CI only — requires NPM_TOKEN)
 ```
 User test
   → witness(page, testInfo, 'name')
-  → @testivai/witness-playwright  captures screenshot + DOM snapshot
+  → @testivai/witness-playwright  captures screenshot + DOM snapshot + element map
   → @testivai/witness BaselineStore
-      first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, metadata.json}
+      first run  → writes .testivai/baselines/<name>/{screenshot.png, dom.html, elements.json, metadata.json}
       later runs → writes .testivai/temp/<name>/...
                    pixel-diffs baseline vs temp
                    DOM-diffs baseline.dom.html vs temp.dom.html
+                   compares element maps: style check, attribution, page shift
   → reporter writes visual-report/results.json + visual-report/index.html
 
 CI — GitHub Actions
@@ -130,8 +132,8 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `src/server.ts` | Registers the tools and the `review-visual-changes` prompt; starts the stdio server on import |
-| `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool) |
+| `src/server.ts` | Registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import |
+| `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool), and the prompt texts; `TRIAGE_PROMPT.rubric()` is shared with the review action |
 | `src/lib.ts` | `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore) |
 
 ### GitHub Action reporter (`action/`)
@@ -142,7 +144,14 @@ CI — GitHub Actions
 | `src/comment.ts` | Builds PR comment markdown |
 | `src/status.ts` | Determines pass/fail commit status |
 | `src/types.ts` | Shared TypeScript interfaces |
-| `dist/index.js` | Bundled output (esbuild) — **must be committed after every src change** |
+| `src/review.ts` | The review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment |
+| `dist/index.js`, `dist/review.cjs` | Bundled output (esbuild) — **must be committed after every src change** |
+
+### GitHub Action AI triage (`review/`)
+
+| File | Responsibility |
+|---|---|
+| `action.yml` | Composite action: prepare → `anthropics/claude-code-action@v1` → post; loads `action/dist/review.cjs` |
 
 ### GitHub Action approver (`approve/`)
 
@@ -161,11 +170,13 @@ CI — GitHub Actions
     <name>/
       screenshot.png             committed reference screenshot
       dom.html                   committed DOM snapshot
+      elements.json              element map (boxes + computed-style digests); optional
       metadata.json              { name, timestamp, viewport, ... }
   temp/                          gitignored — current run artifacts
     <name>/
       screenshot.png
       dom.html
+      elements.json
       metadata.json
 ```
 
@@ -179,7 +190,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 {
   "version": "2.3.0",
   "timestamp": "<ISO>",
-  "summary": { "total": 3, "passed": 0, "changed": 3, "newSnapshots": 0, "missing": 1 },
+  "summary": { "total": 2, "passed": 1, "changed": 1, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
   "snapshots": [
     {
@@ -192,21 +203,39 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
       "baselineApprovedAt": "<ISO>",
       "dom": {
         "changed":   false,
-        "noiseHint": true,
+        "noiseHint": false,
         "summary":   null,
         "styleCheck":   "mismatch",
-        "styleChanges": []
+        "styleChanges": { "count": 1, "elements": [".hero > h1"] }
       },
       "regions":   [{ "x": 10, "y": 20, "width": 100, "height": 40,
+                      "classification": "change",
+                      "elements": [{ "selector": ".hero > h1", "role": "changed" }] },
+                    { "x": 0, "y": 120, "width": 1280, "height": 640,
                       "classification": "shift", "shift": { "dx": 0, "dy": -1 },
-                      "elements": [{ "selector": ".hero > h1", "role": "shifted" }] }],
+                      "elements": [{ "selector": "main", "role": "shifted" }] }],
       "pageShift": { "dy": -1, "belowY": 120, "count": 4 },
-      "masks": [], "maskWarnings": [],
+      "masks": [], "maskWarnings": []
+    },
+    {
+      "name": "footer",
+      "status": "passed",
+      "diffPercent": 0.3,
+      "diffPath":  "images/footer/diff.png",
+      "dom": { "changed": false, "noiseHint": true, "summary": null, "styleCheck": "match" },
       "autoPassed": "noise"
     }
   ]
 }
 ```
+
+When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
+`"match"` → likely render noise (not proof); `"mismatch"` → a real style-only change
+(`noiseHint` is then false); `"unavailable"`, or absent in older results → styles not
+compared, so a stylesheet-only change is not ruled out: never word it as noise.
+`noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case (`noiseHint`
+true AND `styleCheck: "match"`, within `noiseMaxDiffPercent`), and `autoPassed` always
+comes with `status: "passed"`.
 
 Breaking changes to this schema require a major version bump on `@testivai/witness`.
 

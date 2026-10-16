@@ -24,29 +24,35 @@ This page is the contract. Changes here follow semver — the schema bumps a maj
     │   └── <name>/
     │       ├── screenshot.png  # required (PNG bytes)
     │       ├── metadata.json   # required ({ name, createdAt, updatedAt, ... })
-    │       ├── dom.html        # optional — enables the noise-hint signal
+    │       ├── dom.html        # optional — enables the DOM diff and noise hint
+    │       ├── elements.json   # optional — element map: enables the style check, attribution, shift detection
     │       └── .previous/      # snapshot of the baseline before the last approve
     │           ├── screenshot.png
     │           ├── metadata.json
-    │           └── dom.html
+    │           ├── dom.html
+    │           └── elements.json
     └── temp/
         └── <name>/
             ├── screenshot.png  # required
-            └── dom.html        # optional
+            ├── dom.html        # optional
+            └── elements.json   # optional
 ```
 
 ### Adapter responsibilities
 
-A new adapter — JS, Python, or otherwise — needs to do **exactly two things**:
+A new adapter — JS, Python, or otherwise — needs to do **one required thing, and up to two optional ones**:
 
 1. Capture a full-page screenshot and write it to `.testivai/temp/<name>/screenshot.png`.
-2. Optionally capture `document.documentElement.outerHTML` and write it to `.testivai/temp/<name>/dom.html`.
+2. Optionally capture `document.documentElement.outerHTML` and write it to `.testivai/temp/<name>/dom.html`. This enables the DOM diff and the noise hint.
+3. Optionally capture an element map and write it to `.testivai/temp/<name>/elements.json`: a JSON array of `{ path, x, y, width, height, styleHash }`, one entry per collected element, in the screenshot's coordinates (`styleHash` is a digest of the element's computed styles). Generate it with the shared collector (`collectElementMap` in `packages/witness/src/capture/element-map.ts`, which the Python, Java and Ruby packages ship as a generated script) so the paths and digests match what other adapters write against the same baselines.
 
 That's the entire contract for capture. After the test run, the user invokes `npx testivai report` (or the framework adapter triggers it via a lifecycle hook), which:
 
 - Diffs `temp/<name>/` against `baselines/<name>/`
 - Writes `visual-report/results.json` and `visual-report/index.html`
 - The GitHub Action (or any other tool) reads `results.json`
+
+Without `elements.json` on both sides, computed styles are not compared (`styleCheck: "unavailable"`), and there is no selector attribution or page-shift detection. A pixel diff with an identical DOM then reads *styles not compared* — could be render noise or a stylesheet-only change — rather than likely render noise, and `noiseAutoPass` never passes it.
 
 ### `metadata.json` (baseline only)
 
@@ -75,9 +81,9 @@ That's the entire contract for capture. After the test run, the user invokes `np
   "baselinesDir": ".testivai/baselines",  // override baseline storage ({platform} token supported)
   "maxDiffPercent": 0,        // pass diffs at or below this % (autoPassed: "threshold")
   "maxDiffPixels": 100,       // absolute variant; either criterion passing suffices
-  "noiseAutoPass": false,     // auto-pass DOM-identical diffs (autoPassed: "noise")
+  "noiseAutoPass": false,     // auto-pass diffs with identical DOM AND styleCheck "match" (autoPassed: "noise")
   "noiseMaxDiffPercent": 1,   // upper bound (diff %) for noiseAutoPass
-  "shiftTolerance": 0,        // auto-pass pure element shifts ≤ N px/axis (autoPassed: "shift")
+  "shiftTolerance": 0,        // auto-pass pure element shifts ≤ N px/axis, needs element maps (autoPassed: "shift")
   "stabilize": true,          // freeze animations, hide caret, await fonts pre-capture
   "ignoreSelectors": [],      // elements hidden (visibility:hidden) during capture
   "mask": [],                 // areas excluded from the pixel diff; selectors or regions
@@ -101,8 +107,8 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 5,
-    "passed": 1,
-    "changed": 3,
+    "passed": 2,
+    "changed": 2,
     "newSnapshots": 1,
     "missing": 1             // baselines that received no capture this run
   },
@@ -121,7 +127,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
     },
     {
       "name": "checkout-page",
-      "status": "changed",
+      "status": "passed",     // auto-passed: the pixel diff is kept below
       "diffPercent": 0.5,
       "diffCount": 5120,
       "totalPixels": 1024000,
@@ -140,8 +146,26 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "maskWarnings": [],     // mask specs that could not be resolved
       "autoPassed": "noise"   // present only when a pass criterion applied:
                               // "threshold" (maxDiffPercent/maxDiffPixels),
-                              // "noise" (noiseAutoPass), or "shift"
+                              // "noise" (noiseAutoPass: needs noiseHint AND
+                              // styleCheck "match"), or "shift"
                               // (shiftTolerance); status is then "passed"
+    },
+    {
+      "name": "promo-banner",
+      "status": "changed",    // not auto-passed: styles were not compared
+      "diffPercent": 0.4,
+      "diffCount": 4096,
+      "totalPixels": 1024000,
+      "baselinePath": "images/promo-banner/baseline.png",
+      "currentPath":  "images/promo-banner/current.png",
+      "diffPath":     "images/promo-banner/diff.png",
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,    // DOM identical, no style MISMATCH found...
+        "styleCheck": "unavailable" // ...but none compared: render noise or a
+                              // stylesheet-only change, not ruled out
+      }
     },
     {
       "name": "nav-redesign",
@@ -208,25 +232,25 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `missingBaselines` | string[] | optional | names behind `summary.missing`; emitted from schema 2.3.0 |
 | `snapshots[].name` | string | yes | unique within a report |
 | `snapshots[].status` | enum | yes | `passed` &#124; `changed` &#124; `new` |
-| `snapshots[].diffPercent` | number | yes | 0–100. 0 for `passed` and `new`. |
+| `snapshots[].diffPercent` | number | yes | 0–100. 0 for `new` and for a `passed` snapshot with no pixel above `threshold`; an auto-passed snapshot keeps its diff percentage |
 | `snapshots[].diffCount` | number | yes | absolute count of differing pixels |
-| `snapshots[].totalPixels` | number | yes | total pixels compared (0 for `new`) |
+| `snapshots[].totalPixels` | number | yes | total pixels compared (0 for `new`, for a byte-identical `passed` snapshot, and for a `changed` snapshot whose PNG failed to decode) |
 | `snapshots[].baselinePath` | string | optional | relative path under `<reportDir>/`; absent for `new` |
 | `snapshots[].currentPath` | string | optional | relative path under `<reportDir>/` |
-| `snapshots[].diffPath` | string | optional | only present for `changed` |
-| `snapshots[].dom` | object | optional | only present when DOM was captured on both sides for a `changed` snapshot |
+| `snapshots[].diffPath` | string | optional | present whenever the two PNGs differ byte-wise and decode: `changed`, auto-passed, or a `passed` snapshot with no pixel above `threshold`; absent for byte-identical passes, `new`, and a `changed` snapshot whose PNG failed to decode |
+| `snapshots[].dom` | object | optional | only present when DOM was captured on both sides and the PNGs differ byte-wise (`changed`, auto-passed, or `passed` with no pixel above `threshold`) |
 | `snapshots[].dom.changed` | boolean | yes within `dom` | true if structural DOM diff detected |
 | `snapshots[].dom.summary` | object &#124; null | yes within `dom` | null when `changed` is false |
 | `snapshots[].dom.summary.added` / `.removed` / `.attributeChanges` | number | yes within `summary` | structural change counts |
 | `snapshots[].dom.summary.textChanges` | number | optional | visible-text token changes |
-| `snapshots[].dom.noiseHint` | boolean | yes within `dom` | true when pixel diff exists but DOM unchanged **and** no style mismatch was found: either the style digests match (`styleCheck: "match"`) or none were comparable (`styleCheck: "unavailable"`, so styles were not compared) |
-| `snapshots[].dom.styleCheck` | enum | optional | `match` &#124; `mismatch` &#124; `unavailable` — computed-style fingerprint verdict; `unavailable` when the verdict could not be measured — no element map on one or both sides, or no element whose `styleHash` is present on both. An adapter that emits bounds without a `styleHash` gets `unavailable`, never a `match` |
+| `snapshots[].dom.noiseHint` | boolean | yes within `dom` | true when pixel diff exists but DOM unchanged **and** no style mismatch was found: either the style digests match (`styleCheck: "match"`) or none were comparable (`styleCheck: "unavailable"`, so styles were not compared). Read it with `styleCheck`: only `noiseHint` + `match` is likely render noise; `noiseHint` + `unavailable` means a stylesheet-only change is not ruled out |
+| `snapshots[].dom.styleCheck` | enum | optional | `match` &#124; `mismatch` &#124; `unavailable` — computed-style fingerprint verdict; `unavailable` when the verdict could not be measured — no element map on one or both sides, or no element whose `styleHash` is present on both. An adapter that emits bounds without a `styleHash` gets `unavailable`, never a `match`. Absent in results written before the style check existed: treat as `unavailable` |
 | `snapshots[].dom.styleChanges` | object | optional | present on `mismatch`: `{ count, elements[] }` (up to 10 selectors) |
 | `snapshots[].regions` | array | optional | changed-pixel clusters as bounding boxes: `x`, `y`, `width`, `height`, `diffPixels`, `diffPercent`, plus optional `classification` (`shift` &#124; `change`), `shift` (`{ dx, dy }` when classified `shift`), and `elements[]` (`{ selector, role }`, `role` = `shifted` &#124; `changed`, max 3, smallest first). Attribution fields require captured element maps |
 | `snapshots[].pageShift` | object | optional | whole-page uniform displacement: `{ dy, belowY, count }`. Requires element maps on both sides |
 | `snapshots[].masks` | array | optional | masks applied to this comparison, resolved to pixels: `{ x, y, width, height, source }`. Present when non-empty |
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
-| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed` |
+| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs) |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
 
 ### Schema versioning
@@ -260,7 +284,7 @@ def witness(driver, name: str, *, project_root: Path = Path.cwd()):
         pass  # noise hint just won't be available
 ```
 
-The user then runs `npx testivai report` (or wires it into a pytest hook) and the existing OSS tooling does the rest — diff, report, GitHub Action. No JavaScript code in the adapter; just disk I/O conforming to the layout above.
+The user then runs `npx testivai report` (or wires it into a pytest hook) and the existing OSS tooling does the rest — diff, report, GitHub Action. No JavaScript code in the adapter; just disk I/O conforming to the layout above. This sketch writes no `elements.json`, so its identical-DOM diffs read *styles not compared*; inject the shared element-map collector (step 3 above) to get the style check.
 
 ## Stability promise
 

@@ -52,7 +52,13 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 - **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
-The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison: when pixels differ but the DOM is structurally identical and no computed-style change was found, the comment flags the change as likely render noise. It adds "Styles verified unchanged" only when the computed styles were compared; without that (the style check was unavailable), a stylesheet-only change is not ruled out. When only the computed styles changed, it flags a style-only change, which is real. When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
+The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison. The action does not filter on the hint: every snapshot with status `changed` is listed with its approve command. A diff becomes `passed` before it reaches the action only through witness pass criteria you configure (`maxDiffPercent`, `maxDiffPixels`, `shiftTolerance`, or `noiseAutoPass`, which passes an identical-DOM diff only when `styleCheck` is "match"). When pixels differ but the DOM is structurally identical, the computed-style check decides what the comment says:
+
+- **Styles compared and unchanged** (`styleCheck: "match"`): likely render noise (anti-aliasing, font hinting), still not proof. The line ends "Styles verified unchanged".
+- **Styles changed** (`styleCheck: "mismatch"`): a style-only change, which is real, not noise.
+- **Styles not compared** (`styleCheck: "unavailable"`, or a `results.json` from before the style check): the comment says "DOM unchanged, styles not compared". It could be render noise or a stylesheet-only change, so compare the images before approving. This happens when there are no comparable style digests on both sides, for example when a capture has no element map.
+
+When the DOM also differs, the comment summarises added / removed / attribute-change counts so reviewers can decide whether the change is intentional.
 
 ## Example output
 
@@ -68,6 +74,14 @@ The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` 
 > DOM unchanged — pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged.
 
 /testivai approve checkout-page
+</details>
+
+<details>
+<summary>pricing — 0.3% different</summary>
+
+> DOM unchanged, styles not compared — could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.
+
+/testivai approve pricing
 </details>
 
 <details>

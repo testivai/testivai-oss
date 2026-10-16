@@ -85,8 +85,8 @@ other adapter reads.
 | File | Powers |
 |---|---|
 | `screenshot.png` | The pixel diff and heatmap |
-| `dom.html` | Noise hint, text-change detection |
-| `elements.json` | Region→selector attribution, shift detection, style checks |
+| `dom.html` | DOM diff, noise hint, text-change detection |
+| `elements.json` | Region→selector attribution, shift detection, style checks (an identical-DOM diff is *likely render noise* only when these styles match) |
 
 Full-page capture uses Chromium's CDP `captureBeyondViewport` when the driver
 exposes `execute_cdp`, Firefox's native full-page screenshot when available, and
@@ -98,7 +98,9 @@ against the same baselines.
 
 DOM and element-map capture are both best-effort: if a strict
 Content-Security-Policy blocks the injected script, the screenshot still lands
-and the report falls back to the layers it does have.
+and the report falls back to the layers it does have. Without the element map,
+computed styles are not compared, so an identical-DOM diff reads *styles not
+compared* (render noise or a stylesheet-only change), never likely noise.
 
 ## Driver notes
 

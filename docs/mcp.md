@@ -60,8 +60,10 @@ With the server added, a visual review happens in the conversation:
 2. Type `/testivai:review-visual-changes` (`/mcp__testivai__review-visual-changes`
    also works), or just ask *"what changed visually?"*. Claude reads the
    verdicts, calls `explain_snapshot` for each change, looks at the diff images
-   with `get_diff` when the evidence is ambiguous, and recommends approve,
-   investigate, or ignore-as-noise for each snapshot.
+   with `get_diff` when the evidence is ambiguous (always when the styles were
+   not compared), and recommends approve, investigate, or likely noise for
+   each snapshot. "Likely noise" is only for an identical DOM whose computed
+   styles were compared and match.
 3. To accept a change, say so: *"approve home"*. Claude calls
    `approve_snapshot`, and Claude Code shows its permission prompt for that
    call. Answer **Yes** to approve it, or **No** to keep the current baseline.
@@ -112,9 +114,51 @@ diff image, and each new snapshot's capture.
 | `list_baselines` | Committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed snapshots to baselines — **only after a human says so** |
 
-There's also a prompt, **`review-visual-changes`**, that walks a client through a
+There are also two prompts. **`review-visual-changes`** walks a client through a
 full review: summary → `explain_snapshot` per change → diff images when
-ambiguous → a per-snapshot recommendation.
+ambiguous → a per-snapshot recommendation. **`triage-visual-diff`** sorts each
+diff into glitch, intended change, bug or possible bug ([below](#triage-a-diff-glitch-intended-change-bug-or-possible-bug)).
+
+## Triage a diff: glitch, intended change, bug or possible bug
+
+A pixel diff alone can't tell a rendering glitch from a regression. The
+`triage-visual-diff` prompt has the model decide, per snapshot, from the
+signals, the images and what the change was meant to do:
+
+| Verdict | Meaning |
+|---|---|
+| **glitch** | The page did not change: render noise, a bad capture (the baseline's or the current one), or a font or other resource that failed to load |
+| **intended change** | The page changed, and it matches what the change under test was meant to do |
+| **bug** | The page changed in a way the change was not meant to make, or the result looks broken |
+| **possible bug** | The page really changed, but the evidence can't settle whether that was meant, or it is incomplete (styles not compared, no DOM data); the model says what to check |
+
+In Claude Code, type `/testivai:triage-visual-diff` (or
+`/mcp__testivai__triage-visual-diff`). Both arguments are optional:
+
+- `snapshot`: triage one snapshot; empty triages every changed one.
+- `intent`: what the change was meant to do, for example the pull request
+  description. Empty has the model look for it in the conversation, the PR or
+  the branch's diff; with no statement of intent anywhere it calls a real
+  change a possible bug rather than guess.
+
+The rules it gives the model:
+
+- A changed DOM or changed computed styles (`styleCheck: "mismatch"`) is never
+  a glitch.
+- An identical DOM whose styles were not compared (`styleCheck: "unavailable"`
+  or missing) is not called a glitch from the DOM alone; the images decide.
+- Render noise is small and scattered. A larger or local diff with an
+  identical DOM and matching styles is a bad capture or a change the style
+  check cannot see (it does not cover size, overflow, position, transform and
+  some other properties, or images). The model calls it a glitch only when
+  nothing the change touched could have caused it, and then says which image
+  is wrong. A bad baseline has to be replaced from a capture two runs agree
+  on.
+- It reports a verdict, confidence, evidence and next step per snapshot, and
+  never calls `approve_snapshot` or `approve_all`.
+
+Other MCP clients list it as a prompt too. To run the same triage on every
+pull request in CI, use the [`testivai/testivai-oss/review@v1` action](./github-action.md#ai-triage-of-every-diff).
 
 ## What `explain_snapshot` actually returns
 
@@ -224,7 +268,8 @@ order (a snapshot joins at most one group):
 |---|---|---|
 | Style-only change | identical DOM and **exactly the same set of restyled elements** | whether the new style values are the same: the grouping is on which elements changed style |
 | Page shift | the same displacement: identical `dy` and `belowY` | whether the same content caused it |
-| Render noise | the noise hint, split by whether the computed styles were compared (`styleCheck: "match"`) or not | anything the DOM and style signals don't cover |
+| Styles not compared | identical DOM, styles not compared (`styleCheck: "unavailable"`, or no style check in older results; the two are grouped apart). Labelled *render noise or a stylesheet-only change, not ruled out*, never labelled noise | which of the two it is: compare the images |
+| Likely render noise | identical DOM and the computed styles compared and identical (`styleCheck: "match"`) | anything the DOM and style signals don't cover |
 
 It never groups structural DOM changes, snapshots without DOM data, or
 style-only changes with more than 10 restyled elements (witness lists only
@@ -256,7 +301,7 @@ Approving a baseline rewrites the definition of "correct," so an agent that
 approves its own work can launder a regression into the new baseline. The
 guardrails are in the wording the model actually reads: both tool descriptions
 say to invoke them only after a reviewer has confirmed, the
-`review-visual-changes` prompt repeats it, and every `get_visual_results`
+`review-visual-changes` and `triage-visual-diff` prompts repeat it, and every `get_visual_results`
 response ends with the same instruction.
 
 Human-shaped approval paths stay available either way: `npx testivai approve`
@@ -272,8 +317,9 @@ If your agent isn't MCP-capable, paste into `AGENTS.md` / `CLAUDE.md` /
 ## Visual verification
 After changing UI code, run the visual tests, then read visual-report/results.json:
 - status "changed" + dom.changed true → real structural change; compare against intent
-- status "changed" + dom.styleCheck "mismatch" → style-only change; real, not noise
-- status "changed" + dom.noiseHint true → likely render noise; mention, don't block
+- status "changed" + dom.changed false + dom.styleCheck "mismatch" → style-only change; real, not noise
+- status "changed" + dom.noiseHint true + dom.styleCheck "match" → likely render noise; mention, don't block
+- status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
 - status "new" → no baseline yet; tell the human
 Never run `testivai approve` yourself — approval is a human decision.
 ```
