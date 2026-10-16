@@ -9,14 +9,18 @@
  *           the domain to log in with as step outputs.
  *   verify  After `mcp-publisher publish`: is the version listed, under this
  *           repository? Warns when it is not the latest.
+ *   key-hex Prints MCP_PRIVATE_KEY as the hex mcp-publisher logs in with,
+ *           whichever form it was pasted in (see privateKeyHex).
  *
  * Publishing was a manual step before this, and the listing stayed at 0.5.7,
  * under the repository's old owner, while npm moved on to 0.7.0.
  *
  * Usage:
  *   node scripts/mcp-registry.js check|verify [packageDir]   (default: packages/mcp)
+ *   node scripts/mcp-registry.js key-hex
  */
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -124,10 +128,62 @@ async function verify({ pkgDir, fetch, sleep, attempts = 6, intervalMs = 10000 }
   }
 }
 
-/** The CLI, with its effects passed in. Resolves to the exit code. */
-async function main(argv, { env, fetch, sleep, log }) {
+const KEY_FORMS =
+  'use the key.pem file `openssl genpkey -algorithm Ed25519` wrote, its base64 line, or the 64 hex characters of the key';
+
+/**
+ * The Ed25519 private key as mcp-publisher takes it (64 hex characters, the
+ * 32-byte seed), from MCP_PRIVATE_KEY as people paste it: those hex
+ * characters (also in the colon-separated layout `openssl pkey -text`
+ * prints), the key.pem file, or the file's base64 line alone. The first runs
+ * failed on a secret holding the file, then on one holding its base64 line.
+ * Errors never repeat the value.
+ */
+function privateKeyHex(value) {
+  const text = (value || '').trim();
+  if (!text) {
+    throw new Error(
+      'MCP_PRIVATE_KEY is empty: add it as a secret on the mcp-registry-publish environment (CONTRIBUTING.md, "MCP Registry listing")',
+    );
+  }
+  const hex = text.replace(/[\s:]/g, '');
+  if (/^[0-9a-f]{64}$/i.test(hex)) return hex.toLowerCase();
+
+  // The PEM armour, and newlines however they were pasted, leave the base64
+  // of the PKCS#8 DER.
+  const body = text.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/\\n|\s/g, '');
+  let key = null;
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(body)) {
+    try {
+      key = crypto.createPrivateKey({ key: Buffer.from(body, 'base64'), format: 'der', type: 'pkcs8' });
+    } catch {
+      key = null;
+    }
+  }
+  if (!key) throw new Error(`MCP_PRIVATE_KEY is not an Ed25519 private key: ${KEY_FORMS}`);
+  if (key.asymmetricKeyType !== 'ed25519') {
+    throw new Error(`MCP_PRIVATE_KEY is an ${key.asymmetricKeyType} key; the registry login needs an Ed25519 key`);
+  }
+  return Buffer.from(key.export({ format: 'jwk' }).d, 'base64url').toString('hex');
+}
+
+/**
+ * The CLI, with its effects passed in. Resolves to the exit code. `err` is
+ * stderr: key-hex's stdout is the key, which the workflow captures, so its
+ * errors must not go there.
+ */
+async function main(argv, { env, fetch, sleep, log, err = log }) {
   const [command, dir] = argv;
   const pkgDir = path.resolve(dir || path.join(__dirname, '..', 'packages', 'mcp'));
+  if (command === 'key-hex') {
+    try {
+      log(privateKeyHex(env.MCP_PRIVATE_KEY));
+      return 0;
+    } catch (e) {
+      err(`::error::${e.message}`);
+      return 1;
+    }
+  }
   try {
     if (command === 'check') {
       const result = await check({ pkgDir, fetch, sleep });
@@ -149,14 +205,14 @@ async function main(argv, { env, fetch, sleep, log }) {
       }
       return 0;
     }
-    throw new Error(`unknown command "${command}"; use check or verify`);
-  } catch (err) {
-    log(`::error::${err.message}`);
+    throw new Error(`unknown command "${command}"; use check, verify or key-hex`);
+  } catch (e) {
+    log(`::error::${e.message}`);
     return 1;
   }
 }
 
-module.exports = { REGISTRY_URL, NPM_URL, domainFor, readListing, check, verify, main };
+module.exports = { REGISTRY_URL, NPM_URL, domainFor, readListing, check, verify, privateKeyHex, main };
 
 if (require.main === module) {
   main(process.argv.slice(2), {
@@ -164,6 +220,7 @@ if (require.main === module) {
     fetch: globalThis.fetch,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log: (line) => console.log(line),
+    err: (line) => console.error(line),
   }).then((code) => {
     process.exitCode = code;
   });
