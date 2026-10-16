@@ -1,11 +1,14 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.testiv/mcp",
+  "title": "TestivAI",
   "description": "Local-first visual regression for AI agents: verdicts, diff images, explain_snapshot. No API key.",
   "repository": {
     "url": "https://github.com/testivai/testivai-oss",
-    "source": "github"
+    "source": "github",
+    "subfolder": "packages/mcp"
   },
+  "websiteUrl": "https://github.com/testivai/testivai-oss/tree/main/packages/mcp#readme",
   "version": "0.7.0",
   "packages": [
     {

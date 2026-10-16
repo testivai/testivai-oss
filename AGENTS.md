@@ -258,6 +258,7 @@ Exit codes (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 changed /
 contributor adds changeset → pnpm changeset
 PR merges → CI opens "Version Packages" PR automatically
 Version PR merges → CI publishes to npm with provenance
+@testivai/mcp published → CI lists packages/mcp/server.json in the MCP Registry (mcp-registry.yml)
 ```
 
 Independent versioning per package. Internal deps cascade at `patch` level.

@@ -76,6 +76,26 @@ When you bump `@testivai/witness` (the core), the adapter packages (`witness-pla
 
 A maintainer can also run the workflow manually via the **Actions** tab if needed (escape hatch for hotfixes).
 
+### MCP Registry listing
+
+`@testivai/mcp` is listed in the official [MCP Registry](https://registry.modelcontextprotocol.io) as `ai.testiv/mcp`, from `packages/mcp/server.json`. Registry versions are immutable, so each npm release needs its own listing: when a release publishes `@testivai/mcp`, `release.yml` runs `.github/workflows/mcp-registry.yml`, which publishes `server.json` with `mcp-publisher` and checks the result. `pnpm version-packages` keeps the versions in `server.json` on the `package.json` version, so there is nothing to edit by hand.
+
+To list a version that is on npm but not in the registry (a release from before this workflow, or one whose listing failed), run **MCP Registry** from the Actions tab on `main`. It publishes nothing when the registry already has the version.
+
+One-time setup, by a maintainer:
+
+1. The name `ai.testiv/mcp` needs proof of owning `testiv.ai`: the `testiv.ai` DNS TXT record holds an Ed25519 public key (`v=MCPv1; k=ed25519; p=…`), and the workflow signs in with the matching private key, as 64 hex characters. If that key is lost, make a new pair and replace the TXT record ([registry guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx)):
+
+   ```bash
+   openssl genpkey -algorithm Ed25519 -out key.pem
+   echo "testiv.ai. IN TXT \"v=MCPv1; k=ed25519; p=$(openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | base64)\""
+   openssl pkey -in key.pem -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n'   # the private key, hex
+   ```
+
+2. That key can publish any server under `ai.testiv/*`. In **Settings → Environments**, create the environment `mcp-registry-publish`, limit its deployment branches to `main`, and add the hex private key there as the secret `MCP_PRIVATE_KEY`, not as a repository secret. A required reviewer on the environment makes each publish wait for approval.
+
+Without the secret, the workflow fails at the login step and says what is missing.
+
 ## Code Style
 
 - TypeScript everywhere

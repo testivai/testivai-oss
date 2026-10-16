@@ -9,8 +9,8 @@
  * lands in the same Version PR as the package.json change.
  *
  * Only the two version fields are rewritten; everything else stays as
- * authored. Publishing the listing to the registry (`mcp-publisher`) is a
- * separate step and is not done here.
+ * authored. Publishing the listing to the registry is not done here:
+ * .github/workflows/mcp-registry.yml does that after the npm release.
  *
  * Usage:
  *   node scripts/sync-mcp-server-json.js [packageDir]   (default: packages/mcp)
