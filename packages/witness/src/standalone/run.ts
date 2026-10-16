@@ -182,40 +182,91 @@ const FRESH_FRAME_SCRIPT = `new Promise((resolve) => {
  * viewport (a collapsed 100vh hero, narrow-viewport media rules), so
  * identical pages flipped between two renders from run to run. A forced
  * layout alone does not prevent this; a rendered frame does.
+ *
+ * Returns whether two frames were rendered: false when the in-page wait
+ * timed out, or failed because the page navigated.
  */
-async function waitForFreshFrame(client: any): Promise<void> {
+async function waitForFreshFrame(client: any): Promise<boolean> {
   try {
-    await client.Runtime.evaluate({ expression: FRESH_FRAME_SCRIPT, awaitPromise: true, returnByValue: true });
+    const result = await client.Runtime.evaluate({
+      expression: FRESH_FRAME_SCRIPT,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    return result?.result?.value === true;
   } catch {
-    // best-effort: the capture still proceeds if the page navigated or the wait failed
+    return false;
   }
+}
+
+/**
+ * Wait for a fresh frame, retrying once when none arrived in time (a loaded
+ * machine can stall a frame past the in-page timeout). If neither attempt
+ * sees one, the capture still proceeds: best-effort, never blocking.
+ */
+async function settleFrame(client: any): Promise<void> {
+  if (await waitForFreshFrame(client)) return;
+  logger.debug('standalone capture: no fresh frame within the wait; waiting once more');
+  if (await waitForFreshFrame(client)) return;
+  logger.debug('standalone capture: no fresh frame after a retry; capturing anyway, the screenshot may be stale');
+}
+
+/**
+ * The most captures of one page while waiting for two in a row to match.
+ * Every stale-capture pattern measured settles within four (stale, good,
+ * good / good, stale, good, good); a page that never stops animating costs
+ * four captures, not an endless loop.
+ */
+const MAX_CAPTURES = 4;
+
+async function screenshot(client: any, width: number, height: number): Promise<string> {
+  const shot = await client.Page.captureScreenshot({
+    format: 'png',
+    captureBeyondViewport: true,
+    clip: { x: 0, y: 0, width, height, scale: 1 },
+  });
+  return shot.data;
 }
 
 /** Full-page screenshot via layout metrics (same technique as the Playwright adapter's CDP path). Exported for testing. */
 export async function captureFullPage(client: any): Promise<Buffer> {
-  await waitForFreshFrame(client);
+  await settleFrame(client);
 
   // Freshly-launched Chrome can report zero-size content before its first
   // real layout — poll briefly until metrics are usable.
   let width = 0;
   let height = 0;
+  let polled = false;
   const deadline = Date.now() + 5000;
   for (;;) {
     const metrics = await client.Page.getLayoutMetrics();
     width = Math.ceil(metrics.cssContentSize?.width ?? metrics.contentSize.width);
     height = Math.ceil(metrics.cssContentSize?.height ?? metrics.contentSize.height);
     if ((width > 0 && height > 0) || Date.now() >= deadline) break;
+    polled = true;
     await new Promise((r) => setTimeout(r, 200));
   }
   if (width <= 0 || height <= 0) {
     throw new Error(`page reported unusable content size ${width}x${height}`);
   }
-  const shot = await client.Page.captureScreenshot({
-    format: 'png',
-    captureBeyondViewport: true,
-    clip: { x: 0, y: 0, width, height, scale: 1 },
-  });
-  return Buffer.from(shot.data, 'base64');
+  // The frame waited for above predates the layout the poll waited for, so
+  // it may not show it: wait for a frame rendered after that layout.
+  if (polled) await settleFrame(client);
+
+  // Even after two fresh frames, Page.captureScreenshot now and then returns
+  // an older frame: the layout from before the viewport override, or an
+  // entry animation mid-way. Measured, it never returned the same stale
+  // pixels twice in a row, so capture until two captures in a row match.
+  let previous = await screenshot(client, width, height);
+  for (let captures = 1; captures < MAX_CAPTURES; captures++) {
+    await settleFrame(client);
+    const current = await screenshot(client, width, height);
+    if (current === previous) return Buffer.from(current, 'base64');
+    logger.debug('standalone capture: two captures in a row differed; capturing again');
+    previous = current;
+  }
+  logger.debug(`standalone capture: no two captures in a row matched in ${MAX_CAPTURES}; keeping the last`);
+  return Buffer.from(previous, 'base64');
 }
 
 export async function runStandaloneWitness(
