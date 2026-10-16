@@ -78,7 +78,7 @@ runs:
     # .testivai/config.json reportDir, else visual-report.
     - name: Anything to triage?
       id: prep
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       env:
         TESTIVAI_REVIEW_LIB: ${{ github.action_path }}/../action/dist/review.cjs
         ENABLED: ${{ inputs.enabled }}
@@ -115,7 +115,7 @@ runs:
     - name: Post the triage
       id: post
       if: steps.prep.outputs.run == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       env:
         TESTIVAI_REVIEW_LIB: ${{ github.action_path }}/../action/dist/review.cjs
         OUTCOME: ${{ steps.claude.outcome }}
