@@ -108,6 +108,7 @@ CI (GitHub Actions):
 - Changeset files live in `.changeset/*.md`
 - On merge to main, the release workflow opens a "Version Packages" PR automatically
 - Merging the Version PR triggers `pnpm release` (publish to npm with provenance)
+- When that publishes `@testivai/mcp`, `release.yml` calls `.github/workflows/mcp-registry.yml`, which publishes `packages/mcp/server.json` to the MCP Registry as `ai.testiv/mcp` (decisions in `scripts/mcp-registry.js`; setup in CONTRIBUTING.md, "MCP Registry listing")
 - Independent versioning: each package has its own version; `updateInternalDependencies: "patch"` cascades
 
 ## Action versioning

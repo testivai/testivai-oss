@@ -19,6 +19,37 @@ describe('server.json (MCP registry listing)', () => {
     expect(server.packages[0].identifier).toBe(pkg.name);
     expect(server.packages[0].version).toBe(pkg.version);
   });
+
+  // The registry accepts a version only when the npm package of that version
+  // names this server in its mcpName field.
+  it('name is the package.json mcpName', () => {
+    expect(server.name).toBe(pkg.mcpName);
+  });
+
+  // The 2025-09-29 schema is deprecated; `mcp-publisher validate` warns on it.
+  it('uses the current server.json schema', () => {
+    expect(server.$schema).toBe('https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json');
+  });
+
+  // Listings published before the repository moved to the testivai org
+  // pointed at the old owner, and a monorepo link without a subfolder lands
+  // on the repository root instead of this package.
+  it('points at the repository and folder package.json names', () => {
+    const url = pkg.repository.url.replace(/^git\+/, '').replace(/\.git$/, '');
+    expect(server.repository).toEqual({ url, source: 'github', subfolder: pkg.repository.directory });
+  });
+
+  it('links the package homepage as its website', () => {
+    expect(server.websiteUrl).toBe(pkg.homepage);
+  });
+
+  it('has a display title, and title and description within the schema limits', () => {
+    expect(server.title).toBe('TestivAI');
+    for (const field of ['title', 'description']) {
+      expect(server[field].length).toBeGreaterThan(0);
+      expect(server[field].length).toBeLessThanOrEqual(100);
+    }
+  });
 });
 
 // The release flow keeps the two in step: `pnpm version-packages` (what

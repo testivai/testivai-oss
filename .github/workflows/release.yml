@@ -137,6 +137,17 @@ jobs:
             echo "::notice::No pending changesets, nothing to release."
           fi
 
+  # Registry versions are immutable, so every @testivai/mcp release needs its
+  # own MCP Registry listing. mcp-registry.yml waits for npm to serve the new
+  # version, since the registry checks its mcpName there.
+  mcp-registry:
+    name: MCP Registry listing
+    needs: release
+    if: needs.release.outputs.published == 'true' && contains(needs.release.outputs.publishedPackages, '"@testivai/mcp"')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mcp-registry.yml
+
   # A release is only real if a stranger can install it.
   #
   # Every other CI job installs from the pnpm workspace, which by construction
