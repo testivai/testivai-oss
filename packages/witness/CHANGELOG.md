@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.2.0
+
+### Minor Changes
+
+- 23c126e: A diff with an identical DOM and matching computed styles is called likely render noise only when it is also small and scattered. The style digest covers a fixed list of properties, so a real change to size, overflow, position, transform, text decoration, filters, pseudo-elements or an image leaves the DOM identical and the styles matching, and so does a bad capture. Render noise is scattered; those are not.
+
+  - **`noiseAutoPass` no longer passes a diff concentrated in one area.** When every diff region fits in a box covering at most a third of the page, the snapshot stays `changed` for a human, whatever `noiseMaxDiffPercent` allows. Scattered diffs pass as before, up to `noiseMaxDiffPercent`. Measured on real runs: a `max-height`/`overflow` bug that clipped one product card (0.03% of pixels, 3 regions in 0.8% of the page), a capture whose card text did not paint, and a baseline with a shifted band no longer auto-pass; text-rendering noise spread over the page (20 regions over 38% of it) still does.
+  - **The HTML report has its own verdict for these diffs.** "Diff concentrated in one area" names the regions and their box, and says it is a bad capture or a change the style check does not cover. "Large diff" covers a spread-out diff over 1% of pixels. "Likely render noise" now also says the diff is small and scattered.
+  - **New exports from `@testivai/witness/report`:** `diffShape(result)` reads that shape from `diffPercent`, `totalPixels` and `regions` (with `describeRegions`, `NOISE_MAX_DIFF_PERCENT`, `CONCENTRATED_MAX_PAGE_SHARE` and `STYLE_CHECK_DOES_NOT_COVER`), so `@testivai/mcp` and the GitHub Action apply the same rule.
+
+  Known limit: a change to a class that repeats down a long page spreads its regions as widely as text-rendering noise, so a small one can still read as scattered.
+
+  `results.json` is unchanged: `dom.noiseHint` still means "DOM identical and no style mismatch found". The shape is read from fields results.json already has, so older results read the same way.
+
+- 34d7304: An identical DOM is no longer called likely render noise unless the computed styles were compared and matched.
+
+  - **`noiseAutoPass` now requires a style match.** It passes a diff only when the DOM is identical **and** `dom.styleCheck` is `"match"` (still within `noiseMaxDiffPercent`). A snapshot whose styles were not compared (`"unavailable"`) stays `changed` for a human, so a stylesheet-only change can no longer auto-pass silently. This matters for captures with a DOM but no element map: the standalone crawler (`testivai witness <url>`), playwright-python and playwright-java. The `@testivai/witness-playwright`, `-webdriverio` and `-selenium` adapters, Selenium for Python and Java, and the Ruby adapter record styles and behave as before, as long as the baseline has an element map too: a baseline approved before its adapter recorded one (or captured with the element map turned off) has no style data, so its snapshots now stay `changed` until the baseline is re-approved. The `testivai run` sidecar captures no DOM, so it never had a noise hint and is unaffected.
+  - **The HTML report has a third verdict, "Styles not compared".** It means the DOM is identical but the computed styles were not compared, so it could be render noise or a stylesheet-only change: compare the images before approving. Results written before the style check existed (no `styleCheck`) read the same way. The likely-noise verdict and badge now appear only when the styles matched, and say so.
+  - A DOM change that also restyles elements (for example a `class` attribute change) now reads as a structural change that names the restyled elements, instead of "style-only change … identical DOM".
+  - The report sidebar, the auto-pass note and the config docs say what is true: captures are stabilized by default, other dynamic content needs `ignoreSelectors`/`mask`, and noise is labelled, not removed.
+
+  `results.json` is unchanged: `dom.noiseHint` still means "DOM identical and no style mismatch found"; read it together with `dom.styleCheck`.
+
+### Patch Changes
+
+- b3fb0e6: Standalone captures (`testivai witness <url>`) no longer report an unchanged page as changed now and then. Even after the page had rendered fresh frames, Chrome occasionally returned an older frame for the full-page screenshot: the layout from before the capture viewport was applied (narrow-viewport styles, a collapsed `min-height: 100vh` hero), or an entry animation part-way through. Each page is now captured until two captures in a row match, up to four captures, so a stale frame is caught and replaced. A page whose captures always match costs one extra screenshot.
+
+  The wait for a fresh frame before capturing is also retried once when no frame arrives within a second, and runs again when a freshly launched Chrome needed its layout polled before it reported a usable page size.
+
 ## 2.1.1
 
 ### Patch Changes
