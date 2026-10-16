@@ -84,7 +84,7 @@ async function check({ pkgDir, fetch, sleep, attempts = defaults.attempts, inter
   }
 
   // The same request the registry makes to check ownership.
-  const url = `${NPM_URL}/${identifier.replace('/', '%2F')}/${version}`;
+  const url = `${NPM_URL}/${identifier.replaceAll('/', '%2F')}/${version}`;
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(url, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } });
     if (res.status === 200) {
