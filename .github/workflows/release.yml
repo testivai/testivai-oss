@@ -251,6 +251,9 @@ jobs:
             TESTIVAI_CHROME_PATH="$(command -v google-chrome || command -v chromium-browser)" \
             npx testivai witness http://localhost:3001 --pages "/"
           test -f visual-report/results.json
+          # The capture ran as root, so its output is root-owned: hand it back,
+          # or the next step's rm -rf fails with "Permission denied".
+          sudo chown -R "$(id -u):$(id -g)" visual-report .testivai
 
       - name: Playwright adapter captures through the reporter
         working-directory: ${{ runner.temp }}/smoke
