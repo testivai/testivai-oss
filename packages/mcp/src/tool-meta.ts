@@ -97,7 +97,7 @@ export const REVIEW_PROMPT = {
     'Review the latest TestivAI visual regression results in this project:',
     '',
     '1. Call get_report for the summary. If nothing changed, nothing is new and no baseline is missing (missingBaselines), say so and stop.',
-    '2. For every changed snapshot, call explain_snapshot(name) and read its layers and guidance.',
+    '2. For every changed snapshot and every missing baseline, call explain_snapshot(name) and read its layers and guidance.',
     '   When the evidence is ambiguous, call get_diff(name) and inspect the images.',
     '3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),',
     '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
@@ -114,13 +114,28 @@ export const REVIEW_PROMPT = {
     '     could be render noise or a stylesheet-only change, so call get_diff(name)',
     '     and compare the images; do not call it noise.',
     '4. End with a recommendation per snapshot: approve (once the human confirms), investigate,',
-    '   or likely noise (mention it, do not block on it; only for the likely-render-noise case).',
+    '   or likely noise (mention it, do not block on it; only for the likely-render-noise case);',
+    '   for a missing baseline: delete its baseline directory once the human confirms the removal',
+    '   was intended, otherwise investigate (approving does nothing).',
     '   Never call approve_snapshot/approve_all yourself unless the human has explicitly',
     '   confirmed the changes are intended — baseline approval is a human decision.',
   ].join('\n'),
 };
 
 /** One line of prompt text per argument line, quoted, so an argument cannot read as instructions. */
+/**
+ * What to recommend per verdict. The removal command for a missing baseline
+ * names `baselinesDir` (the project's own, `{platform}` resolved), because a
+ * copied default path fails where baselines live elsewhere.
+ */
+function nextStepsFor(baselinesDir = '.testivai/baselines'): string {
+  const dir = baselinesDir.replace(/[`\r\n]/g, '');
+  return (
+    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; ' +
+    `for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`
+  );
+}
+
 const quoteLines = (value: string): string =>
   value
     .trim()
@@ -145,10 +160,10 @@ export const TRIAGE_PROMPT = {
     snapshot: 'Snapshot or missing baseline to triage. Leave empty to triage every changed or new snapshot and every missing baseline.',
     intent: 'What the change under test was meant to do, for example the pull request description. Leave empty to have the model look for it.',
   },
-  /** What to recommend per verdict; shared with the CI review. */
-  nextSteps:
-    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; ' +
-    'for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example `git rm -r .testivai/baselines/<name>`) in the same change, and a bug restores the test or its capture.',
+  /** What to recommend per verdict, for the default baselines directory; shared with the CI review. */
+  nextSteps: nextStepsFor(),
+  /** The same, naming the project's own baselines directory in the removal command. */
+  nextStepsFor,
   /** The last line of every triage prompt, this one and the CI review's. */
   approvalRule: "Do not call approve_snapshot or approve_all: approving is the human's decision, and this triage is the input to it.",
   /**
@@ -169,7 +184,7 @@ export const TRIAGE_PROMPT = {
       '- **bug**: the page changed in a way the change under test was not meant to make: an element it did not touch changed, or the result looks broken (clipped, overlapping or missing content).',
       '- **possible bug**: the page really changed but the evidence cannot settle whether that was meant, or the evidence is incomplete (styles not compared, no DOM data, images that disagree with the signals). Say exactly what a person should check.',
       '',
-      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images. The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
+      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
       '',
       '| explain_snapshot shows | What it means |',
       '|---|---|',
@@ -187,7 +202,7 @@ export const TRIAGE_PROMPT = {
       'Compare the elements that changed (the selectors in regions and styleChanges) with what the change touched: an element it did not touch, or a result that looks broken, is a bug even when the intent mentions the page.',
     ].join('\n');
   },
-  textFor({ snapshot, intent }: { snapshot?: string; intent?: string }): string {
+  textFor({ snapshot, intent, baselinesDir }: { snapshot?: string; intent?: string; baselinesDir?: string }): string {
     const name = snapshot?.replace(/[`\r\n]/g, '').trim();
     const target = name ? `snapshot \`${name}\`` : 'every changed or new snapshot and every missing baseline';
     return [
@@ -201,7 +216,7 @@ export const TRIAGE_PROMPT = {
       '- Verdict: glitch, intended change, bug or possible bug',
       '- Confidence: high, medium or low, and what would raise it',
       '- Evidence: the signals and what you saw in the images that decided it',
-      `- Next step: ${TRIAGE_PROMPT.nextSteps}`,
+      `- Next step: ${nextStepsFor(baselinesDir)}`,
       '',
       'End with one line that counts each verdict.',
       '',

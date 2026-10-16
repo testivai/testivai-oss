@@ -66,6 +66,41 @@ describe('toTriage', () => {
     expect(review.toTriage({ snapshots: [], missingBaselines: 'products' } as unknown as ResultsData)).toEqual([]);
     expect(review.toTriage({ snapshots: [], missingBaselines: [7, '', null, 'faq'] } as unknown as ResultsData)).toEqual([{ name: 'faq', status: 'missing' }]);
   });
+
+  it('includeMissing false (missing baselines are expected): the changed and new snapshots only', () => {
+    const r = results([snap('home', 'changed'), snap('pricing', 'new')], ['products']);
+    expect(review.toTriage(r, { includeMissing: false })).toEqual([
+      { name: 'home', status: 'changed' },
+      { name: 'pricing', status: 'new' },
+    ]);
+  });
+});
+
+describe('triagesMissing', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'review-missing-config-'));
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const config = (c: unknown) => {
+    fs.mkdirSync(path.join(dir, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), typeof c === 'string' ? c : JSON.stringify(c));
+  };
+
+  it('yes by default: no config, or one that does not turn failOnMissing off', () => {
+    expect(review.triagesMissing(dir)).toBe(true);
+    config({ failOnMissing: true });
+    expect(review.triagesMissing(dir)).toBe(true);
+    config({ reportDir: 'out' });
+    expect(review.triagesMissing(dir)).toBe(true);
+    config('{ not json');
+    expect(review.triagesMissing(dir)).toBe(true);
+  });
+
+  it('no when .testivai/config.json says missing baselines are expected (failOnMissing: false)', () => {
+    config({ failOnMissing: false });
+    expect(review.triagesMissing(dir)).toBe(false);
+  });
 });
 
 // ── when it runs, and so spends tokens ──────────────────────────────────────
@@ -106,6 +141,18 @@ describe('decide', () => {
     const d = review.decide({ ...base, results: missingOnly, hasCredentials: false });
     expect(d).toMatchObject({ run: false, clearStale: true, level: 'notice' });
     if (!d.run) expect(d.reason).toMatch(/^Changed or new snapshots or missing baselines found, but no Claude credential is set/);
+  });
+
+  it('missing baselines expected (includeMissing false): a missing-only push does not run, and says why', () => {
+    const missingOnly = results([snap('home', 'passed')], ['pricing']);
+    const d = review.decide({ ...base, results: missingOnly, includeMissing: false });
+    expect(d).toMatchObject({ run: false, clearStale: true, level: 'info' });
+    if (!d.run) {
+      expect(d.reason).toBe(
+        'No changed or new snapshots on the latest push: nothing to triage. Missing baselines are not triaged here, because .testivai/config.json sets failOnMissing: false.',
+      );
+    }
+    expect(review.decide({ ...base, results: results([snap('home', 'changed')], ['pricing']), includeMissing: false })).toEqual({ run: true });
   });
 
   it('turned off: never runs, and says no tokens were used', () => {
@@ -281,12 +328,14 @@ describe('buildPrompt', () => {
     const only = review.buildPrompt({ ...input, snapshots: missing('products') });
     expect(only).not.toMatch(/changed or is new/);
     expect(only).toContain('so there is no current image: `products`.');
+    // Not "too": there is no other list for it to add to.
+    expect(only).toContain('\nTriage every missing baseline, a committed baseline that got no capture this run');
   });
 
   it('says where a missing baseline is committed, so Claude can Read its screenshot even with an older MCP server', () => {
     const only = review.buildPrompt({ ...input, snapshots: missing('products') });
     expect(only).toContain(
-      "Each missing baseline's committed files are in `.testivai/baselines/<name>/` (screenshot.png, dom.html, metadata.json): Read `.testivai/baselines/<name>/screenshot.png` to see what its test used to capture.",
+      "Each missing baseline's committed files are in `.testivai/baselines/<name>/` (screenshot.png, dom.html, metadata.json, and elements.json when there is one): Read `.testivai/baselines/<name>/screenshot.png` to see what its test used to capture.",
     );
     expect(only).toMatch(/An older @testivai\/mcp may not know missing baselines \(explain_snapshot and get_diff then say there is no such snapshot\): judge them from those files/);
     const custom = review.buildPrompt({ ...input, baselinesDir: 'shots/linux', snapshots: missing('products') });
@@ -310,6 +359,21 @@ describe('buildPrompt', () => {
     expect(full).toMatch(/`s29`, and 10 more \(get_visual_results lists them all\)\./);
     expect(full).not.toContain('`m0`');
     expect(full).toContain('so there is no current image: 3 of them (get_report\'s missingBaselines lists them all).');
+
+    // More missing names than the changed list overflows by: still none listed.
+    const over = review.buildPrompt({
+      ...input,
+      snapshots: [...changed(...Array.from({ length: 40 }, (_, i) => `s${i}`)), ...missing(...Array.from({ length: 15 }, (_, i) => `m${i}`))],
+    });
+    expect(over).not.toContain('`m0`');
+    expect(over).toContain("so there is no current image: 15 of them (get_report's missingBaselines lists them all).");
+  });
+
+  it('the removal command names the real baselines directory, never the default one', () => {
+    const custom = review.buildPrompt({ ...input, baselinesDir: 'shots/linux', snapshots: missing('products') });
+    expect(custom).toContain('`git rm -r shots/linux/<name>`');
+    expect(custom).not.toContain('.testivai/baselines/<name>');
+    expect(custom).toContain(TRIAGE_PROMPT.nextStepsFor('shots/linux'));
   });
 
   it('uses the same rubric as the MCP prompt, with the pull request as the statement of intent', () => {
@@ -547,6 +611,13 @@ describe('renderComment', () => {
       const odd = review.renderComment(RM, { summary: 's', snapshots: [entry('products', 'bug', { evidence: 'a | b <!-- x @octocat' })] });
       const row = odd.split('\n').find((l) => l.startsWith('| `products` (missing)'))!;
       expect(row).toContain('a \\| b &lt;!-- x @\u200boctocat');
+    });
+
+    it('includeMissing false (missing baselines are expected): no missing rows and no removal note', () => {
+      const without = review.renderComment(RM, { summary: 's', snapshots: [entry('home', 'bug')] }, { includeMissing: false });
+      expect(without).not.toContain('(missing)');
+      expect(without).not.toContain('A missing baseline has nothing to approve');
+      expect(without.split('\n').filter((l) => l.startsWith('| `')).map((l) => l.split(' | ')[0])).toEqual(['| `home`', '| `pricing`']);
     });
   });
 });
@@ -825,6 +896,31 @@ describe('prepare (the step before Claude runs)', () => {
     expect(writes(gh.calls)).toEqual([]);
   });
 
+  // A --grep run, a matrix lane or a path-filtered job leaves baselines
+  // missing on purpose; failOnMissing: false says so, and each would
+  // otherwise start a Claude run on every pull request.
+  it('failOnMissing: false in .testivai/config.json: a missing-only push starts no Claude run', async () => {
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ failOnMissing: false }));
+    writeResults(results([snap('home', 'passed')], ['products']));
+    const core = fakeCore();
+    await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env() });
+    expect(core.outputs.run).toBe('false');
+    expect(core.log.join('\n')).toMatch(/Missing baselines are not triaged here, because \.testivai\/config\.json sets failOnMissing: false\./);
+  });
+
+  it('failOnMissing: false: a changed snapshot is still triaged, without the missing baselines', async () => {
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ failOnMissing: false }));
+    writeResults(results([snap('home', 'changed')], ['products']));
+    const core = fakeCore();
+    await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env() });
+    expect(core.outputs.run).toBe('true');
+    expect(core.outputs.prompt).toContain('Triage every snapshot that changed or is new: `home`.');
+    expect(core.outputs.prompt).not.toMatch(/Triage every missing baseline/);
+    expect(core.outputs.prompt).not.toContain('`products`');
+  });
+
   it('no credential: no Claude, and a notice in the log', async () => {
     writeResults(R);
     const core = fakeCore();
@@ -934,6 +1030,20 @@ describe('post (the step after Claude runs)', () => {
     const body = String(writes(gh.calls)[0].args.body);
     expect(body).toBe(review.renderComment(RM, JSON.parse(t), { runUrl: 'https://github.com/acme/shop/actions/runs/7', sha: 'abc1234def' }));
     expect(body).toContain('| `products` (missing) | 🟢 intended change |');
+    expect(core.log).toContain('info: AI triage of 1 snapshot(s) done.');
+  });
+
+  it('failOnMissing: false: the comment leaves the missing baselines out, as the prompt did', async () => {
+    fs.mkdirSync(path.join(dir, '.testivai'));
+    fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ failOnMissing: false }));
+    const RM = results([snap('home', 'changed')], ['products']);
+    fs.writeFileSync(path.join(dir, 'visual-report', 'results.json'), JSON.stringify(RM));
+    const gh = fakeGithub();
+    const core = fakeCore();
+    await review.post({ github: gh, context: prContext(), core, env: env() });
+    const body = String(writes(gh.calls)[0].args.body);
+    expect(body).not.toContain('(missing)');
+    expect(body).toContain('| `home` | 🟢 intended change |');
     expect(core.log).toContain('info: AI triage of 1 snapshot(s) done.');
   });
 

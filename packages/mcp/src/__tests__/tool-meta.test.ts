@@ -169,6 +169,14 @@ describe('review-visual-changes prompt', () => {
     expect(line).toMatch(/no capture this run/);
     expect(line).toMatch(/approving does nothing for it/);
   });
+
+  it('step 2 explains every missing baseline too, and step 4 offers removing one, never approving it', () => {
+    const flat = text.replace(/\s+/g, ' ');
+    expect(flat).toMatch(/2\. For every changed snapshot and every missing baseline, call explain_snapshot\(name\)/);
+    expect(flat.slice(flat.indexOf('4. End with a recommendation'))).toMatch(
+      /for a missing baseline: delete its baseline directory once the human confirms the removal was intended, otherwise investigate \(approving does nothing\)/,
+    );
+  });
 });
 
 /**
@@ -363,6 +371,20 @@ describe('triage-visual-diff prompt', () => {
       expect(TRIAGE_PROMPT.nextSteps).toMatch(
         /for a missing baseline, approving does nothing \(it only promotes a new capture\): an intended removal deletes its baseline directory \(for example `git rm -r \.testivai\/baselines\/<name>`\) in the same change, and a bug restores the test or its capture\.$/,
       );
+    });
+
+    // A custom baselinesDir: a copied `git rm -r .testivai/baselines/<name>` would fail.
+    it('the removal command names the baselines directory it is given', () => {
+      expect(TRIAGE_PROMPT.nextSteps).toBe(TRIAGE_PROMPT.nextStepsFor());
+      expect(TRIAGE_PROMPT.nextStepsFor('shots/linux')).toContain('(for example `git rm -r shots/linux/<name>`)');
+      expect(TRIAGE_PROMPT.nextStepsFor('shots/linux')).not.toContain('.testivai/baselines');
+      expect(TRIAGE_PROMPT.nextStepsFor('a`b\nc')).toContain('`git rm -r abc/<name>`');
+      expect(TRIAGE_PROMPT.textFor({ baselinesDir: 'shots/linux' })).toContain(`- Next step: ${TRIAGE_PROMPT.nextStepsFor('shots/linux')}`);
+    });
+
+    it('the evidence line says get_diff has only the committed screenshot for a missing baseline', () => {
+      const evidence = rubric.split('\n').find((l) => l.startsWith('Evidence:'));
+      expect(evidence).toMatch(/for a missing baseline, get_diff returns only its committed screenshot/);
     });
   });
 

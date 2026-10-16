@@ -109,7 +109,7 @@ diff image, and each new snapshot's capture.
 
 | Tool | Returns |
 |---|---|
-| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture. Each missing baseline (committed, but no capture this run) gets its own line too, with nothing to approve: an intended removal deletes the baseline directory |
+| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture. Each missing baseline (committed, but no capture this run) gets its own line too (several share one verdict line, so a partial run stays short), with nothing to approve: an intended removal deletes the baseline directory |
 | `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance; for a missing baseline, status `missing`, the committed baseline files and what to check instead |
 | `get_report` | The raw `results.json` payload |
 | `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context; for a missing baseline, the committed baseline image only, since there is no current capture |

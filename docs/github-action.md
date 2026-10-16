@@ -351,8 +351,18 @@ seconds:
 5. The run was not started by a bot, unless that bot is in `allowed-bots`
    (`claude-code-action` refuses other bots, so those runs skip with a notice).
 
+Runs that leave baselines out on purpose, such as a `--grep` run, one browser
+lane of a matrix, a path-filtered job or one that passes `--allow-missing`,
+always have missing baselines, so each pull request would start a triage with
+a possible-bug row for every skipped baseline. Setting `failOnMissing: false`
+in `.testivai/config.json` says missing baselines are expected and leaves
+missing baselines out of the triage (changed and new snapshots are still
+triaged). The `--allow-missing` flag and the reporter's `fail-on-missing`
+input are not visible to the triage, so with those, run the triage only after
+the job that captures the whole suite, or set `enabled: false`.
+
 Each triage is one Claude Code session that calls the MCP tools and looks at
-images, so its cost grows with the number of changed snapshots. When we ran
+images, so its cost grows with the number of changed, new and missing snapshots. When we ran
 the same prompt on one to three changed snapshots, one triage took about 60k
 to 85k tokens (measured with Claude subagents, not inside the action, so
 treat it as a rough guide and check your usage after the first runs).

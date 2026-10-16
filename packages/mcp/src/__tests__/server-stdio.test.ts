@@ -397,15 +397,17 @@ describe('missing baselines (built server over stdio)', () => {
   const call = async (name: string, args: Record<string, unknown> = {}) => (await client.callTool({ name, arguments: args })).content as Content;
   const texts = (c: Content) => c.filter((x) => x.type === 'text').map((x) => x.text ?? '');
 
-  it('get_visual_results counts them in the header and gives each one a verdict line after the snapshots', async () => {
+  it('get_visual_results counts them in the header, then gives the verdict once and a line per name after the snapshots', async () => {
     const lines = texts(await call('get_visual_results')).join('\n').split('\n');
     expect(lines[0]).toBe('Run: t — 1 snapshots: 1 passed, 0 changed, 0 new; 2 missing baselines (no capture this run).');
     const home = lines.indexOf('- home: passed — no visual change');
-    const products = lines.indexOf(`- products: ${missingVerdict('.testivai/baselines/products')}`);
-    const outside = lines.indexOf(`- ../../outside: ${missingVerdict(null)}`);
+    const group = lines.indexOf(`Missing baselines (2), each a ${missingVerdict('.testivai/baselines/<name>')}:`);
+    const products = lines.indexOf('- products: missing baseline (see above)');
+    const outside = lines.indexOf('- ../../outside: missing baseline (see above); the name does not resolve to a directory inside the baselines directory');
     const closing = lines.findIndex((l) => l.startsWith('Baseline approval is a human decision'));
     expect(home).toBeGreaterThan(-1);
-    expect(products).toBe(home + 1);
+    expect(group).toBe(home + 1);
+    expect(products).toBe(group + 1);
     expect(outside).toBe(products + 1);
     expect(closing).toBeGreaterThan(outside);
   });
@@ -484,5 +486,32 @@ describe('missing baselines (built server over stdio)', () => {
   it('a name that is neither a snapshot nor a missing baseline is still unknown', async () => {
     expect(texts(await call('get_diff', { name: 'nope' }))).toEqual(['No snapshot named "nope" in the latest results.']);
     expect(texts(await call('explain_snapshot', { name: 'nope' }))[0]).toMatch(/^No snapshot named "nope"/);
+  });
+});
+
+// The triage prompt's removal command names this project's baselines
+// directory: a copied `git rm -r .testivai/baselines/<name>` fails elsewhere.
+describe('triage-visual-diff with a custom baselinesDir (built server over stdio)', () => {
+  const { TRIAGE_PROMPT } = require('../tool-meta') as typeof import('../tool-meta');
+  let root: string;
+  let client: Client;
+
+  beforeAll(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-baselinesdir-'));
+    fs.mkdirSync(path.join(root, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: 'shots/{platform}' }));
+    client = await connectBuiltServer(root);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('gives the removal command for the resolved directory', async () => {
+    const prompt = await client.getPrompt({ name: 'triage-visual-diff', arguments: {} });
+    const text = (prompt.messages[0].content as { text: string }).text;
+    expect(text).toContain(`- Next step: ${TRIAGE_PROMPT.nextStepsFor(`shots/${process.platform}`)}`);
+    expect(text).not.toContain('.testivai/baselines/<name>');
   });
 });

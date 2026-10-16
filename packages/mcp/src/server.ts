@@ -4,7 +4,7 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, imageContent, type ToolContent } from './lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, imageContent, baselinesDirFor, type ToolContent } from './lib';
 import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
@@ -212,7 +212,7 @@ server.registerPrompt(
     messages: [
       {
         role: 'user' as const,
-        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent }) },
+        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent, baselinesDir: baselinesDirFor(projectRoot) }) },
       },
     ],
   })

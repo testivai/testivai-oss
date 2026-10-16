@@ -129,6 +129,14 @@ describe('AI triage docs: missing baselines', () => {
     expect(doc).toMatch(/older `@testivai\/mcp`/);
   });
 
+  // A --grep run, a matrix lane or a path-filtered job leaves baselines missing
+  // on purpose: each would start a paid run on every pull request.
+  it('docs/github-action.md: partial runs leave baselines missing on purpose; failOnMissing: false keeps them out', () => {
+    expect(doc).toMatch(/`--grep`[^.]*matrix[^.]*`--allow-missing`/);
+    expect(doc).toMatch(/`failOnMissing: false` in `\.testivai\/config\.json` says missing baselines are expected and leaves missing baselines out of the triage/);
+    expect(doc).toMatch(/its cost grows with the number of changed, new and missing snapshots/);
+  });
+
   it('README.md: the ai-triage job runs for a missing baseline too', () => {
     expect(flat('README.md')).toMatch(/The `ai-triage` job runs on every pull request with a changed or new snapshot or a missing baseline/);
   });
