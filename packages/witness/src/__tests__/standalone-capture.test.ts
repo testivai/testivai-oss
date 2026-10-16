@@ -253,9 +253,9 @@ describe('captureFullPage', () => {
   });
 
   describe('capture stability', () => {
-    // Chrome can hand Page.captureScreenshot an older frame even after two
-    // fresh frames rendered (a pre-viewport-override layout, an entry
-    // animation mid-way). It never did so twice in a row with the same pixels.
+    // Chrome can hand Page.captureScreenshot a wrong frame even after two
+    // fresh frames rendered (the page laid out for a near-zero viewport); the
+    // capture after it is almost always right.
 
     it('captures twice and returns the capture once two in a row match', async () => {
       const { client, calls } = fakeClient({ shots: ['good'] });

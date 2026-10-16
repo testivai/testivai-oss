@@ -69,16 +69,61 @@ async function waitFor(
   }
 }
 
-async function openPage(port: number, url: string): Promise<PageClient> {
-  const target = await CDP.New({ port, url });
-  const client = await CDP({ port, target: target.id });
-  await Promise.all([client.Page.enable(), client.Runtime.enable()]);
-  return { client, targetId: target.id };
+/** How long to wait for a page to load before capturing it anyway. */
+const PAGE_LOAD_TIMEOUT_MS = 15_000;
+
+/**
+ * True once the tab shows the page it was sent to, fully loaded. A new tab
+ * starts on about:blank, which already reports readyState 'complete', and
+ * keeps showing it until the page's response arrives, so readyState alone
+ * would pass before the page has even started loading.
+ */
+const PAGE_LOADED = `location.href !== 'about:blank' && document.readyState === 'complete'`;
+
+/**
+ * Open a tab, apply `viewport` when given, then load `url` and wait until the
+ * tab shows that page, loaded. Closes the tab again when that fails.
+ *
+ * Opening the tab on `url` directly and waiting for readyState 'complete'
+ * returned while the tab still showed about:blank: on the first page of a
+ * freshly launched Chrome, or any page of a server that takes a moment to
+ * answer. The stabilization CSS and ignoreSelectors then went into
+ * about:blank and were lost, the font wait and reveal pass ran on it, and
+ * the capture raced the real page's entry animations. The viewport is applied
+ * before the page is requested, so the page never loads at another size.
+ *
+ * Exported for testing.
+ */
+export async function openPage(
+  port: number,
+  url: string,
+  viewport?: { width: number; height: number },
+): Promise<PageClient> {
+  const target = await CDP.New({ port });
+  const page: PageClient = { client: null, targetId: target.id };
+  try {
+    page.client = await CDP({ port, target: target.id });
+    await Promise.all([page.client.Page.enable(), page.client.Runtime.enable()]);
+    if (viewport) {
+      await page.client.Emulation.setDeviceMetricsOverride({
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+    }
+    await page.client.Page.navigate({ url });
+    await waitFor(page.client, PAGE_LOADED, PAGE_LOAD_TIMEOUT_MS);
+    return page;
+  } catch (err) {
+    await closePage(port, page);
+    throw err;
+  }
 }
 
 async function closePage(port: number, page: PageClient): Promise<void> {
   try {
-    await page.client.close();
+    if (page.client) await page.client.close();
   } catch {
     /* already closed */
   }
@@ -254,9 +299,12 @@ export async function captureFullPage(client: any): Promise<Buffer> {
   if (polled) await settleFrame(client);
 
   // Even after two fresh frames, Page.captureScreenshot now and then returns
-  // an older frame: the layout from before the viewport override, or an
-  // entry animation mid-way. Measured, it never returned the same stale
-  // pixels twice in a row, so capture until two captures in a row match.
+  // the page laid out for a near-zero viewport (narrow media rules, a
+  // collapsed 100vh hero), most likely from the 1x1 view Chrome emulates for
+  // a moment while it sets up a beyond-viewport capture. The capture after
+  // it is almost always right, so capture until two captures in a row match.
+  // That wrong frame is the same pixels every time, so two of them in a row
+  // still match and are kept: rare, since it takes two misses, but possible.
   let previous = await screenshot(client, width, height);
   for (let captures = 1; captures < MAX_CAPTURES; captures++) {
     await settleFrame(client);
@@ -304,7 +352,6 @@ export async function runStandaloneWitness(
       pages = resolvePages(startUrl, explicitPages);
     } else {
       const first = await openPage(port, startUrl);
-      await waitFor(first.client, `document.readyState === 'complete'`, 15_000);
       const hrefs =
         (await evaluate<string[]>(
           first.client,
@@ -319,15 +366,9 @@ export async function runStandaloneWitness(
     // 3. Capture every page
     for (const url of pages) {
       const name = pageNameFromUrl(url);
-      const page = await openPage(port, url);
+      let page: PageClient | undefined;
       try {
-        await page.client.Emulation.setDeviceMetricsOverride({
-          width: viewport.width,
-          height: viewport.height,
-          deviceScaleFactor: 1,
-          mobile: false,
-        });
-        await waitFor(page.client, `document.readyState === 'complete'`, 15_000);
+        page = await openPage(port, url, viewport);
         await prepPage(page.client, config.stabilize, config.ignoreSelectors ?? []);
         await revealPage(page.client);
 
@@ -340,7 +381,7 @@ export async function runStandaloneWitness(
       } catch (err) {
         console.log(chalk.yellow(`  ⚠ skipped ${name}: ${(err as Error).message}`));
       } finally {
-        await closePage(port, page);
+        if (page) await closePage(port, page);
       }
     }
   } finally {
