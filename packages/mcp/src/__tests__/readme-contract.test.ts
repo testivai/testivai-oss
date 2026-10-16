@@ -33,6 +33,14 @@ describe('@testivai/mcp README', () => {
     expect(row).not.toMatch(/the same kind of noise/i);
     expect(readme).not.toMatch(/whether it's real or just render noise/i);
   });
+
+  // Matching styles are likely noise only for a small, scattered diff: the
+  // README must say so and document the concentrated-or-large verdict.
+  it('describes likely noise as small and scattered, and the concentrated-or-large verdict as not noise', () => {
+    const row = readme.split('\n').find((l) => l.startsWith('| `get_visual_results`'));
+    expect(row).toMatch(/likely render noise \(the DOM and computed styles both match and the diff is small and scattered/i);
+    expect(row).toMatch(/concentrated in one area or large[^/|]*bad capture or a change the style check does not cover[^/|]*compare the images/i);
+  });
 });
 
 // approve_snapshot / approve_all exist so a human can approve in conversation;

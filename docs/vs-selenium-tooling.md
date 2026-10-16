@@ -52,7 +52,7 @@ Verified against the adapter source, not aspirational:
 | | |
 |---|---|
 | **Pixel diff + heatmap** | Difference magnitude rendered as a yellow→red heatmap over a washed baseline, with changed regions outlined. |
-| **DOM + element map** | The page's DOM and per-element computed-style digests are captured next to the screenshot, so the report can tell *pixels differ, DOM and styles identical* (likely render noise) from *only the styles changed* (a real style-only change) and *the DOM actually changed* — with added / removed / attribute / text counts. When the styles could not be compared, it says so instead of calling the diff noise. |
+| **DOM + element map** | The page's DOM and per-element computed-style digests are captured next to the screenshot, so the report can tell *pixels differ in a few scattered places, DOM and styles identical* (likely render noise) from *DOM and styles identical but the diff sits in one area* (a bad capture, or a change the style check does not cover), from *only the styles changed* (a real style-only change) and *the DOM actually changed* — with added / removed / attribute / text counts. When the styles could not be compared, it says so instead of calling the diff noise. |
 | **Full-page screenshots** | Chromium via CDP `captureBeyondViewport`; Firefox natively (Python). Other browsers fall back to viewport — documented, not silent. |
 | **Stabilization** | Animations and transitions collapsed, caret hidden, web fonts awaited before capture. |
 | **Masks & ignored selectors** | Exclude dynamic areas; masked regions are hatched in the diff and listed in the report, so nothing hides silently. |

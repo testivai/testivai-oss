@@ -14,16 +14,21 @@ export interface SnapshotDomSignal {
   /**
    * Noise hint: pixel diff is non-zero, the DOM is structurally unchanged,
    * and no computed-style mismatch was found. Read it together with
-   * `styleCheck`: only with 'match' does it suggest render noise
+   * `styleCheck` and the shape of the diff: only with 'match' AND a small,
+   * scattered diff (diffShape in report/diff-shape.ts, read from
+   * `diffPercent`, `totalPixels` and `regions`) does it suggest render noise
    * (anti-aliasing, font hinting, sub-pixel layout), and even then it is not
-   * proof. It is also true when styleCheck is 'unavailable' (or missing, in
-   * older results): styles were not compared, so a stylesheet-only change is
-   * not ruled out.
+   * proof. With 'match' but a diff concentrated in one area or large, it is a
+   * bad capture or a change the style check does not cover. It is also true
+   * when styleCheck is 'unavailable' (or missing, in older results): styles
+   * were not compared, so a stylesheet-only change is not ruled out.
    */
   noiseHint: boolean;
   /**
    * Style-fingerprint verdict: 'match' (comparable digests equal — likely
-   * render noise, still not proof), 'mismatch' (styles changed with
+   * render noise when the diff is small and scattered, still not proof; the
+   * digest covers a fixed list of properties, not size, overflow, position,
+   * transform and the like), 'mismatch' (styles changed with
    * identical DOM — a REAL change; the noise hint is suppressed),
    * 'unavailable' (no element map on one or both sides, or no element with
    * a style digest on both sides — styles were not compared, so a
@@ -77,9 +82,10 @@ export interface SnapshotResult {
    * Present when the snapshot's pixels differed but a pass criterion
    * reported it as passed: 'threshold' (within maxDiffPercent /
    * maxDiffPixels), 'noise' (noiseAutoPass enabled, DOM identical AND
-   * computed styles compared and identical — styleCheck 'match' — and
-   * within noiseMaxDiffPercent; a diff whose styles were not compared or
-   * changed is never auto-passed as noise), or 'shift' (every region is a pure
+   * computed styles compared and identical — styleCheck 'match' — AND the
+   * diff not concentrated in one area, within noiseMaxDiffPercent; a diff
+   * whose styles were not compared or changed, or whose regions all sit in
+   * one area, is never auto-passed as noise), or 'shift' (every region is a pure
    * element shift within shiftTolerance px). The diff image is still
    * written — auto-passes stay auditable.
    */

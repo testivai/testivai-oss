@@ -74,18 +74,23 @@ describe('compareAll with style fingerprints (integration)', () => {
       baselineHash?: string;
       candidateHash?: string;
       withMaps?: boolean;
+      /** Isolated single pixels spread over the page (the render-noise shape) instead of one solid block. */
+      specks?: boolean;
     } = {},
   ) {
-    const { baselineHash = 'aaaa', candidateHash = 'aaaa', withMaps = true } = opts;
+    const { baselineHash = 'aaaa', candidateHash = 'aaaa', withMaps = true, specks = false } = opts;
     const bDir = path.join(root, '.testivai', 'baselines', name);
     const tDir = path.join(root, '.testivai', 'temp', name);
     fs.mkdirSync(bDir, { recursive: true });
     fs.mkdirSync(tDir, { recursive: true });
-    // Same DOM both sides; different pixels (the stylesheet-change shape)
+    // Same DOM both sides; different pixels (the stylesheet-change shape, or scattered specks)
+    const rects = specks
+      ? Array.from({ length: 24 }, (_, i) => ({ x: 8 + (i % 6) * 36, y: 8 + Math.floor(i / 6) * 36, width: 1, height: 1 }))
+      : [{ x: 20, y: 20, width: 100, height: 40 }];
     fs.writeFileSync(path.join(bDir, 'screenshot.png'),
-      makePng(W, H, undefined, [{ rect: { x: 20, y: 20, width: 100, height: 40 }, color: BLUE }]));
+      makePng(W, H, undefined, rects.map((rect) => ({ rect, color: BLUE }))));
     fs.writeFileSync(path.join(tDir, 'screenshot.png'),
-      makePng(W, H, undefined, [{ rect: { x: 20, y: 20, width: 100, height: 40 }, color: RED }]));
+      makePng(W, H, undefined, rects.map((rect) => ({ rect, color: RED }))));
     fs.writeFileSync(path.join(bDir, 'dom.html'), DOM);
     fs.writeFileSync(path.join(tDir, 'dom.html'), DOM);
     if (withMaps) {
@@ -123,8 +128,11 @@ describe('compareAll with style fingerprints (integration)', () => {
     expect(result.autoPassed).toBeUndefined();
   });
 
-  it('true render noise (digests match) keeps the hint and auto-pass path', () => {
-    writeSnapshot('true-noise', { baselineHash: 'aaaa', candidateHash: 'aaaa' });
+  // Render noise is scattered pixels. A solid block that changed colour with
+  // matching digests is concentrated in one area, not noise: it stays changed
+  // (style-check-semantics.test.ts).
+  it('true render noise (digests match, scattered pixels) keeps the hint and auto-pass path', () => {
+    writeSnapshot('true-noise', { baselineHash: 'aaaa', candidateHash: 'aaaa', specks: true });
 
     const [result] = compareAll({
       projectRoot: root,
