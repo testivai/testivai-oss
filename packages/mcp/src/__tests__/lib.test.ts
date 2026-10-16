@@ -854,3 +854,268 @@ describe('withPromptArguments', () => {
     expect(withPromptArguments(null)).toBeNull();
   });
 });
+
+/**
+ * Missing baselines: committed baselines that got no capture this run
+ * (results.json 2.3.0+ `missingBaselines`). There is no current image and
+ * nothing to approve, so they get their own verdict, explanation and diff.
+ * Names come from results.json, so a name never reaches a path outside the
+ * baselines directory.
+ */
+describe('@testivai/mcp missing baselines', () => {
+  const lib = require('../lib') as typeof import('../lib');
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-missing-'));
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const png = (w: number, h: number): Buffer => PNG.sync.write(new PNG({ width: w, height: h }));
+
+  /** A committed baseline: screenshot.png, dom.html and metadata.json under `dir` (relative to root). */
+  const commitBaseline = (dir: string, name: string, screenshot: Buffer = png(4, 3)) => {
+    const d = path.join(root, dir, name);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'screenshot.png'), screenshot);
+    fs.writeFileSync(path.join(d, 'dom.html'), '<html></html>');
+    fs.writeFileSync(path.join(d, 'metadata.json'), '{}');
+  };
+
+  const results = (over: Partial<ResultsFile> = {}): ResultsFile => ({
+    version: '2.3.0',
+    timestamp: 't',
+    summary: { total: 2, passed: 1, changed: 0, newSnapshots: 1, missing: 1 },
+    snapshots: [
+      { name: 'home', status: 'passed' },
+      { name: 'catalog', status: 'new' },
+    ],
+    missingBaselines: ['products'],
+    ...over,
+  });
+
+  const writeResults = (r: ResultsFile) => {
+    fs.mkdirSync(path.join(root, 'visual-report'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'visual-report', 'results.json'), JSON.stringify(r));
+  };
+
+  describe('missingBaselineNames', () => {
+    it('lists each name in missingBaselines once, in order', () => {
+      expect(lib.missingBaselineNames(results({ missingBaselines: ['products', 'faq', 'products'] }))).toEqual(['products', 'faq']);
+    });
+
+    it('skips a name that is also a snapshot: the snapshot line covers it', () => {
+      expect(lib.missingBaselineNames(results({ missingBaselines: ['home', 'products'] }))).toEqual(['products']);
+    });
+
+    it('older results without missingBaselines have none, and junk entries are dropped', () => {
+      const { missingBaselines: _, ...older } = results();
+      expect(lib.missingBaselineNames(older as ResultsFile)).toEqual([]);
+      expect(lib.missingBaselineNames(results({ missingBaselines: 'products' as unknown as string[] }))).toEqual([]);
+      expect(lib.missingBaselineNames(results({ missingBaselines: [3, '', null, 'faq'] as unknown as string[] }))).toEqual(['faq']);
+    });
+  });
+
+  describe('missingVerdict', () => {
+    it('says there is no capture, why it cannot say why, that there is nothing to approve, and how to accept a removal', () => {
+      expect(lib.missingVerdict('.testivai/baselines/products')).toBe(
+        "missing baseline — committed, but no capture this run: its test was removed, renamed or skipped, or failed before it captured (the report cannot say which; the test run's log can); " +
+          'nothing to approve (approving only promotes a new capture) — to accept an intended removal, delete its baseline directory (.testivai/baselines/products) in the same change',
+      );
+    });
+
+    it('without a directory it still says how', () => {
+      expect(lib.missingVerdict(null)).toMatch(/delete its baseline directory in the same change$/);
+    });
+  });
+
+  describe('summaryLine', () => {
+    it('counts missing baselines when the results carry the count', () => {
+      expect(lib.summaryLine(results())).toBe('Run: t — 2 snapshots: 1 passed, 0 changed, 1 new; 1 missing baseline (no capture this run).');
+      expect(lib.summaryLine(results({ summary: { total: 2, passed: 1, changed: 0, newSnapshots: 1, missing: 2 } }))).toMatch(
+        /; 2 missing baselines \(no capture this run\)\.$/,
+      );
+    });
+
+    it('falls back to the list when the summary has no count', () => {
+      expect(lib.summaryLine(results({ summary: { total: 2, passed: 1, changed: 0, newSnapshots: 1 } }))).toMatch(/; 1 missing baseline/);
+    });
+
+    it('older results without either: the header as it always was', () => {
+      const { missingBaselines: _, ...older } = results({ summary: { total: 2, passed: 1, changed: 0, newSnapshots: 1 } });
+      expect(lib.summaryLine(older as ResultsFile)).toBe('Run: t — 2 snapshots: 1 passed, 0 changed, 1 new.');
+    });
+  });
+
+  describe('missingBaselineDir (the only way a name becomes a path)', () => {
+    it('resolves a listed name inside the baselines directory', () => {
+      commitBaseline('.testivai/baselines', 'products');
+      expect(lib.missingBaselineDir(root, results(), 'products')).toBe(path.join(root, '.testivai', 'baselines', 'products'));
+    });
+
+    it('honours baselinesDir in .testivai/config.json, including {platform}', () => {
+      fs.mkdirSync(path.join(root, '.testivai'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: 'shots/{platform}' }));
+      commitBaseline(`shots/${process.platform}`, 'products');
+      expect(lib.missingBaselineDir(root, results(), 'products')).toBe(path.join(root, 'shots', process.platform, 'products'));
+    });
+
+    it('never looks up a name results.json does not list as missing', () => {
+      commitBaseline('.testivai/baselines', 'secret');
+      expect(lib.missingBaselineDir(root, results(), 'secret')).toBeNull();
+      expect(lib.missingBaselineDir(root, results(), 'home')).toBeNull();
+    });
+
+    it.each(['../outside', '..', '.', 'a/../outside', 'nested/products', 'products/', `${'x'}\0y`])(
+      'refuses a listed name that is not one directory inside the baselines directory: %p',
+      (name) => {
+        fs.mkdirSync(path.join(root, 'outside'), { recursive: true });
+        expect(lib.missingBaselineDir(root, results({ missingBaselines: [name] }), name)).toBeNull();
+      },
+    );
+
+    it('refuses a baseline directory that is a symlink out of the baselines directory', () => {
+      commitBaseline('.', 'outside');
+      fs.mkdirSync(path.join(root, '.testivai', 'baselines'), { recursive: true });
+      fs.symlinkSync(path.join(root, 'outside'), path.join(root, '.testivai', 'baselines', 'evil'));
+      expect(lib.missingBaselineDir(root, results({ missingBaselines: ['evil'] }), 'evil')).toBeNull();
+    });
+  });
+
+  describe('explainSnapshot for a missing baseline', () => {
+    it('returns status missing, the verdict, the committed files and the guidance', () => {
+      commitBaseline('.testivai/baselines', 'products');
+      writeResults(results());
+      expect(lib.explainSnapshot(root, 'products')).toEqual({
+        name: 'products',
+        status: 'missing',
+        verdict: lib.missingVerdict('.testivai/baselines/products'),
+        baseline: {
+          directory: '.testivai/baselines/products',
+          files: ['.testivai/baselines/products/screenshot.png', '.testivai/baselines/products/dom.html', '.testivai/baselines/products/metadata.json'],
+        },
+        guidance: [
+          'No capture this run: the baseline is committed (.testivai/baselines/products), but the test run captured nothing under this name, so there is no current image and nothing to diff. ' +
+            'The report cannot say why: the test may have been removed or renamed, skipped, or failed before it captured. ' +
+            "Check what the change under test did to that test or snapshot, and the test run's log for a failed or skipped test.",
+          'New snapshots this run (no baseline yet): catalog. If one of them is this test under another name, it is a rename: judge the two together.',
+          'Approving does nothing here: approve_snapshot and `testivai approve` only promote a new capture from .testivai/temp, and there is none. ' +
+            'To accept an intended removal, delete the baseline directory in the same change (git rm -r .testivai/baselines/products); otherwise restore the test, or what it needs to reach its capture.',
+          'There is no capture to call bad, so this is not a glitch: an intended change if the change under test meant to remove or rename it, a bug if it did so by mistake or broke the test before its capture, otherwise a possible bug.',
+        ],
+      });
+    });
+
+    it('a custom baselinesDir: the paths are where the baseline really is', () => {
+      fs.mkdirSync(path.join(root, '.testivai'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: 'tests/__baselines__' }));
+      commitBaseline('tests/__baselines__', 'products');
+      writeResults(results());
+      const e = lib.explainSnapshot(root, 'products') as import('../lib').MissingBaselineExplanation;
+      expect(e.baseline.directory).toBe('tests/__baselines__/products');
+      expect(e.baseline.files[0]).toBe('tests/__baselines__/products/screenshot.png');
+      expect(e.verdict).toContain('(tests/__baselines__/products)');
+    });
+
+    it('lists elements.json too when the baseline has one, and says when no file is there', () => {
+      commitBaseline('.testivai/baselines', 'products');
+      fs.writeFileSync(path.join(root, '.testivai', 'baselines', 'products', 'elements.json'), '{}');
+      writeResults(results({ missingBaselines: ['products', 'gone'] }));
+      expect((lib.explainSnapshot(root, 'products') as import('../lib').MissingBaselineExplanation).baseline.files).toContain(
+        '.testivai/baselines/products/elements.json',
+      );
+      const gone = lib.explainSnapshot(root, 'gone') as import('../lib').MissingBaselineExplanation;
+      expect(gone.baseline).toEqual({ directory: '.testivai/baselines/gone', files: [] });
+      expect(gone.guidance).toContain('No committed baseline files were found in .testivai/baselines/gone.');
+    });
+
+    it('a traversal name in missingBaselines reads nothing outside the baselines directory', () => {
+      commitBaseline('.', 'outside');
+      writeResults(results({ missingBaselines: ['../../outside'] }));
+      const e = lib.explainSnapshot(root, '../../outside') as import('../lib').MissingBaselineExplanation;
+      expect(e.status).toBe('missing');
+      expect(e.baseline).toEqual({ directory: null, files: [] });
+      expect(JSON.stringify(e)).not.toMatch(/outside\/screenshot\.png/);
+      expect(e.guidance[0]).toBe(
+        'The name "../../outside" does not resolve to a directory inside the baselines directory (.testivai/baselines), so no baseline files were read.',
+      );
+    });
+
+    it('a file inside the baseline that links out of the baselines directory is not listed', () => {
+      commitBaseline('.', 'outside');
+      commitBaseline('.testivai/baselines', 'products');
+      const shot = path.join(root, '.testivai', 'baselines', 'products', 'screenshot.png');
+      fs.rmSync(shot);
+      fs.symlinkSync(path.join(root, 'outside', 'screenshot.png'), shot);
+      writeResults(results());
+      expect((lib.explainSnapshot(root, 'products') as import('../lib').MissingBaselineExplanation).baseline.files).toEqual([
+        '.testivai/baselines/products/dom.html',
+        '.testivai/baselines/products/metadata.json',
+      ]);
+    });
+
+    it('a name that is a snapshot too keeps the snapshot explanation; an unlisted name is unknown', () => {
+      commitBaseline('.testivai/baselines', 'home');
+      writeResults(results({ missingBaselines: ['home', 'products'] }));
+      expect(lib.explainSnapshot(root, 'home')).toMatchObject({ name: 'home', status: 'passed', layers: expect.any(Object) });
+      expect(lib.explainSnapshot(root, 'other')).toBeNull();
+    });
+  });
+
+  describe('missingBaselineDiff (get_diff for a missing baseline)', () => {
+    type Content = { type: string; text?: string; data?: string; mimeType?: string };
+    const texts = (c: Content[]) => c.filter((x) => x.type === 'text').map((x) => x.text);
+
+    it('the verdict, that there is no current capture, then the committed screenshot only', () => {
+      commitBaseline('.testivai/baselines', 'products');
+      const content = lib.missingBaselineDiff(root, results(), 'products') as Content[];
+      expect(texts(content)).toEqual([
+        `products: ${lib.missingVerdict('.testivai/baselines/products')}`,
+        'No current capture: nothing was captured under this name this run, so there is no current or diff image, only the committed baseline.',
+        'baseline:',
+      ]);
+      const images = content.filter((x) => x.type === 'image');
+      expect(images).toHaveLength(1);
+      expect(images[0].mimeType).toBe('image/png');
+      expect(Buffer.from(images[0].data!, 'base64')).toEqual(fs.readFileSync(path.join(root, '.testivai', 'baselines', 'products', 'screenshot.png')));
+    });
+
+    it('downscales a large baseline like the other images', () => {
+      commitBaseline('.testivai/baselines', 'products', png(3000, 10));
+      const content = lib.missingBaselineDiff(root, results(), 'products') as Content[];
+      expect(texts(content)).toContain('baseline (downscaled from 3000x10):');
+      const shown = PNG.sync.read(Buffer.from(content.find((x) => x.type === 'image')!.data!, 'base64'));
+      expect(shown.width).toBeLessThanOrEqual(1024);
+    });
+
+    it('says a missing or unreadable screenshot instead of throwing', () => {
+      writeResults(results());
+      const none = lib.missingBaselineDiff(root, results(), 'products') as Content[];
+      expect(texts(none)[2]).toBe('baseline: no committed screenshot at .testivai/baselines/products/screenshot.png.');
+      expect(none.some((x) => x.type === 'image')).toBe(false);
+
+      commitBaseline('.testivai/baselines', 'products', Buffer.from('not a png'));
+      const bad = lib.missingBaselineDiff(root, results(), 'products') as Content[];
+      expect(texts(bad)[2]).toMatch(/^baseline: \.testivai\/baselines\/products\/screenshot\.png could not be read as a PNG \(.+\)\.$/);
+      expect(bad.some((x) => x.type === 'image')).toBe(false);
+    });
+
+    it('a traversal name shows no image, and an unlisted name is not a missing baseline', () => {
+      commitBaseline('.', 'outside');
+      const content = lib.missingBaselineDiff(root, results({ missingBaselines: ['../outside'] }), '../outside') as Content[];
+      expect(content.some((x) => x.type === 'image')).toBe(false);
+      expect(texts(content)[2]).toBe('baseline: "../outside" does not resolve to a directory inside the baselines directory, so no file was read.');
+      expect(lib.missingBaselineDiff(root, results(), 'home')).toBeNull();
+    });
+  });
+
+  it('missingBaselineLines: one `- <name>: <verdict>` line per missing baseline', () => {
+    commitBaseline('.testivai/baselines', 'products');
+    expect(lib.missingBaselineLines(root, results({ missingBaselines: ['products', '../x'] }))).toEqual([
+      `- products: ${lib.missingVerdict('.testivai/baselines/products')}`,
+      `- ../x: ${lib.missingVerdict(null)}`,
+    ]);
+    const { missingBaselines: _, ...older } = results();
+    expect(lib.missingBaselineLines(root, older as ResultsFile)).toEqual([]);
+  });
+});

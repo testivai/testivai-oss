@@ -1,11 +1,12 @@
 name: 'TestivAI AI Triage'
 description: >
   On a pull request with visual changes, Claude triages each changed or new
-  snapshot as a glitch, an intended change, a bug or a possible bug, from the
-  TestivAI report (through @testivai/mcp), the images and the pull request's
-  diff, and posts one comment. Advisory: it never changes the visual check or
-  a baseline. It runs, and uses tokens, only when there is something to triage
-  and a Claude credential is set; enabled: false turns it off.
+  snapshot and each missing baseline as a glitch, an intended change, a bug or
+  a possible bug, from the TestivAI report (through @testivai/mcp), the images
+  and the pull request's diff, and posts one comment. Advisory: it never
+  changes the visual check or a baseline. It runs, and uses tokens, only when
+  there is something to triage and a Claude credential is set; enabled: false
+  turns it off.
 author: 'TestivAI'
 
 branding:
@@ -41,8 +42,8 @@ inputs:
   enabled:
     description: >
       true (the default) triages every pull request run that has a changed or
-      new snapshot. false turns it off: Claude does not run and no tokens are
-      used. Anything else fails the step.
+      new snapshot or a missing baseline. false turns it off: Claude does not
+      run and no tokens are used. Anything else fails the step.
     required: false
     default: 'true'
 
@@ -72,10 +73,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # Decides whether Claude runs at all (enabled, a pull request, something
-    # changed, a credential, not a disallowed bot), and if so writes the PR
-    # diff and the prompt. The report is read where @testivai/mcp reads it:
-    # .testivai/config.json reportDir, else visual-report.
+    # Decides whether Claude runs at all (enabled, a pull request, a snapshot
+    # changed, new or missing, a credential, not a disallowed bot), and if so
+    # writes the PR diff and the prompt. The report is read where
+    # @testivai/mcp reads it: .testivai/config.json reportDir, else
+    # visual-report.
     - name: Anything to triage?
       id: prep
       uses: actions/github-script@v9

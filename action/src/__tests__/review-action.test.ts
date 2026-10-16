@@ -230,6 +230,42 @@ describe('the scripts load dist/review.cjs and run', () => {
     expect(fs.readFileSync(path.join(dir, 'visual-report', 'triage', 'pr.diff'), 'utf8')).toContain('site/index.html');
   });
 
+  // A baseline with no capture this run (results.json 2.3.0 missingBaselines)
+  // is reason enough to run: the test may have been removed or broken.
+  const missingOnly = () =>
+    fs.writeFileSync(
+      path.join(dir, 'visual-report', 'results.json'),
+      JSON.stringify({
+        version: '2.3.0',
+        timestamp: 0,
+        summary: { total: 1, passed: 1, changed: 0, newSnapshots: 0, missing: 1 },
+        snapshots: [{ name: 'home', status: 'passed' }],
+        missingBaselines: ['products'],
+      }),
+    );
+
+  it('prepare: a missing baseline alone runs Claude, and the prompt lists it with where its baseline is', async () => {
+    missingOnly();
+    const f = fakes();
+    await runScript(prep, values(), { github: f.github, context, core: f.core });
+    expect(f.outputs.run).toBe('true');
+    expect(f.outputs.prompt).toContain('so there is no current image: `products`.');
+    expect(f.outputs.prompt).toContain('Read `.testivai/baselines/<name>/screenshot.png`');
+    expect(f.outputs.prompt).not.toMatch(/changed or is new:/);
+  });
+
+  it('post: a missing baseline gets its marked row', async () => {
+    missingOnly();
+    const f = fakes();
+    const triage = JSON.stringify({
+      summary: 'The products test was removed by mistake.',
+      snapshots: [{ name: 'products', verdict: 'bug', confidence: 'medium', evidence: 'tests/products.spec.ts deleted', nextStep: 'restore it' }],
+    });
+    await runScript(post, values({ 'steps.claude.outputs.structured_output': triage }), { github: f.github, context, core: f.core });
+    expect(f.posted).toHaveLength(1);
+    expect(f.posted[0]).toContain('| `products` (missing) | 🔴 bug | medium | tests/products.spec.ts deleted | restore it |');
+  });
+
   it('prepare: enabled false keeps Claude from running', async () => {
     const f = fakes();
     await runScript(prep, values({ 'inputs.enabled': 'false' }), { github: f.github, context, core: f.core });

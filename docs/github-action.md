@@ -232,7 +232,8 @@ The next CI run shows the snapshot back in the `passed` bucket. Approve everythi
 
 The reporter says *what kind* of change each snapshot is, deterministically.
 The companion `testivai/testivai-oss/review@v1` action adds a second opinion
-on every pull request run that has a changed or new snapshot: Claude
+on every pull request run that has a changed or new snapshot or a missing
+baseline: Claude
 ([`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action))
 reads the report through [`@testivai/mcp`](./mcp.md), looks at the baseline,
 current and diff images, reads the pull request's diff and description, and
@@ -252,11 +253,29 @@ were not compared is not called one from the DOM alone, and a large or local
 diff is called a glitch only when nothing the pull request changed could have
 caused it (the style check does not cover every CSS property).
 
+A missing baseline is a committed baseline that got no capture this run
+(`missingBaselines` in `results.json`): its test was removed, renamed or
+skipped, or failed before `witness()` captured. There is no current image and
+the report cannot say why, so Claude reads the pull request. A removal or
+rename it meant is an intended change. One it did not mean (a rename shows up
+as a new snapshot under the other name), or a change that broke what the test
+needs to reach its capture (the page, a selector it waits for), is a bug.
+Anything else is a possible bug, with a pointer to the test run's log for a
+failed or skipped test. It is never a glitch: there is no capture to call bad.
+Approving does nothing for a missing baseline, because `/testivai approve`
+only promotes a new capture: to accept an intended removal, delete the
+baseline in the same pull request, for example
+`git rm -r .testivai/baselines/<name>`. The prompt tells Claude where the
+committed baseline is, so it can look at its `screenshot.png` even with an
+older `@testivai/mcp` (the action runs the latest published one) that does not
+list missing baselines yet.
+
 The result is one PR comment, updated on each push:
 
 | Snapshot | Verdict | Confidence | Evidence | Next step |
 |---|---|---|---|---|
 | `home` | 🔴 bug | high | DOM changed: `footer.site-footer` removed; the PR only touches `button.btn` in `site/styles.css`. | Restore the footer in `site/index.html`. |
+| `products` (missing) | 🟢 intended change | high | No capture this run; the PR deletes `tests/products.spec.ts` and says the page is gone. | Delete its baseline in this PR: `git rm -r .testivai/baselines/products`. |
 
 It is advisory. It never changes the visual check or a baseline, and Claude
 gets read-only tools: the TestivAI MCP tools without `approve_snapshot` and
@@ -323,9 +342,10 @@ seconds:
 
 1. `enabled` is not `false`.
 2. The run is for a pull request (`pull_request` event).
-3. At least one snapshot is changed or new. Passed snapshots and missing
-   baselines alone never start a run and are not triaged (Claude still sees
-   each passed snapshot as one line of `get_visual_results`).
+3. At least one snapshot is changed or new, or a baseline is missing
+   (`missingBaselines` in `results.json`: committed, but no capture this
+   run). Passed snapshots alone never start a run (Claude still sees each
+   passed snapshot as one line of `get_visual_results`).
 4. A Claude credential is set. Pull requests from forks get no secrets, so
    they are skipped.
 5. The run was not started by a bot, unless that bot is in `allowed-bots`

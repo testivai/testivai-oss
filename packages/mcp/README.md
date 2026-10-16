@@ -10,10 +10,10 @@ signals cannot settle.
 
 | Tool | What it does |
 |---|---|
-| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed (an auto-passed diff says which configured criterion passed it) / likely render noise (the DOM and computed styles both match and the diff is small and scattered; still not proof) / concentrated in one area or large (the DOM and computed styles match, but every diff region fits in a box covering at most a third of the page, or over 1% of pixels differ: a bad capture or a change the style check does not cover, such as size, overflow, transform or an image, so compare the images before approving) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary) / styles not compared (identical DOM, style check unavailable: could be render noise or a stylesheet-only change, so compare the images before approving). Snapshots that share an identical signal (style-only change on the same elements, the same page shift, identical DOM with styles not compared, a large spread-out diff, likely render noise) are grouped first; a diff concentrated in one area is never grouped. It ends with the paths to open the HTML report and each diff image |
-| `explain_snapshot` | Layered evidence for one snapshot: pixel regions and the shape of the diff (`layers.pixel.shape`: scattered, concentrated or large), element attribution (which selectors shifted vs changed, whole-page shift), the DOM/style signal, and interpretation guidance |
+| `get_visual_results` | Reads `visual-report/results.json` and returns a one-line verdict per snapshot: passed (an auto-passed diff says which configured criterion passed it) / likely render noise (the DOM and computed styles both match and the diff is small and scattered; still not proof) / concentrated in one area or large (the DOM and computed styles match, but every diff region fits in a box covering at most a third of the page, or over 1% of pixels differ: a bad capture or a change the style check does not cover, such as size, overflow, transform or an image, so compare the images before approving) / style-only change (identical DOM, different computed styles: a real change) / structural change (with the DOM summary) / styles not compared (identical DOM, style check unavailable: could be render noise or a stylesheet-only change, so compare the images before approving). Snapshots that share an identical signal (style-only change on the same elements, the same page shift, identical DOM with styles not compared, a large spread-out diff, likely render noise) are grouped first; a diff concentrated in one area is never grouped. Each missing baseline (committed, but no capture this run) gets its own line, with nothing to approve: an intended removal deletes the baseline directory. It ends with the paths to open the HTML report and each diff image |
+| `explain_snapshot` | Layered evidence for one snapshot: pixel regions and the shape of the diff (`layers.pixel.shape`: scattered, concentrated or large), element attribution (which selectors shifted vs changed, whole-page shift), the DOM/style signal, and interpretation guidance; for a missing baseline, status `missing`, the committed baseline files and what to check instead |
 | `get_report` | The raw `results.json` payload, for agents that parse structured data |
-| `get_diff` (alias `get_snapshot_diff`) | Returns the baseline, current, and diff **images** for one snapshot, downscaled to fit model context, so the agent can see the change |
+| `get_diff` (alias `get_snapshot_diff`) | Returns the baseline, current, and diff **images** for one snapshot, downscaled to fit model context, so the agent can see the change; for a missing baseline, the committed baseline image only |
 | `list_baselines` | Lists the committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed captures to committed baselines (same as `testivai approve`), **only after a human confirms** |
 
@@ -21,8 +21,9 @@ The server also ships two prompts. `review-visual-changes` walks the agent
 through a full review: summary, `explain_snapshot` per change, diff images when
 the evidence is ambiguous, and a recommendation per snapshot.
 `triage-visual-diff` (optional `snapshot` and `intent` arguments) sorts each
-diff into glitch, intended change, bug or possible bug, with the evidence and
-a next step; a changed DOM or changed computed styles is never a glitch. The
+diff, and each missing baseline, into glitch, intended change, bug or possible
+bug, with the evidence and a next step; a changed DOM or changed computed
+styles is never a glitch, and neither is a missing baseline. The
 same rules run in CI with the
 [`testivai/testivai-oss/review@v1`](https://github.com/testivai/testivai-oss/blob/main/docs/github-action.md#ai-triage-of-every-diff)
 action.

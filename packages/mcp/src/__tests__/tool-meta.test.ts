@@ -77,6 +77,34 @@ describe('get_visual_results description', () => {
   });
 });
 
+// Missing baselines (no capture this run) are served by these tools too; the
+// model must learn that before it calls them, and that approving does nothing.
+describe('tool descriptions: missing baselines', () => {
+  it('get_visual_results: they get their own line, with nothing to approve', () => {
+    const missing = clauses(TOOL_META.get_visual_results.description).filter((c) => /missing baselines/i.test(c));
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatch(/committed baselines that got no capture this run/);
+    expect(missing[0]).toMatch(/their own line/);
+    expect(missing[0]).toMatch(/there is nothing to approve, and an intended removal deletes the baseline directory/);
+  });
+
+  it('explain_snapshot: status missing, the committed files, and what to check instead', () => {
+    expect(TOOL_META.explain_snapshot.description).toMatch(
+      /For a missing baseline \(no capture this run\) it returns status "missing", the committed baseline files and what to check instead/,
+    );
+  });
+
+  it('get_diff and its alias: only the committed baseline image, since there is no current capture', () => {
+    for (const tool of [TOOL_META.get_diff, TOOL_META.get_snapshot_diff]) {
+      expect(tool.description).toMatch(/for a missing baseline \(no capture this run\), only the committed baseline image, since there is no current capture/);
+    }
+  });
+
+  it('get_report: the payload carries missingBaselines', () => {
+    expect(TOOL_META.get_report.description).toMatch(/missingBaselines/);
+  });
+});
+
 /**
  * The review-visual-changes prompt decides how the model sorts each diff, so
  * it carries the same four cases as the verdicts: likely render noise (DOM
@@ -124,6 +152,22 @@ describe('review-visual-changes prompt', () => {
   it('keeps baseline approval a human decision', () => {
     expect(text).toMatch(/baseline approval is a human decision/i);
     expect(text).toMatch(/Never call approve_snapshot\/approve_all yourself/);
+  });
+
+  // A baseline with no capture this run is coverage that silently shrank.
+  it('does not stop at step 1 when the only finding is a missing baseline', () => {
+    expect(text).not.toMatch(/If nothing changed and nothing is new, say so and stop/);
+    expect(text).toMatch(/1\. Call get_report for the summary\. If nothing changed, nothing is new and no baseline is missing \(missingBaselines\), say so and stop\./);
+  });
+
+  it('lists a missing baseline among the cases, with nothing to approve', () => {
+    // The bullet and its indented continuation lines.
+    const bullet = text.match(/^ {3}- a missing baseline.*(?:\n {5}\S.*)*/m);
+    expect(bullet).not.toBeNull();
+    const line = bullet![0];
+    expect(line).toMatch(/missingBaselines/);
+    expect(line).toMatch(/no capture this run/);
+    expect(line).toMatch(/approving does nothing for it/);
   });
 });
 
@@ -203,16 +247,20 @@ describe('triage-visual-diff prompt', () => {
     expect(text).toMatch(/approving is the human's decision/i);
   });
 
-  it('without arguments: triages every changed snapshot and finds the intent itself', () => {
-    expect(text).toMatch(/every changed snapshot/i);
+  it('without arguments: triages every changed or new snapshot and every missing baseline, and finds the intent itself', () => {
+    // The same targets as the CI review's prompt (action/src/review.ts).
+    expect(text).toMatch(/^Triage every changed or new snapshot and every missing baseline in this project's latest TestivAI visual results/);
     expect(text).toMatch(/no statement of intent/i);
     expect(text).toMatch(/possible bug rather than guess/i);
+    expect(TRIAGE_PROMPT.args.snapshot).toBe(
+      'Snapshot or missing baseline to triage. Leave empty to triage every changed or new snapshot and every missing baseline.',
+    );
   });
 
   it('with arguments: focuses on the snapshot and uses the stated intent verbatim', () => {
     const focused = TRIAGE_PROMPT.textFor({ snapshot: 'checkout', intent: 'Make the pay button pill-shaped.' });
     expect(focused).toMatch(/snapshot `checkout`/);
-    expect(focused).not.toMatch(/every changed snapshot/i);
+    expect(focused).not.toMatch(/every changed or new snapshot/i);
     expect(focused).toContain('Make the pay button pill-shaped.');
     expect(focused).not.toMatch(/no statement of intent/i);
   });
@@ -255,8 +303,67 @@ describe('triage-visual-diff prompt', () => {
   it('a named snapshot that auto-passed with uncompared styles is triaged, not dismissed', () => {
     const named = TRIAGE_PROMPT.textFor({ snapshot: 'footer' });
     expect(named).not.toMatch(/If it passed or is not in the results, say so and stop/);
-    expect(named).toMatch(/If it is not in the results, or it passed without an auto-pass, say so and stop/);
+    expect(named).toMatch(/If it is neither a snapshot nor a missing baseline in the results, or it passed without an auto-pass, say so and stop/);
     expect(named).toMatch(/auto-passed[^.]*say which criterion passed it[^.]*styles were not compared/i);
+  });
+
+  // A missing baseline is listed in missingBaselines, not in snapshots: "not
+  // in the results, stop" alone would end the triage of exactly that name.
+  it('a named missing baseline is triaged, not dismissed for having no capture', () => {
+    const named = TRIAGE_PROMPT.textFor({ snapshot: 'products' });
+    expect(named).not.toMatch(/If it is not in the results, or it passed/);
+    expect(named).toMatch(
+      /If it is a missing baseline \(listed in missingBaselines\), triage it by the status "missing" row below: do not stop because it has no capture\./,
+    );
+  });
+
+  describe('missing baselines (a committed baseline with no capture this run)', () => {
+    const rubric = TRIAGE_PROMPT.rubric();
+    const row = rubric.split('\n').find((l) => l.startsWith('| status "missing"'));
+
+    it('has its own evidence row, after the other rows', () => {
+      expect(row).toBeDefined();
+      expect(row!.split('|')).toHaveLength(4); // one two-column table row
+      const rows = rubric.split('\n').filter((l) => l.startsWith('| '));
+      expect(rows[rows.length - 1]).toBe(row);
+      expect(row).toMatch(/^\| status "missing" \(in missingBaselines\) \|/);
+    });
+
+    it('says there is no current image and the report cannot tell why', () => {
+      expect(row).toMatch(/there is no current image/);
+      expect(row).toMatch(/the report cannot tell a removed or renamed test from a skipped or failing one/);
+    });
+
+    it('judges it by the change under test: on purpose, by mistake, or broken on the way to the capture', () => {
+      expect(row).toMatch(/removed or renamed that test or snapshot on purpose \(the intent covers it\): intended change/);
+      expect(row).toMatch(
+        /removed or renamed it without meaning to \(the intent does not cover it; for a rename, a new snapshot under the other name is the other half\), or broke what the test needs to reach its capture \(the page, a selector it waits for\): bug/,
+      );
+      expect(row).toMatch(/Otherwise possible bug: tell a person to check the test run's log for a failed or skipped test/);
+    });
+
+    it('is never a glitch on this evidence, and recommends a glitch nowhere', () => {
+      expect(row).toMatch(/Never a glitch on this evidence: there is no capture to call bad\./);
+      expect(row!.match(/glitch/gi)).toEqual(['glitch']);
+    });
+
+    it('leaves the other rows word for word', () => {
+      for (const existing of [
+        '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
+        '| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |',
+        '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, is either a bad capture or a change the style check cannot see: it compares colors, fonts, borders, spacing, display, opacity, visibility and shadows, and does not cover size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets. See "Bad captures" below. |',
+        '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change, and the signs of a bad capture listed below can also come from a stylesheet change here. |',
+        '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
+      ]) {
+        expect(rubric.split('\n')).toContain(existing);
+      }
+    });
+
+    it('next steps: approving does nothing, an intended removal deletes the baseline, a bug restores the capture', () => {
+      expect(TRIAGE_PROMPT.nextSteps).toMatch(
+        /for a missing baseline, approving does nothing \(it only promotes a new capture\): an intended removal deletes its baseline directory \(for example `git rm -r \.testivai\/baselines\/<name>`\) in the same change, and a bug restores the test or its capture\.$/,
+      );
+    });
   });
 
   it('keeps an argument from breaking out of its quote', () => {

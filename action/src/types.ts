@@ -78,3 +78,11 @@ export interface ResultsData {
   missingBaselines?: string[];
 }
 
+/**
+ * One thing the AI triage judges: a changed or new snapshot, or a missing
+ * baseline (in `missingBaselines`: committed, but no capture this run).
+ */
+export interface TriageItem {
+  name: string;
+  status: 'changed' | 'new' | 'missing';
+}

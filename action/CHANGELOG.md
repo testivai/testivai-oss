@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `testivai/testivai-oss/review@v1` triages missing baselines too: committed baselines that got no capture this run (`missingBaselines` in `results.json`), because their test was removed, renamed or skipped, or failed before it captured. A push whose only finding is a missing baseline now starts a run instead of skipping with "nothing to triage". The prompt lists missing baselines apart from the changed and new snapshots (one cap of 30 names across both) and says where each one's committed baseline is (`baselinesDir` in `.testivai/config.json`, `{platform}` included, else `.testivai/baselines`), so Claude can read its `screenshot.png` even with an older `@testivai/mcp`. The shared rubric judges one by the change under test: an intended removal or rename, a bug (an unintended one, or a change that broke the test before its capture), otherwise a possible bug with a pointer to the test run's log; never a glitch. The comment marks those rows `(missing)`, counts them in the tally, and says that approving does nothing for them: an intended removal deletes the baseline directory
+
+## [1.1.0] - 2026-10-16
+
 ### Added
 - `testivai/testivai-oss/review@v1` (`review/action.yml`): on a pull request with a changed or new snapshot, Claude (`anthropics/claude-code-action`) triages each one as a glitch, an intended change, a bug or a possible bug, using the TestivAI MCP server, the images and the pull request's diff, and posts one comment updated on each push. It uses the MCP server's `triage-visual-diff` rubric, bundled as `dist/review.cjs`. Advisory: it never changes the visual check or a baseline, and Claude gets read-only tools. It skips without using tokens when `enabled: false`, when nothing changed, on non-PR events, without a Claude credential (`anthropic-api-key` or `claude-code-oauth-token`), or for a bot not in `allowed-bots`; `model` and `max-turns` bound the cost. Claude reads only inside the workspace (not `.git`, `/proc` or `/sys`) and gets the job's own `github.token`; its answer is posted with secrets redacted and HTML, mentions, links and images defanged, within GitHub's comment size limit. A run superseded by a newer push never writes the comment, and a comment that cannot be written is a warning, not a failed job
 
