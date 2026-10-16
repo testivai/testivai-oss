@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "TestivAI Open Source SDKs - local-first visual regression testing",
+  "author": "Budi Sugianto (https://github.com/mcbuddy)",
   "license": "MIT",
   "repository": {
     "type": "git",
