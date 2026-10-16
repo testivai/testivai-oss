@@ -98,3 +98,60 @@ describe('AI triage setup docs', () => {
     expect(read(file)).toMatch(/^review\/\s+testivai\/testivai-oss\/review@v1/m);
   });
 });
+
+/**
+ * Missing baselines (committed, but no capture this run) are triaged too, and
+ * a missing one alone starts a run. The docs used to say the opposite.
+ */
+describe('AI triage docs: missing baselines', () => {
+  /** Line wraps do not matter to a reader. */
+  const flat = (file: string) => read(file).replace(/\s+/g, ' ');
+  const doc = flat('docs/github-action.md');
+
+  it('docs/github-action.md no longer says missing baselines are left out', () => {
+    expect(doc).not.toMatch(/missing baselines alone never start a run/i);
+    expect(doc).not.toMatch(/are not triaged/i);
+  });
+
+  it('docs/github-action.md: a missing baseline is triaged, and alone starts a run', () => {
+    expect(doc).toMatch(/on every pull request run that has a changed or new snapshot or a missing baseline/);
+    expect(doc).toMatch(/3\. At least one snapshot is changed or new, or a baseline is missing \(`missingBaselines` in `results\.json`/);
+  });
+
+  it('docs/github-action.md: how a missing baseline is judged, marked and accepted', () => {
+    expect(doc).toMatch(/\| `products` \(missing\) \|/);
+    expect(doc).toMatch(/the report cannot say why/i);
+    expect(doc).toMatch(/test run's log/);
+    expect(doc).toMatch(/never a glitch/i);
+    expect(doc).toMatch(/approving does nothing for a missing baseline/i);
+    expect(doc).toMatch(/git rm -r \.testivai\/baselines\/<name>/);
+    // An older @testivai/mcp (CI runs the latest published one) is covered by the prompt.
+    expect(doc).toMatch(/older `@testivai\/mcp`/);
+  });
+
+  // A --grep run, a matrix lane or a path-filtered job leaves baselines missing
+  // on purpose: each would start a paid run on every pull request.
+  it('docs/github-action.md: partial runs leave baselines missing on purpose; failOnMissing: false keeps them out', () => {
+    expect(doc).toMatch(/`--grep`[^.]*matrix[^.]*`--allow-missing`/);
+    expect(doc).toMatch(/`failOnMissing: false` in `\.testivai\/config\.json` says missing baselines are expected and leaves missing baselines out of the triage/);
+    expect(doc).toMatch(/its cost grows with the number of changed, new and missing snapshots/);
+  });
+
+  it('review/action.yml and README.md say a missing baseline is triaged unless failOnMissing is false', () => {
+    const action = parse(read('review/action.yml')) as { description: string; inputs: { enabled: { description: string } } };
+    const clause = /a missing baseline \(unless \.testivai\/config\.json sets failOnMissing: false\)/;
+    expect(action.description.replace(/\s+/g, ' ')).toMatch(/each missing baseline \(unless \.testivai\/config\.json sets failOnMissing: false\)/);
+    expect(action.inputs.enabled.description.replace(/\s+/g, ' ')).toMatch(clause);
+    expect(flat('README.md')).toMatch(clause);
+  });
+
+  it('README.md: the ai-triage job runs for a missing baseline too', () => {
+    expect(flat('README.md')).toMatch(/The `ai-triage` job runs on every pull request with a changed or new snapshot or a missing baseline/);
+  });
+
+  it('review/action.yml: the description and the enabled input say missing baselines too', () => {
+    const action = parse(read('review/action.yml')) as { description: string; inputs: { enabled: { description: string } } };
+    expect(action.description.replace(/\s+/g, ' ')).toMatch(/triages each changed or new snapshot and each missing baseline/);
+    expect(action.inputs.enabled.description.replace(/\s+/g, ' ')).toMatch(/a changed or new snapshot or a missing baseline/);
+  });
+});

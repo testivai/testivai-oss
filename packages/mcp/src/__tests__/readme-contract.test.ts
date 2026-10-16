@@ -43,6 +43,33 @@ describe('@testivai/mcp README', () => {
   });
 });
 
+// Missing baselines (committed, but no capture this run) are served by
+// get_visual_results, explain_snapshot and get_diff, and triaged by the
+// triage-visual-diff prompt: both docs that describe the tools say so.
+describe('docs describe missing baselines', () => {
+  const flat = (file: string) => read(file).replace(/\s+/g, ' ');
+  const row = (text: string, tool: string) => text.split('\n').find((l) => l.startsWith(`| \`${tool}\``)) ?? '';
+
+  it.each([
+    ['packages/mcp/README.md', README],
+    ['docs/mcp.md', path.join(REPO_ROOT, 'docs', 'mcp.md')],
+  ])('%s: the tools table covers them', (_rel, file) => {
+    const text = read(file);
+    expect(row(text, 'get_visual_results')).toMatch(/missing baselines? \(committed, but no capture this run\)[^|]*nothing to approve/i);
+    expect(row(text, 'explain_snapshot')).toMatch(/for a missing baseline, status `missing`, the committed baseline files and what to check instead/i);
+    expect(row(text, 'get_diff')).toMatch(/for a missing baseline, the committed baseline image only/i);
+  });
+
+  it('docs/mcp.md: the triage prompt covers them, never as a glitch', () => {
+    const doc = flat(path.join(REPO_ROOT, 'docs', 'mcp.md'));
+    expect(doc).toMatch(/`snapshot`: triage one snapshot or missing baseline; empty triages every changed or new snapshot and every missing baseline/);
+    expect(doc).toMatch(
+      /A missing baseline \(committed, but no capture this run[^)]*\) is never a glitch: the model reads the change under test for a removed or renamed test, or one broken before its capture, and otherwise calls it a possible bug and says to check the test run's log/,
+    );
+    expect(doc).toMatch(/Approving does nothing for a missing baseline: an intended removal deletes its baseline directory in the same change/);
+  });
+});
+
 // approve_snapshot / approve_all exist so a human can approve in conversation;
 // a guide that says there is no approve tool sends readers to the wrong flow.
 describe('agent guides describe the approve tools that exist', () => {

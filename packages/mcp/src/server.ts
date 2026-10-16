@@ -4,7 +4,7 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments } from './lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, imageContent, baselinesDirFor, type ToolContent } from './lib';
 import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
@@ -41,10 +41,12 @@ server.registerTool(
       };
     }
     const lines = [
-      `Run: ${results.timestamp} — ${results.summary.total} snapshots: ${results.summary.passed} passed, ${results.summary.changed} changed, ${results.summary.newSnapshots} new.`,
+      summaryLine(results),
       '',
       ...withBlankAfter(changeGroupLines(results.snapshots)),
       ...results.snapshots.map((s) => `- ${s.name}: ${verdictFor(s)}`),
+      // Committed baselines that got no capture this run: nothing to approve.
+      ...missingBaselineLines(projectRoot, results),
       '',
       ...withBlankAfter(reportLinks(paths, results)),
       'Baseline approval is a human decision: do not approve on your own. When the human confirms a change in this conversation, ' +
@@ -66,29 +68,19 @@ const snapshotDiffHandler = async ({ name }: { name: string }) => {
   const results = readResults(paths);
   const snapshot = results?.snapshots.find((s) => s.name === name);
   if (!results || !snapshot) {
+    // A missing baseline has no current capture: its committed screenshot only.
+    const missing = results ? missingBaselineDiff(projectRoot, results, name) : null;
+    if (missing) return { content: missing };
     return { content: [{ type: 'text', text: `No snapshot named "${name}" in the latest results.` }] };
   }
-  const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
-    { type: 'text', text: `${snapshot.name}: ${verdictFor(snapshot)}` },
-  ];
+  const content: ToolContent[] = [{ type: 'text', text: `${snapshot.name}: ${verdictFor(snapshot)}` }];
   for (const [label, rel] of [
     ['baseline', snapshot.baselinePath],
     ['current', snapshot.currentPath],
     ['diff', snapshot.diffPath],
   ] as const) {
     const abs = rel ? resolveImage(paths, rel) : null;
-    if (abs) {
-      const raw = fs.readFileSync(abs);
-      const downscaled = downscalePng(raw);
-      const wasDownscaled =
-        downscaled.originalWidth !== downscaled.width ||
-        downscaled.originalHeight !== downscaled.height;
-      const textLabel = wasDownscaled
-        ? `${label} (downscaled from ${downscaled.originalWidth}x${downscaled.originalHeight}):`
-        : `${label}:`;
-      content.push({ type: 'text', text: textLabel });
-      content.push({ type: 'image', data: downscaled.data.toString('base64'), mimeType: 'image/png' });
-    }
+    if (abs) content.push(...imageContent(label, fs.readFileSync(abs)));
   }
   return { content };
 };
@@ -220,7 +212,7 @@ server.registerPrompt(
     messages: [
       {
         role: 'user' as const,
-        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent }) },
+        content: { type: 'text' as const, text: TRIAGE_PROMPT.textFor({ snapshot, intent, baselinesDir: baselinesDirFor(projectRoot) }) },
       },
     ],
   })

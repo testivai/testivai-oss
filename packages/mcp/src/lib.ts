@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
-import { BaselineStore } from '@testivai/witness/baselines';
+import { BaselineStore, resolveBaselinesDir } from '@testivai/witness/baselines';
+import { shellArg } from './tool-meta';
 import {
   describeRegions,
   diffShape,
@@ -53,8 +54,15 @@ export interface SnapshotResult {
 export interface ResultsFile {
   version: string;
   timestamp: string;
-  summary: { total: number; passed: number; changed: number; newSnapshots: number };
+  /** `missing`: results.json 2.3.0+, the number of baselines with no capture this run. */
+  summary: { total: number; passed: number; changed: number; newSnapshots: number; missing?: number };
   snapshots: SnapshotResult[];
+  /**
+   * results.json 2.3.0+: committed baselines that got no capture this run
+   * (the test was removed, renamed or skipped, or failed before it
+   * captured). Absent in older results: treat as none.
+   */
+  missingBaselines?: string[];
 }
 
 export interface ProjectPaths {
@@ -83,6 +91,235 @@ export function readResults(paths: ProjectPaths): ResultsFile | null {
   const file = path.join(paths.reportDir, 'results.json');
   if (!fs.existsSync(file)) return null;
   return JSON.parse(fs.readFileSync(file, 'utf8')) as ResultsFile;
+}
+
+/** The get_visual_results header: the run and its counts, with missing baselines when the results carry them. */
+export function summaryLine(results: ResultsFile): string {
+  const { total, passed, changed, newSnapshots, missing } = results.summary;
+  const m = typeof missing === 'number' ? missing : Array.isArray(results.missingBaselines) ? results.missingBaselines.length : undefined;
+  const missingText = m === undefined ? '' : `; ${m} missing baseline${m === 1 ? '' : 's'} (no capture this run)`;
+  return `Run: ${results.timestamp} — ${total} snapshots: ${passed} passed, ${changed} changed, ${newSnapshots} new${missingText}.`;
+}
+
+/**
+ * The missing baselines to report, in results order and each once: names in
+ * `missingBaselines` that are not also a snapshot (the snapshot's own line
+ * covers those). Older results have no such list: none.
+ */
+export function missingBaselineNames(results: ResultsFile): string[] {
+  if (!Array.isArray(results.missingBaselines)) return [];
+  const snapshots = new Set((results.snapshots ?? []).map((s) => s.name));
+  const names = results.missingBaselines.filter((n): n is string => typeof n === 'string' && n.length > 0 && !snapshots.has(n));
+  return [...new Set(names)];
+}
+
+/** A path for the reader: relative to the project root, with forward slashes. */
+const projectPath = (root: string, abs: string): string => path.relative(root, abs).split(path.sep).join('/') || '.';
+
+/** The baselines directory relative to the project root (config.json baselinesDir, `{platform}` resolved). */
+export const baselinesDirFor = (root: string): string => projectPath(root, resolveBaselinesDir(root));
+
+/** True when `target`, with every symlink resolved, is strictly inside `dir` (also resolved). */
+function staysInside(dir: string, target: string): boolean {
+  try {
+    const realDir = fs.realpathSync(dir);
+    return fs.realpathSync(target).startsWith(realDir + path.sep);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The committed baseline directory of a missing baseline (absolute), or null.
+ * This is the only way a missing name becomes a path: the name must be listed
+ * in `missingBaselines` (and not be a snapshot), must name one directory
+ * directly inside the baselines directory (resolveBaselinesDir: config.json
+ * `baselinesDir`, `{platform}` included), and, when it exists, must not lead
+ * out of it through a symlink. witness lists missing baselines from that
+ * directory's own entries, so a real one always passes.
+ */
+export function missingBaselineDir(root: string, results: ResultsFile, name: string): string | null {
+  if (name.includes('\0') || !missingBaselineNames(results).includes(name)) return null;
+  const base = path.resolve(resolveBaselinesDir(root));
+  const dir = path.resolve(base, name);
+  if (path.dirname(dir) !== base || path.basename(dir) !== name) return null;
+  if (fs.existsSync(dir) && !staysInside(base, dir)) return null;
+  return dir;
+}
+
+/** One-line verdict for a missing baseline; `dir` is its baseline directory relative to the project root, when known. */
+export function missingVerdict(dir?: string | null): string {
+  return (
+    "missing baseline — committed, but no capture this run: its test was removed, renamed or skipped, or failed before it captured (the report cannot say which; the test run's log can); " +
+    `nothing to approve (approving only promotes a new capture) — to accept an intended removal, delete its baseline directory${dir ? ` (${dir})` : ''} in the same change`
+  );
+}
+
+/**
+ * Why a missing baseline's directory may not be there: the results predate a
+ * deletion, or another machine wrote them with a baselinesDir that resolved
+ * elsewhere (`{platform}`). Neither is "committed here", so no git rm.
+ */
+export function notHere(dir: string): string {
+  return (
+    `no baseline directory at ${dir} on this machine: the results may be stale (the baseline was already deleted, or the tests have not run since), ` +
+    `or come from a machine whose baselinesDir resolved to another directory ({platform} resolves to ${process.platform} here); re-run the tests before judging it`
+  );
+}
+
+/** A missing baseline's directory (absolute, and relative for the reader), whether it is there, and its verdict. */
+function locateMissing(
+  root: string,
+  results: ResultsFile,
+  name: string,
+): { abs: string | null; dir: string | null; present: boolean; verdict: string } {
+  const abs = missingBaselineDir(root, results, name);
+  const dir = abs ? projectPath(root, abs) : null;
+  const present = abs !== null && fs.existsSync(abs);
+  return { abs, dir, present, verdict: abs && !present ? `missing baseline — ${notHere(dir as string)}` : missingVerdict(dir) };
+}
+
+/**
+ * get_visual_results lines for the missing baselines. One is shaped like the
+ * per-snapshot lines (`- <name>: <verdict>`). Several are grouped by kind,
+ * each kind's verdict once and a short line per name, since a partial run
+ * (`--grep`, a matrix lane) can leave most of the suite missing: committed
+ * here, not on this machine (stale results, another platform's
+ * `{platform}`), or a name outside the baselines directory. A baseline that
+ * is not here is never under the "committed, delete it" verdict.
+ */
+export function missingBaselineLines(root: string, results: ResultsFile): string[] {
+  const names = missingBaselineNames(results);
+  if (names.length <= 1) return names.map((name) => `- ${name}: ${locateMissing(root, results, name).verdict}`);
+  const committed: string[] = [];
+  const notOnThisMachine: string[] = [];
+  const unresolved: string[] = [];
+  for (const name of names) {
+    const { abs, present } = locateMissing(root, results, name);
+    (!abs ? unresolved : present ? committed : notOnThisMachine).push(name);
+  }
+  const template = `${baselinesDirFor(root)}/<name>`;
+  const group = (list: string[], header: string, verdict: string): string[] =>
+    list.length > 0 ? [`${header} (${list.length}): ${verdict}`, ...list.map((n) => `- ${n}`)] : [];
+  return [
+    ...group(committed, 'Missing baselines', missingVerdict(template)),
+    ...group(notOnThisMachine, 'Missing baselines not on this machine', `missing baseline — ${notHere(template)}`),
+    ...group(
+      unresolved,
+      'Missing baselines whose name does not resolve to a directory inside the baselines directory',
+      'no baseline files were read for them',
+    ),
+  ];
+}
+
+/** The files a committed baseline can hold, in the order they are listed. */
+const BASELINE_FILES = ['screenshot.png', 'dom.html', 'metadata.json', 'elements.json'];
+
+
+/** explain_snapshot for a missing baseline: no capture, so no layers; the committed files and what to check instead. */
+export interface MissingBaselineExplanation {
+  name: string;
+  status: 'missing';
+  verdict: string;
+  baseline: {
+    /** Relative to the project root; null when the name does not resolve inside the baselines directory. */
+    directory: string | null;
+    /** The committed files that exist (screenshot.png, dom.html, metadata.json, elements.json), relative to the project root. */
+    files: string[];
+  };
+  guidance: string[];
+}
+
+function explainMissingBaseline(root: string, results: ResultsFile, name: string): MissingBaselineExplanation {
+  const base = resolveBaselinesDir(root);
+  const { abs, dir, present, verdict } = locateMissing(root, results, name);
+  const files = abs
+    ? BASELINE_FILES.map((f) => path.join(abs, f))
+        .filter((f) => fs.existsSync(f) && staysInside(base, f))
+        .map((f) => projectPath(root, f))
+    : [];
+
+  const guidance: string[] = [];
+  if (!dir) {
+    guidance.push(
+      `The name "${name}" does not resolve to a directory inside the baselines directory (${projectPath(root, base)}), so no baseline files were read.`,
+    );
+  } else if (!present) {
+    // Not committed here: stale results or another platform's baselinesDir.
+    const why = notHere(dir);
+    guidance.push(`${why.charAt(0).toUpperCase()}${why.slice(1)}.`);
+  } else if (files.length === 0) {
+    guidance.push(`No committed baseline files were found in ${dir}.`);
+  }
+  if (!dir || present) {
+    guidance.push(
+      `No capture this run: the baseline is committed${dir ? ` (${dir})` : ''}, but the test run captured nothing under this name, so there is no current image and nothing to diff. ` +
+        'The report cannot say why: the test may have been removed or renamed, skipped, or failed before it captured. ' +
+        "Check what the change under test did to that test or snapshot, and the test run's log for a failed or skipped test.",
+    );
+  }
+  const fresh = results.snapshots.filter((s) => s.status === 'new').map((s) => s.name);
+  if (fresh.length > 0) {
+    const shown = fresh.slice(0, 10).join(', ') + (fresh.length > 10 ? ', …' : '');
+    guidance.push(`New snapshots this run (no baseline yet): ${shown}. If one of them is this test under another name, it is a rename: judge the two together.`);
+  }
+  guidance.push(
+    'Approving does nothing here: approve_snapshot and `testivai approve` only promote a new capture from .testivai/temp, and there is none.' +
+      (!dir || present
+        ? ` To accept an intended removal, delete the baseline directory in the same change${dir ? ` (git rm -r ${shellArg(dir)})` : ''}; otherwise restore the test, or what it needs to reach its capture.`
+        : ''),
+    'There is no capture to call bad, so this is not a glitch: an intended change if the change under test meant to remove or rename it, a bug if it did so by mistake or broke the test before its capture, otherwise a possible bug.',
+  );
+  return { name, status: 'missing', verdict, baseline: { directory: dir, files }, guidance };
+}
+
+/** One item of a tool result: text or a PNG. */
+export type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+
+/** An image labelled like get_diff labels it, downscaled for model context. */
+export function imageContent(label: string, raw: Buffer): ToolContent[] {
+  const downscaled = downscalePng(raw);
+  const wasDownscaled = downscaled.originalWidth !== downscaled.width || downscaled.originalHeight !== downscaled.height;
+  return [
+    { type: 'text', text: wasDownscaled ? `${label} (downscaled from ${downscaled.originalWidth}x${downscaled.originalHeight}):` : `${label}:` },
+    { type: 'image', data: downscaled.data.toString('base64'), mimeType: 'image/png' },
+  ];
+}
+
+/**
+ * get_diff for a missing baseline: its verdict, that there is no current
+ * capture, and the committed baseline screenshot only. A screenshot that is
+ * not there, or not a PNG, is said, never thrown. Null when the name is not
+ * a missing baseline.
+ */
+export function missingBaselineDiff(root: string, results: ResultsFile, name: string): ToolContent[] | null {
+  if (!missingBaselineNames(results).includes(name)) return null;
+  const { abs: dir, verdict } = locateMissing(root, results, name);
+  const content: ToolContent[] = [
+    { type: 'text', text: `${name}: ${verdict}` },
+    {
+      type: 'text',
+      text: 'No current capture: nothing was captured under this name this run, so there is no current or diff image, only the committed baseline.',
+    },
+  ];
+  if (!dir) {
+    content.push({ type: 'text', text: `baseline: "${name}" does not resolve to a directory inside the baselines directory, so no file was read.` });
+    return content;
+  }
+  const file = path.join(dir, 'screenshot.png');
+  if (!fs.existsSync(file) || !staysInside(resolveBaselinesDir(root), file)) {
+    content.push({ type: 'text', text: `baseline: no committed screenshot at ${projectPath(root, file)}.` });
+    return content;
+  }
+  try {
+    content.push(...imageContent('baseline', fs.readFileSync(file)));
+  } catch (err) {
+    content.push({
+      type: 'text',
+      text: `baseline: ${projectPath(root, file)} could not be read as a PNG (${err instanceof Error ? err.message : String(err)}).`,
+    });
+  }
+  return content;
 }
 
 /**
@@ -316,11 +553,16 @@ function sharedElement(regions: RegionInfo[]): string | null {
   return shared[0] ?? null;
 }
 
-/** Build the layered explanation bundle for one snapshot, or null if absent. */
-export function explainSnapshot(root: string, name: string): SnapshotExplanation | null {
+/**
+ * Build the layered explanation bundle for one snapshot, the missing-baseline
+ * explanation for a name in `missingBaselines` that is not a snapshot, or
+ * null when the latest results have neither.
+ */
+export function explainSnapshot(root: string, name: string): SnapshotExplanation | MissingBaselineExplanation | null {
   const results = readResults(resolvePaths(root));
-  const snapshot = results?.snapshots.find((s) => s.name === name);
-  if (!results || !snapshot) return null;
+  if (!results) return null;
+  const snapshot = results.snapshots.find((s) => s.name === name);
+  if (!snapshot) return missingBaselineNames(results).includes(name) ? explainMissingBaseline(root, results, name) : null;
 
   const regions = [...(snapshot.regions ?? [])]
     .sort((a, b) => b.width * b.height - a.width * a.height)
@@ -337,6 +579,14 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   const guidance: string[] = [];
   if (snapshot.status === 'new') {
     guidance.push('No baseline exists yet — this is a first capture, not a regression. A human should review and approve it.');
+    // The other half of a rename: read on its own it would look like something to approve.
+    const missing = missingBaselineNames(results);
+    if (missing.length > 0) {
+      const shown = missing.slice(0, 10).join(', ') + (missing.length > 10 ? ', …' : '');
+      guidance.push(
+        `Missing baselines this run (no capture): ${shown}. If this new snapshot is one of them under another name, it is a rename: judge the two together before approving it.`,
+      );
+    }
   }
   const notCompared = stylesNotCompared(snapshot.dom);
   const shape = matchedStylesShape(snapshot);
@@ -479,7 +729,6 @@ export function approveAll(root: string): ApproveResult {
 export function listBaselines(root: string): string[] {
   // Honor config.json baselinesDir (incl. the {platform} token) so this
   // agrees with the store's resolution — see witness resolveBaselinesDir.
-  const { resolveBaselinesDir } = require('@testivai/witness/baselines');
   const dir: string = resolveBaselinesDir(root);
   if (!fs.existsSync(dir)) return [];
   return fs

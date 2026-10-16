@@ -21,7 +21,8 @@ const requiresUserInteraction = { 'anthropic/requiresUserInteraction': true };
 const diffImages: ToolMeta = {
   title: 'View snapshot diff images',
   description:
-    'Return the baseline, current, and diff images for one changed snapshot so you can see what changed visually. ' +
+    'Return the baseline, current, and diff images for one changed snapshot so you can see what changed visually; ' +
+    'for a missing baseline (no capture this run), only the committed baseline image, since there is no current capture. ' +
     'Use get_report / get_visual_results first to find snapshot names.',
 };
 
@@ -38,6 +39,8 @@ export const TOOL_META = {
       'and so is any DOM change — both need human review. ' +
       'When the styles were not compared (style check unavailable), the verdict says so and does not call the diff noise: ' +
       'with an identical DOM it could be render noise or a stylesheet-only change, so look at the diff (get_diff) before approving. ' +
+      'Missing baselines (committed baselines that got no capture this run: a test removed, renamed or skipped, or one that failed before it captured) ' +
+      'get their own line: there is nothing to approve, and an intended removal deletes the baseline directory. ' +
       'Run the test suite first (e.g. `npx playwright test`) if results are stale or missing.',
   },
   // `get_diff` is the canonical name; `get_snapshot_diff` is kept as an alias.
@@ -47,7 +50,8 @@ export const TOOL_META = {
     title: 'Get the raw visual report (results.json)',
     description:
       'Return the machine-readable results.json payload verbatim (summary + per-snapshot status, diff %, ' +
-      'DOM signal, and region→selector attribution). Parse this instead of scraping CLI output.',
+      'DOM signal, and region→selector attribution, plus missingBaselines: committed baselines with no capture this run). ' +
+      'Parse this instead of scraping CLI output.',
   },
   approve_snapshot: {
     title: 'Approve one snapshot as the new baseline',
@@ -72,7 +76,8 @@ export const TOOL_META = {
     description:
       'Layered evidence for one snapshot: pixel regions with bounding boxes, element attribution ' +
       '(which selectors shifted vs changed, whole-page shift detection), the DOM/style signal, and ' +
-      'interpretation guidance. Use this to explain WHY a diff happened — pair with get_diff for the images.',
+      'interpretation guidance. Use this to explain WHY a diff happened — pair with get_diff for the images. ' +
+      'For a missing baseline (no capture this run) it returns status "missing", the committed baseline files and what to check instead.',
   },
 } satisfies Record<string, ToolMeta>;
 
@@ -91,8 +96,8 @@ export const REVIEW_PROMPT = {
   text: [
     'Review the latest TestivAI visual regression results in this project:',
     '',
-    '1. Call get_report for the summary. If nothing changed and nothing is new, say so and stop.',
-    '2. For every changed snapshot, call explain_snapshot(name) and read its layers and guidance.',
+    '1. Call get_report for the summary. If nothing changed, nothing is new and no baseline is missing (missingBaselines), say so and stop.',
+    '2. For every changed snapshot and every missing baseline, call explain_snapshot(name) and read its layers and guidance.',
     '   When the evidence is ambiguous, call get_diff(name) and inspect the images.',
     '3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),',
     '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
@@ -102,16 +107,37 @@ export const REVIEW_PROMPT = {
     '     or is over 1% of pixels): a bad capture or a change the style check does not cover, so call get_diff(name)',
     '     and compare the images; do not call it noise,',
     '   - a style-only change (identical DOM, computed styles differ: a real change),',
+    '   - a missing baseline (in missingBaselines: no capture this run, so no current image): its test was removed, renamed,',
+    '     skipped or failed before its capture; explain_snapshot(name) says what to check, and approving does nothing for it,',
     '   - a structural change (the DOM changed), or',
     '   - styles not compared (identical DOM, style check unavailable):',
     '     could be render noise or a stylesheet-only change, so call get_diff(name)',
     '     and compare the images; do not call it noise.',
     '4. End with a recommendation per snapshot: approve (once the human confirms), investigate,',
-    '   or likely noise (mention it, do not block on it; only for the likely-render-noise case).',
+    '   or likely noise (mention it, do not block on it; only for the likely-render-noise case);',
+    '   for a missing baseline: delete its baseline directory once the human confirms the removal',
+    '   was intended, otherwise investigate (approving does nothing).',
     '   Never call approve_snapshot/approve_all yourself unless the human has explicitly',
     '   confirmed the changes are intended — baseline approval is a human decision.',
   ].join('\n'),
 };
+
+/** A path quoted for a shell when it holds anything but plain path characters (shared with lib.ts). */
+export const shellArg = (s: string): string => (/^[\w./@%+=:,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+/**
+ * What to recommend per verdict. The removal command for a missing baseline
+ * names `baselinesDir` (the project's own, `{platform}` resolved), because a
+ * copied default path fails where baselines live elsewhere; quoted when the
+ * shell would split it, and `.` for the project root itself.
+ */
+function nextStepsFor(baselinesDir = '.testivai/baselines'): string {
+  const dir = shellArg(baselinesDir.replace(/[`\r\n]/g, '') || '.');
+  return (
+    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; ' +
+    `for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`
+  );
+}
 
 /** One line of prompt text per argument line, quoted, so an argument cannot read as instructions. */
 const quoteLines = (value: string): string =>
@@ -135,12 +161,13 @@ export const TRIAGE_PROMPT = {
   description:
     'Decide whether a visual diff is a glitch (the capture or environment, not the page), an intended change, a bug, or a possible bug, from the snapshot evidence, the images and what the change was meant to do.',
   args: {
-    snapshot: 'Snapshot to triage. Leave empty to triage every changed snapshot.',
+    snapshot: 'Snapshot or missing baseline to triage. Leave empty to triage every changed or new snapshot and every missing baseline.',
     intent: 'What the change under test was meant to do, for example the pull request description. Leave empty to have the model look for it.',
   },
-  /** What to recommend per verdict; shared with the CI review. */
-  nextSteps:
-    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on.',
+  /** What to recommend per verdict, for the default baselines directory; shared with the CI review. */
+  nextSteps: nextStepsFor(),
+  /** The same, naming the project's own baselines directory in the removal command. */
+  nextStepsFor,
   /** The last line of every triage prompt, this one and the CI review's. */
   approvalRule: "Do not call approve_snapshot or approve_all: approving is the human's decision, and this triage is the input to it.",
   /**
@@ -161,7 +188,7 @@ export const TRIAGE_PROMPT = {
       '- **bug**: the page changed in a way the change under test was not meant to make: an element it did not touch changed, or the result looks broken (clipped, overlapping or missing content).',
       '- **possible bug**: the page really changed but the evidence cannot settle whether that was meant, or the evidence is incomplete (styles not compared, no DOM data, images that disagree with the signals). Say exactly what a person should check.',
       '',
-      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images. The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
+      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
       '',
       '| explain_snapshot shows | What it means |',
       '|---|---|',
@@ -170,6 +197,7 @@ export const TRIAGE_PROMPT = {
       '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, is either a bad capture or a change the style check cannot see: it compares colors, fonts, borders, spacing, display, opacity, visibility and shadows, and does not cover size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets. See "Bad captures" below. |',
       '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change, and the signs of a bad capture listed below can also come from a stylesheet change here. |',
       '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
+      '| status "missing" (in missingBaselines) | A committed baseline got no capture this run: there is no current image, and the report cannot tell a removed or renamed test from a skipped or failing one. Read the change under test. It removed or renamed that test or snapshot on purpose (the intent covers it): intended change. It removed or renamed it without meaning to (the intent does not cover it; for a rename, a new snapshot under the other name is the other half), or broke what the test needs to reach its capture (the page, a selector it waits for): bug. Otherwise possible bug: tell a person to check the test run\'s log for a failed or skipped test. Never a glitch on this evidence: there is no capture to call bad. |',
       '',
       'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When the DOM is unchanged and styleCheck is "match" but the diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs can be a bad capture, or a change to something the style check does not cover. Look at what the change under test touched: if it changed CSS, an image, a font or another asset that could reach that area, judge it as a real change (intended change, bug or possible bug). Call it a glitch only when nothing in the change could have caused it, and say which image is wrong: if it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. If you cannot see what the change touched, say so, and call it a glitch only if the images clearly show a broken capture (a torn, half-drawn or partly blank render); otherwise a possible bug.',
       '',
@@ -178,11 +206,11 @@ export const TRIAGE_PROMPT = {
       'Compare the elements that changed (the selectors in regions and styleChanges) with what the change touched: an element it did not touch, or a result that looks broken, is a bug even when the intent mentions the page.',
     ].join('\n');
   },
-  textFor({ snapshot, intent }: { snapshot?: string; intent?: string }): string {
+  textFor({ snapshot, intent, baselinesDir }: { snapshot?: string; intent?: string; baselinesDir?: string }): string {
     const name = snapshot?.replace(/[`\r\n]/g, '').trim();
-    const target = name ? `snapshot \`${name}\`` : 'every changed snapshot';
+    const target = name ? `snapshot \`${name}\`` : 'every changed or new snapshot and every missing baseline';
     return [
-      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? ' If it is not in the results, or it passed without an auto-pass, say so and stop. If it auto-passed, say which criterion passed it, and triage it anyway when its verdict says the styles were not compared.' : ''}`,
+      `Triage ${target} in this project's latest TestivAI visual results: for each one, decide whether the diff is a glitch, an intended change, a bug or a possible bug, and say what to do next.${name ? ' If it is neither a snapshot nor a missing baseline in the results, or it passed without an auto-pass, say so and stop. If it auto-passed, say which criterion passed it, and triage it anyway when its verdict says the styles were not compared. If it is a missing baseline (listed in missingBaselines), triage it by the status "missing" row below: do not stop because it has no capture.' : ''}`,
       '',
       TRIAGE_PROMPT.rubric(intent),
       '',
@@ -192,7 +220,7 @@ export const TRIAGE_PROMPT = {
       '- Verdict: glitch, intended change, bug or possible bug',
       '- Confidence: high, medium or low, and what would raise it',
       '- Evidence: the signals and what you saw in the images that decided it',
-      `- Next step: ${TRIAGE_PROMPT.nextSteps}`,
+      `- Next step: ${nextStepsFor(baselinesDir)}`,
       '',
       'End with one line that counts each verdict.',
       '',

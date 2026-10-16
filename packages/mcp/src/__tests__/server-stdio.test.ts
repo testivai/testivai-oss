@@ -356,3 +356,162 @@ describe('change groups in get_visual_results (built server over stdio)', () => 
     expect(text).toContain(`- solo: ${verdictFor(results.snapshots[0] as import('../lib').SnapshotResult)}`);
   });
 });
+
+// Missing baselines (results.json 2.3.0+ missingBaselines): committed
+// baselines that got no capture this run. The built server lists them, explains
+// them and shows their committed screenshot, and never reads outside the
+// baselines directory for a name results.json lists.
+describe('missing baselines (built server over stdio)', () => {
+  const { missingVerdict } = require('../lib') as typeof import('../lib');
+  let root: string;
+  let client: Client;
+
+  beforeAll(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-missing-stdio-'));
+    const baseline = path.join(root, '.testivai', 'baselines', 'products');
+    fs.mkdirSync(baseline, { recursive: true });
+    fs.writeFileSync(path.join(baseline, 'screenshot.png'), PNG.sync.write(new PNG({ width: 3, height: 2 })));
+    fs.writeFileSync(path.join(baseline, 'dom.html'), '<html></html>');
+    fs.mkdirSync(path.join(root, 'outside'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'outside', 'screenshot.png'), PNG.sync.write(new PNG({ width: 5, height: 5 })));
+    fs.mkdirSync(path.join(root, 'visual-report'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'visual-report', 'results.json'),
+      JSON.stringify({
+        version: '2.3.0',
+        timestamp: 't',
+        summary: { total: 1, passed: 1, changed: 0, newSnapshots: 0, missing: 2 },
+        snapshots: [{ name: 'home', status: 'passed' }],
+        missingBaselines: ['products', '../../outside'],
+      }),
+    );
+    client = await connectBuiltServer(root);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  type Content = Array<{ type: string; text?: string; data?: string }>;
+  const call = async (name: string, args: Record<string, unknown> = {}) => (await client.callTool({ name, arguments: args })).content as Content;
+  const texts = (c: Content) => c.filter((x) => x.type === 'text').map((x) => x.text ?? '');
+
+  it('get_visual_results counts them in the header, then gives the verdict once and a line per name after the snapshots', async () => {
+    const lines = texts(await call('get_visual_results')).join('\n').split('\n');
+    expect(lines[0]).toBe('Run: t — 1 snapshots: 1 passed, 0 changed, 0 new; 2 missing baselines (no capture this run).');
+    const home = lines.indexOf('- home: passed — no visual change');
+    const group = lines.indexOf(`Missing baselines (1): ${missingVerdict('.testivai/baselines/<name>')}`);
+    const unresolved = lines.indexOf(
+      'Missing baselines whose name does not resolve to a directory inside the baselines directory (1): no baseline files were read for them',
+    );
+    const closing = lines.findIndex((l) => l.startsWith('Baseline approval is a human decision'));
+    expect(home).toBeGreaterThan(-1);
+    expect(lines.slice(group, unresolved + 2)).toEqual([lines[group], '- products', lines[unresolved], '- ../../outside']);
+    expect(group).toBe(home + 1);
+    expect(closing).toBeGreaterThan(unresolved);
+  });
+
+  it('explain_snapshot returns the missing-baseline explanation', async () => {
+    const e = JSON.parse(texts(await call('explain_snapshot', { name: 'products' }))[0]);
+    expect(e).toMatchObject({
+      name: 'products',
+      status: 'missing',
+      verdict: missingVerdict('.testivai/baselines/products'),
+      baseline: { directory: '.testivai/baselines/products', files: ['.testivai/baselines/products/screenshot.png', '.testivai/baselines/products/dom.html'] },
+    });
+    expect(e.guidance.join(' ')).toMatch(/Approving does nothing here/);
+  });
+
+  it.each(['get_diff', 'get_snapshot_diff'])('%s shows the verdict, no current capture, and the committed screenshot only', async (tool) => {
+    const content = await call(tool, { name: 'products' });
+    expect(texts(content)).toEqual([
+      `products: ${missingVerdict('.testivai/baselines/products')}`,
+      'No current capture: nothing was captured under this name this run, so there is no current or diff image, only the committed baseline.',
+      'baseline:',
+    ]);
+    const images = content.filter((x) => x.type === 'image');
+    expect(images).toHaveLength(1);
+    expect(PNG.sync.read(Buffer.from(images[0].data!, 'base64')).width).toBe(3);
+  });
+
+  it('get_diff on a listed traversal name reads nothing outside the baselines directory', async () => {
+    const content = await call('get_diff', { name: '../../outside' });
+    expect(content.some((x) => x.type === 'image')).toBe(false);
+    expect(texts(content)[2]).toMatch(/does not resolve to a directory inside the baselines directory/);
+  });
+
+  // The images of a changed snapshot come back exactly as before missing
+  // baselines were handled: label, then image, for each file that exists.
+  it('get_diff for a changed snapshot is unchanged: baseline, current and diff, labelled, large ones downscaled', async () => {
+    const report = path.join(root, 'visual-report');
+    fs.mkdirSync(path.join(report, 'images', 'card'), { recursive: true });
+    fs.writeFileSync(path.join(report, 'images', 'card', 'baseline.png'), PNG.sync.write(new PNG({ width: 2, height: 2 })));
+    fs.writeFileSync(path.join(report, 'images', 'card', 'current.png'), PNG.sync.write(new PNG({ width: 3000, height: 10 })));
+    const saved = fs.readFileSync(path.join(report, 'results.json'), 'utf8');
+    fs.writeFileSync(
+      path.join(report, 'results.json'),
+      JSON.stringify({
+        version: '2.3.0',
+        timestamp: 't',
+        summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0, missing: 0 },
+        snapshots: [
+          {
+            name: 'card',
+            status: 'changed',
+            diffPercent: 2,
+            baselinePath: 'images/card/baseline.png',
+            currentPath: 'images/card/current.png',
+            diffPath: 'images/card/diff.png', // not on disk: skipped
+            dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } },
+          },
+        ],
+        missingBaselines: [],
+      }),
+    );
+    try {
+      const content = await call('get_diff', { name: 'card' });
+      expect(content.map((x) => x.type)).toEqual(['text', 'text', 'image', 'text', 'image']);
+      expect(texts(content)).toEqual([
+        'card: changed (2.00% pixels differ) and the DOM changed (1 added, 0 removed, 0 attribute changes) — a real structural change; confirm it is intended before approving',
+        'baseline:',
+        'current (downscaled from 3000x10):',
+      ]);
+      expect(Buffer.from(content[2].data!, 'base64')).toEqual(fs.readFileSync(path.join(report, 'images', 'card', 'baseline.png')));
+    } finally {
+      fs.writeFileSync(path.join(report, 'results.json'), saved);
+    }
+  });
+
+  it('a name that is neither a snapshot nor a missing baseline is still unknown', async () => {
+    expect(texts(await call('get_diff', { name: 'nope' }))).toEqual(['No snapshot named "nope" in the latest results.']);
+    expect(texts(await call('explain_snapshot', { name: 'nope' }))[0]).toMatch(/^No snapshot named "nope"/);
+  });
+});
+
+// The triage prompt's removal command names this project's baselines
+// directory: a copied `git rm -r .testivai/baselines/<name>` fails elsewhere.
+describe('triage-visual-diff with a custom baselinesDir (built server over stdio)', () => {
+  const { TRIAGE_PROMPT } = require('../tool-meta') as typeof import('../tool-meta');
+  let root: string;
+  let client: Client;
+
+  beforeAll(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-baselinesdir-'));
+    fs.mkdirSync(path.join(root, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: 'shots/{platform}' }));
+    client = await connectBuiltServer(root);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('gives the removal command for the resolved directory', async () => {
+    const prompt = await client.getPrompt({ name: 'triage-visual-diff', arguments: {} });
+    const text = (prompt.messages[0].content as { text: string }).text;
+    expect(text).toContain(`- Next step: ${TRIAGE_PROMPT.nextStepsFor(`shots/${process.platform}`)}`);
+    expect(text).not.toContain('.testivai/baselines/<name>');
+  });
+});

@@ -109,10 +109,10 @@ diff image, and each new snapshot's capture.
 
 | Tool | Returns |
 |---|---|
-| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture |
-| `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance |
+| `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture. Each missing baseline (committed, but no capture this run) gets its own line too (several share one verdict line, so a partial run stays short), with nothing to approve: an intended removal deletes the baseline directory |
+| `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance; for a missing baseline, status `missing`, the committed baseline files and what to check instead |
 | `get_report` | The raw `results.json` payload |
-| `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context |
+| `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context; for a missing baseline, the committed baseline image only, since there is no current capture |
 | `list_baselines` | Committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed snapshots to baselines — **only after a human says so** |
 
@@ -137,7 +137,8 @@ signals, the images and what the change was meant to do:
 In Claude Code, type `/testivai:triage-visual-diff` (or
 `/mcp__testivai__triage-visual-diff`). Both arguments are optional:
 
-- `snapshot`: triage one snapshot; empty triages every changed one.
+- `snapshot`: triage one snapshot or missing baseline; empty triages every
+  changed or new snapshot and every missing baseline.
 - `intent`: what the change was meant to do, for example the pull request
   description. Empty has the model look for it in the conversation, the PR or
   the branch's diff; with no statement of intent anywhere it calls a real
@@ -156,6 +157,13 @@ The rules it gives the model:
   nothing the change touched could have caused it, and then says which image
   is wrong. A bad baseline has to be replaced from a capture two runs agree
   on.
+- A missing baseline (committed, but no capture this run: `missingBaselines`
+  in `results.json`) is never a glitch: the model reads the change under test
+  for a removed or renamed test, or one broken before its capture, and
+  otherwise calls it a possible bug and says to check the test run's log, since
+  the report cannot say why nothing was captured. Approving does nothing for a
+  missing baseline: an intended removal deletes its baseline directory in the
+  same change (for example `git rm -r .testivai/baselines/<name>`).
 - It reports a verdict, confidence, evidence and next step per snapshot, and
   never calls `approve_snapshot` or `approve_all`.
 

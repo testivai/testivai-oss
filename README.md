@@ -261,7 +261,8 @@ jobs:
 ```
 
 The `ai-triage` job runs on every pull request with a changed or new
-snapshot once an `ANTHROPIC_API_KEY` secret is set (or a
+snapshot or a missing baseline (unless .testivai/config.json sets
+failOnMissing: false) once an `ANTHROPIC_API_KEY` secret is set (or a
 `CLAUDE_CODE_OAUTH_TOKEN` secret, passed as `claude-code-oauth-token`), and
 posts one advisory comment: which diffs look like glitches, which
 match the PR, and which look like bugs. It never changes the check or a
