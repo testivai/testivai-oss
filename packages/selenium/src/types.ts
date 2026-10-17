@@ -30,6 +30,13 @@ export interface WitnessDriver {
    * Safari drivers, which fall back to the viewport screenshot.
    */
   sendAndGetDevToolsCommand?<T = unknown>(cmd: string, params?: object): Promise<T>;
+
+  /**
+   * selenium-webdriver's `driver.getCapabilities()`. Optional: when present,
+   * the browser, its version and the driver are recorded as capture
+   * provenance in the capture's metadata.json.
+   */
+  getCapabilities?(): Promise<unknown>;
 }
 
 /**

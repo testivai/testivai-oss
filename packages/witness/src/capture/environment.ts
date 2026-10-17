@@ -50,8 +50,8 @@ export interface CaptureEnvironment {
     channel?: string;
     headless?: boolean;
   };
-  /** The test framework driving the browser, when there is one. */
-  framework?: { name: string; version: string | null; language: string; runner?: string };
+  /** The test framework driving the browser, when there is one (language only when the adapter can tell). */
+  framework?: { name: string; version: string | null; language?: string; runner?: string };
   adapter: {
     name: string;
     version: string;
@@ -199,6 +199,69 @@ export function browserFromUserAgent(ua: string): CaptureEnvironment['browser'] 
   return null;
 }
 
+/** WebDriver browserName values, normalized to the engine family and its branded channel. */
+const WEBDRIVER_BROWSERS: Record<string, { name: string; channel?: string; driver?: string }> = {
+  chrome: { name: 'chromium', channel: 'chrome', driver: 'chromedriver' },
+  'chrome-headless-shell': { name: 'chromium', channel: 'chrome-headless-shell', driver: 'chromedriver' },
+  chromium: { name: 'chromium', driver: 'chromedriver' },
+  microsoftedge: { name: 'chromium', channel: 'msedge', driver: 'msedgedriver' },
+  msedge: { name: 'chromium', channel: 'msedge', driver: 'msedgedriver' },
+  firefox: { name: 'firefox', driver: 'geckodriver' },
+  safari: { name: 'webkit', channel: 'safari' },
+};
+
+/** The first token of a driver version string ("141.0.7390.37 (hash-refs/…)" → "141.0.7390.37"). */
+const firstToken = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().split(/\s+/)[0] : undefined);
+
+/**
+ * The browser (and the WebDriver binary) from W3C capabilities, as
+ * WebdriverIO's `browser.capabilities` or selenium-webdriver's
+ * `getCapabilities()` returns them (a plain object, or an object with
+ * `get()`). Headless is read from the browser's own launch arguments, and
+ * only said when they are there to say it. Null without a browser name.
+ */
+export function browserFromCapabilities(
+  caps: unknown,
+): { browser: CaptureEnvironment['browser']; driver?: CaptureEnvironment['driver'] } | null {
+  if (!caps || typeof caps !== 'object') return null;
+  const c = caps as Record<string, unknown> & { get?: (key: string) => unknown };
+  const get = (key: string): unknown => (typeof c.get === 'function' ? c.get(key) : c[key]);
+  const rawName = get('browserName');
+  if (typeof rawName !== 'string' || rawName.length === 0) return null;
+  const known = WEBDRIVER_BROWSERS[rawName.toLowerCase()];
+  const version = get('browserVersion') ?? get('version');
+  const browser: CaptureEnvironment['browser'] = {
+    name: known?.name ?? rawName.toLowerCase(),
+    version: typeof version === 'string' && version.length > 0 ? version : null,
+  };
+  if (known?.channel) browser.channel = known.channel;
+
+  const options = (get('goog:chromeOptions') ?? get('ms:edgeOptions') ?? get('moz:firefoxOptions')) as { args?: unknown } | undefined;
+  if (options && Array.isArray(options.args)) {
+    browser.headless = options.args.some((a) => typeof a === 'string' && /^-{1,2}headless(=|$)/.test(a));
+  }
+
+  let driverVersion: string | undefined;
+  if (known?.driver === 'chromedriver') driverVersion = firstToken((get('chrome') as { chromedriverVersion?: unknown } | undefined)?.chromedriverVersion);
+  if (known?.driver === 'msedgedriver') driverVersion = firstToken((get('msedge') as { msedgedriverVersion?: unknown } | undefined)?.msedgedriverVersion);
+  if (known?.driver === 'geckodriver') driverVersion = firstToken(get('moz:geckodriverVersion'));
+  return driverVersion && known?.driver ? { browser, driver: { name: known.driver, version: driverVersion } } : { browser };
+}
+
+/**
+ * The version of a package as the project at `root` resolves it (the user's
+ * own webdriverio or selenium-webdriver, not one bundled here), or null.
+ */
+export function installedPackageVersion(name: string, root: string = process.cwd()): string | null {
+  try {
+    const pkgPath = require.resolve(`${name}/package.json`, { paths: [root] });
+    const version = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version;
+    return typeof version === 'string' ? version : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Render probe ────────────────────────────────────────────────────────────
 
 /**
@@ -260,12 +323,13 @@ export interface CaptureEnvironmentParts {
 /** Assemble the block from what one adapter observed. */
 export function buildCaptureEnvironment(parts: CaptureEnvironmentParts): CaptureEnvironment {
   const { host } = parts;
-  const env: CaptureEnvironment = {
+  // Built in the documented order (docs/extension-api.md), so metadata.json reads the same everywhere.
+  const env = {
     os: compact({ ...host.os }),
     browser: compact({ ...parts.browser }),
-    adapter: { ...parts.adapter },
-  };
+  } as CaptureEnvironment;
   if (parts.framework) env.framework = compact({ ...parts.framework });
+  env.adapter = { ...parts.adapter };
   if (parts.driver) env.driver = { ...parts.driver };
   if (parts.render) {
     const render = compact({ ...parts.render });
@@ -276,6 +340,36 @@ export function buildCaptureEnvironment(parts: CaptureEnvironmentParts): Capture
   if (host.label) env.label = host.label;
   if (parts.project) env.project = parts.project;
   return env;
+}
+
+export interface WebDriverEnvironmentInput {
+  /** The session's capabilities (WebdriverIO browser.capabilities, Selenium getCapabilities()). */
+  capabilities: unknown;
+  /** The raw RENDER_PROBE_EXPRESSION result. */
+  probe: unknown;
+  adapter: CaptureEnvironment['adapter'];
+  framework: { name: string; version: string | null };
+  host?: HostEnvironment;
+}
+
+/**
+ * The block for a WebDriver adapter: the browser and driver from the
+ * capabilities (the user agent when they say nothing), the render settings
+ * from the probe. Null when neither names the browser: never guessed.
+ */
+export function webDriverEnvironment(input: WebDriverEnvironmentInput): CaptureEnvironment | null {
+  const probed = parseRenderProbe(input.probe);
+  const fromCaps = browserFromCapabilities(input.capabilities);
+  const browser = fromCaps?.browser ?? (probed?.userAgent ? browserFromUserAgent(probed.userAgent) : null);
+  if (!browser) return null;
+  return buildCaptureEnvironment({
+    host: input.host ?? collectHostEnvironment(),
+    browser,
+    framework: { ...input.framework },
+    adapter: input.adapter,
+    driver: fromCaps?.driver,
+    render: probed?.render,
+  });
 }
 
 /**

@@ -31,10 +31,21 @@ import {
   SETTLE_STOP_EXPRESSION,
   DEFAULT_QUIET_MS,
   DEFAULT_SETTLE_TIMEOUT_MS,
+  applyEnvironmentPolicyToName,
+  browserFromCapabilities,
+  browserFromUserAgent,
+  CAPTURE_METHODS,
+  installedPackageVersion,
+  parseRenderProbe,
+  RENDER_PROBE_EXPRESSION,
+  webDriverEnvironment,
 } from '@testivai/witness';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { WitnessDriver, WitnessOptions } from './types';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ADAPTER_VERSION: string = require('../package.json').version;
 
 /** id of the style element injected for the duration of a capture */
 const STYLE_ID = '__testivai_capture_css__';
@@ -146,7 +157,7 @@ async function waitForFonts(driver: WitnessDriver): Promise<void> {
  * Full-page screenshot where the driver supports it, viewport otherwise.
  * Returns a PNG Buffer.
  */
-async function captureScreenshot(driver: WitnessDriver): Promise<Buffer> {
+async function captureScreenshot(driver: WitnessDriver): Promise<{ png: Buffer; method: string }> {
   // Chromium drivers expose raw CDP; captureBeyondViewport gives a true
   // full-page capture without resizing the window (which breaks 100vh
   // layouts — the reason we never use the resize trick).
@@ -157,7 +168,7 @@ async function captureScreenshot(driver: WitnessDriver): Promise<Buffer> {
         { captureBeyondViewport: true, format: 'png' },
       );
       if (result && typeof result.data === 'string' && result.data.length > 0) {
-        return Buffer.from(result.data, 'base64');
+        return { png: Buffer.from(result.data, 'base64'), method: CAPTURE_METHODS.CDP_FULL_PAGE };
       }
     } catch {
       // fall through to the viewport screenshot
@@ -168,7 +179,7 @@ async function captureScreenshot(driver: WitnessDriver): Promise<Buffer> {
   if (typeof base64 !== 'string' || base64.length === 0) {
     throw new Error('testivai.witness: driver.takeScreenshot() returned an empty value');
   }
-  return Buffer.from(base64, 'base64');
+  return { png: Buffer.from(base64, 'base64'), method: CAPTURE_METHODS.WEBDRIVER_VIEWPORT };
 }
 
 /**
@@ -199,10 +210,35 @@ export async function witness(
     name = `${name}__${options.variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase()}`;
   }
 
+  const localConfig = loadLocalConfig(process.cwd());
+
+  // Capture provenance: what the page is rendered with, measured before
+  // anything is injected, plus the session's capabilities. Best-effort.
+  let renderProbe: unknown = null;
+  let capabilities: unknown = null;
+  if (typeof driver.executeScript === 'function') {
+    try {
+      renderProbe = await driver.executeScript<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
+    } catch {
+      // no probe: no render settings recorded
+    }
+  }
+  if (typeof driver.getCapabilities === 'function') {
+    try {
+      capabilities = await driver.getCapabilities();
+    } catch {
+      // no capabilities: the probe's user agent is the fallback
+    }
+  }
+  const browserName = browserFromCapabilities(capabilities)?.browser.name ?? (() => {
+    const ua = parseRenderProbe(renderProbe)?.userAgent;
+    return (ua ? browserFromUserAgent(ua)?.name : undefined) ?? 'unknown';
+  })();
+  name = applyEnvironmentPolicyToName(name, { browser: { name: browserName }, os: { platform: process.platform } }, localConfig.environmentPolicy);
+
   // 0. Prepare the page: stabilization CSS (animations/caret/fonts — the
   //    flake killers) + ignoreSelectors from config.json and this call,
   //    injected as one style tag and removed after the capture.
-  const localConfig = loadLocalConfig(process.cwd());
   const stabilize = options.stabilize ?? localConfig.stabilize;
   const ignoreSelectors = [
     ...new Set([...(localConfig.ignoreSelectors ?? []), ...(options.ignoreSelectors ?? [])]),
@@ -227,8 +263,9 @@ export async function witness(
 
   // 1. Capture screenshot (full-page on Chromium, viewport elsewhere)
   let screenshot: Buffer;
+  let captureMethod: string;
   try {
-    screenshot = await captureScreenshot(driver);
+    ({ png: screenshot, method: captureMethod } = await captureScreenshot(driver));
   } finally {
     if (injected) await removeCaptureCss(driver);
     if (stabilize) await stopSettleObserver(driver);
@@ -284,6 +321,19 @@ export async function witness(
   // 4. Write to .testivai/temp/<name>/
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
+  const environment = webDriverEnvironment({
+    capabilities,
+    probe: renderProbe,
+    adapter: { name: '@testivai/witness-selenium', version: ADAPTER_VERSION, captureMethod },
+    framework: { name: 'selenium-webdriver', version: installedPackageVersion('selenium-webdriver') },
+  });
+  if (environment) {
+    try {
+      store.writeTempMetadata(name, { name, environment });
+    } catch {
+      // without it the compare cannot tell rendering drift from noise for this capture
+    }
+  }
 
   // 5. Shard manifest. A Selenium script has no end-of-run hook to attach to,
   //    so it is refreshed on every capture — which is exactly what lets a

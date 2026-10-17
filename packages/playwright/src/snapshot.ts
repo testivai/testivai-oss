@@ -8,6 +8,15 @@ import { loadConfig, mergeTestConfig } from './config/loader';
 import { collectIgnoreSelectors, collectIgnoreRules, buildIgnoreSelectorsCSS } from './config/ignore-selectors';
 import { buildElementMapExpression } from './capture/element-map';
 import { STABILIZE_CSS, resolveStabilize, waitForFonts, waitForSettled, stopSettleObserver } from './config/stabilize';
+import {
+  applyEnvironmentPolicyToName,
+  BaselineStore,
+  CAPTURE_METHODS,
+  loadLocalConfig,
+  parseRenderProbe,
+  RENDER_PROBE_EXPRESSION,
+} from '@testivai/witness';
+import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
 
 /**
  * Generates a safe filename from a URL.
@@ -81,7 +90,19 @@ export async function snapshot(
   const outputDir = path.join(process.cwd(), '.testivai', 'temp');
   await fs.ensureDir(outputDir);
 
-  const snapshotName = effectiveSnapshotName(name || getSnapshotNameFromUrl(page.url()), testInfo);
+  // What the page is rendered with, measured before anything is injected:
+  // recorded as capture provenance, and its user agent names the engine for
+  // environmentPolicy "separate" when the project does not.
+  const renderProbe: unknown = await page.evaluate(RENDER_PROBE_EXPRESSION).catch(() => null);
+  const environmentPolicy = loadLocalConfig(process.cwd()).environmentPolicy;
+  const snapshotName = applyEnvironmentPolicyToName(
+    effectiveSnapshotName(name || getSnapshotNameFromUrl(page.url()), testInfo),
+    { browser: { name: playwrightBrowserName(testInfo ?? {}, parseRenderProbe(renderProbe)?.userAgent) }, os: { platform: process.platform } },
+    environmentPolicy,
+  );
+  // Which path took the screenshot (set below): part of the provenance, since
+  // another method changes the image and often its size.
+  let captureMethod: string = CAPTURE_METHODS.CDP_FULL_PAGE;
   const timestamp = Date.now();
   const safeName = snapshotName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   const baseFilename = `${timestamp}_${safeName}`;
@@ -209,8 +230,10 @@ export async function snapshot(
   
   // If only one capture needed, just take a regular screenshot
   if (numCaptures <= 1) {
+    captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
     await page.screenshot({ path: screenshotPath, fullPage: true });
   } else {
+    captureMethod = CAPTURE_METHODS.STITCHED_FULL_PAGE;
     // Scroll-and-stitch approach
     const screenshots: Buffer[] = [];
     
@@ -367,6 +390,7 @@ export async function snapshot(
     } catch (error: any) {
       console.error('[TestivAI] Browser screenshot failed:', error.message);
       // Fallback to regular screenshot
+      captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
       await page.screenshot({ path: screenshotPath, fullPage: true });
     }
   }
@@ -481,6 +505,22 @@ export async function snapshot(
       }
     } catch {
       // metadata is an enhancement; the screenshot path never depends on it
+    }
+
+    // Capture provenance: the environment this capture was taken in, merged
+    // into metadata.json (approving freezes it into the baseline). Best-effort
+    // like the rest: the screenshot path never depends on it.
+    try {
+      let browserVersion: string | null = null;
+      try {
+        browserVersion = page.context().browser()?.version() ?? null;
+      } catch {
+        // a persistent context has no browser(): the probe's user agent is the fallback
+      }
+      const environment = playwrightEnvironment({ testInfo: testInfo ?? {}, browserVersion, probe: renderProbe, captureMethod });
+      new BaselineStore(process.cwd()).writeTempMetadata(snapshotName, { name: snapshotName, environment });
+    } catch {
+      // no environment only means the compare cannot tell drift from noise for this capture
     }
 
     // Element map: layout + computed-style digest for every visible

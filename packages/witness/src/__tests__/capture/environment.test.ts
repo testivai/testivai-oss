@@ -5,12 +5,14 @@
  */
 import {
   applyEnvironmentPolicyToName,
+  browserFromCapabilities,
   browserFromUserAgent,
   buildCaptureEnvironment,
   CAPTURE_METHODS,
   collectHostEnvironment,
   detectCi,
   distroFromOsRelease,
+  installedPackageVersion,
   parseEnvironmentVariant,
   parseRenderProbe,
   readEnvironment,
@@ -276,5 +278,66 @@ describe('separate policy keying', () => {
     });
     expect(parseEnvironmentVariant('home__chromium')).toBeNull();
     expect(parseEnvironmentVariant('home__a__b')).toBeNull();
+  });
+});
+
+describe('browserFromCapabilities (WebDriver: WebdriverIO and Selenium)', () => {
+  it('Chrome: chromium with channel chrome, headless from its args, and chromedriver', () => {
+    expect(
+      browserFromCapabilities({
+        browserName: 'chrome',
+        browserVersion: '141.0.7390.37',
+        'goog:chromeOptions': { args: ['--headless=new', '--no-sandbox'] },
+        chrome: { chromedriverVersion: '141.0.7390.37 (2b1b84a5a9f6c7e7a9b7e3a0b8c9d1e2f3a4b5c6-refs/branch-heads/7390@{#1})' },
+      }),
+    ).toEqual({
+      browser: { name: 'chromium', version: '141.0.7390.37', channel: 'chrome', headless: true },
+      driver: { name: 'chromedriver', version: '141.0.7390.37' },
+    });
+  });
+
+  it('Edge, Firefox and Safari', () => {
+    expect(browserFromCapabilities({ browserName: 'MicrosoftEdge', browserVersion: '141.0.3537.57', msedge: { msedgedriverVersion: '141.0.3537.57 (abc)' } })).toEqual({
+      browser: { name: 'chromium', version: '141.0.3537.57', channel: 'msedge' },
+      driver: { name: 'msedgedriver', version: '141.0.3537.57' },
+    });
+    expect(
+      browserFromCapabilities({ browserName: 'firefox', browserVersion: '143.0', 'moz:firefoxOptions': { args: ['-headless'] }, 'moz:geckodriverVersion': '0.36.0' }),
+    ).toEqual({ browser: { name: 'firefox', version: '143.0', headless: true }, driver: { name: 'geckodriver', version: '0.36.0' } });
+    expect(browserFromCapabilities({ browserName: 'Safari', browserVersion: '26.0' })).toEqual({
+      browser: { name: 'webkit', version: '26.0', channel: 'safari' },
+    });
+  });
+
+  it('reads a selenium-webdriver Capabilities object through get()', () => {
+    const map = new Map<string, unknown>([
+      ['browserName', 'chrome'],
+      ['browserVersion', '141.0.7390.37'],
+    ]);
+    expect(browserFromCapabilities({ get: (k: string) => map.get(k) })).toEqual({
+      browser: { name: 'chromium', version: '141.0.7390.37', channel: 'chrome' },
+    });
+  });
+
+  it('a non-headless run says headless: false only when the options are there to say so', () => {
+    expect(browserFromCapabilities({ browserName: 'chrome', browserVersion: '1', 'goog:chromeOptions': { args: [] } })?.browser.headless).toBe(false);
+    expect(browserFromCapabilities({ browserName: 'chrome', browserVersion: '1' })?.browser.headless).toBeUndefined();
+  });
+
+  it('is null without a browser name; an unknown browser keeps its lowercased name', () => {
+    expect(browserFromCapabilities({})).toBeNull();
+    expect(browserFromCapabilities(null)).toBeNull();
+    expect(browserFromCapabilities({ browserName: 'Servo', browserVersion: '0.1' })).toEqual({ browser: { name: 'servo', version: '0.1' } });
+  });
+});
+
+describe('installedPackageVersion', () => {
+  it('the version of a package as the project at that root resolves it', () => {
+    const expected = require('pngjs/package.json').version;
+    expect(installedPackageVersion('pngjs', require('path').join(__dirname, '..', '..', '..'))).toBe(expected);
+  });
+
+  it('null for a package the project does not have', () => {
+    expect(installedPackageVersion('definitely-not-installed-testivai-pkg', process.cwd())).toBeNull();
   });
 });

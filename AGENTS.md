@@ -118,6 +118,8 @@ CI — GitHub Actions
 | `src/diff/diff.ts` | Pixel comparison (pixelmatch) |
 | `src/diff/dom-diff.ts` | Zero-dep DOM tokenizer + multiset comparator; emits noiseHint |
 | `src/report/compare.ts` | Orchestrates diff, writes images to `visual-report/images/` |
+| `src/capture/environment.ts` | Capture provenance: the `environment` block every adapter records in metadata.json |
+| `src/report/environment.ts` | What changed since the baseline (`delta`, `renderingDelta`), `isRenderingDrift()`, shared wording |
 | `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
 | `src/report/template.ts` | Self-contained HTML template for the report |

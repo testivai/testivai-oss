@@ -44,6 +44,7 @@ export type { SettleState } from './capture/settle';
 // Capture provenance — the environment block every adapter records.
 export {
   applyEnvironmentPolicyToName,
+  browserFromCapabilities,
   browserFromUserAgent,
   buildCaptureEnvironment,
   CAPTURE_METHODS,
@@ -51,10 +52,12 @@ export {
   detectCi,
   distroFromOsRelease,
   ENVIRONMENT_POLICIES,
+  installedPackageVersion,
   parseEnvironmentVariant,
   parseRenderProbe,
   readEnvironment,
   RENDER_PROBE_EXPRESSION,
+  webDriverEnvironment,
 } from './capture/environment';
 export type {
   CaptureEnvironment,
@@ -63,6 +66,7 @@ export type {
   HostEnvironment,
   HostSources,
   RenderEnvironment,
+  WebDriverEnvironmentInput,
 } from './capture/environment';
 
 export { BaselineStore } from './baselines';

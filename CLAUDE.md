@@ -73,6 +73,8 @@ CI (GitHub Actions):
 - `src/diff/diff.ts`         — pixel comparison (pixelmatch-based)
 - `src/diff/dom-diff.ts`     — zero-dep DOM tokenizer + multiset comparator; emits noiseHint
 - `src/config/local-config.ts` — LocalConfig type + defaults (single source of truth for config.json fields)
+- `src/capture/environment.ts` — capture provenance: the `environment` block every adapter records in metadata.json (host collection, render probe, WebDriver capabilities, `separate` keying)
+- `src/report/environment.ts` — what changed since the baseline (`delta` / `renderingDelta`), `isRenderingDrift()`, the shared wording (report, MCP and the action)
 - `src/report/diff-shape.ts` — `diffShape()`: scattered / concentrated / large, the rule for when matching styles still mean likely render noise (shared by compare, the report, MCP and the action)
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html

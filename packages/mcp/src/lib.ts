@@ -774,9 +774,10 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   } else if (envChange && (pending || snapshot.autoPassed)) {
     guidance.push(`The environment also changed since the baseline (${envChange}), which can add rendering differences of its own: weigh it, but it does not explain a DOM or style change.`);
   }
-  // A size change first: the pixel layers describe the padding, so the
-  // shape, noise and styles-not-compared readings below do not apply.
-  const sized = snapshot.sizeMismatch !== undefined || drift;
+  // A size change (the pixel layers describe the padding) or rendering drift
+  // (the reading is the environment's) replaces the shape, noise and
+  // styles-not-compared readings below.
+  const pixelReadingReplaced = snapshot.sizeMismatch !== undefined || drift;
   if (snapshot.sizeMismatch) {
     const sm = snapshot.sizeMismatch;
     const sizes = `The current capture is ${sm.candidate.width}×${sm.candidate.height}, the baseline ${sm.baseline.width}×${sm.baseline.height}: ${describeSizeChange(sm)}.`;
@@ -796,14 +797,14 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
       );
     }
   }
-  if (pending && !sized && notCompared) {
+  if (pending && !pixelReadingReplaced && notCompared) {
     const why = notCompared === 'absent' ? 'these results have no style check' : 'no comparable style digests on both sides';
     guidance.push(
       'Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is ' +
         `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
         'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
     );
-  } else if (pending && !sized && shape?.kind === 'concentrated' && shape.box) {
+  } else if (pending && !pixelReadingReplaced && shape?.kind === 'concentrated' && shape.box) {
     const regionList = snapshot.regions ?? [];
     const element = sharedElement(regionList);
     const mapsTo = element ? `, and ${regionList.length === 1 ? 'the region' : 'every region'} maps to \`${element}\`` : '';
@@ -814,7 +815,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'so this is a bad capture (a torn or partly blank render, a shifted band, a bad baseline) or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && !sized && shape?.kind === 'large') {
+  } else if (pending && !pixelReadingReplaced && shape?.kind === 'large') {
     // diffShape treats an unknown size as not small; say so rather than claim a share.
     const size =
       snapshot.diffPercent === undefined
@@ -826,7 +827,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'machines that captured the baseline and the current image; it can also be a bad capture or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && !sized && snapshot.dom?.noiseHint) {
+  } else if (pending && !pixelReadingReplaced && snapshot.dom?.noiseHint) {
     guidance.push('Pixels differ but the DOM is structurally identical, style digests match, and the diff is small and scattered — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
   }
   if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.changed) {
