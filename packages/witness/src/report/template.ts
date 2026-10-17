@@ -509,7 +509,14 @@ function renderAnalysis(snapshot: SnapshotResult): string {
  * warning too: a bad capture, or a change the style check does not cover.
  */
 function renderVerdict(snapshot: SnapshotResult): string {
-  if (snapshot.status === 'passed' && !snapshot.autoPassed) return '';
+  // A DOM change never decides the status: the pixels do. A pass whose DOM
+  // differs is reported as information, with nothing to approve.
+  if (snapshot.status === 'passed' && !snapshot.autoPassed) {
+    if (snapshot.dom?.changed && snapshot.dom.summary) {
+      return `<div class="verdict v-pass"><span>Passed — nothing visible changed, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}): hidden or off-screen content, or markup with no painted effect. Nothing to approve; worth knowing if the change was meant to be visible.</span></div>`;
+    }
+    return '';
+  }
 
   if (snapshot.status === 'new') {
     return `<div class="verdict v-new"><span>First capture — no baseline yet. Review the image, then approve to make it the baseline.</span></div>`;
@@ -529,6 +536,12 @@ function renderVerdict(snapshot: SnapshotResult): string {
         ? '; DOM identical, so the extra height is layout, not new elements'
         : '';
     return `<div class="verdict v-size"><span>Size changed — ${change}${dom}: content was ${grew ? 'added' : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed. Look at the current image ${grew ? "below the baseline's height" : 'for what is gone'} and confirm the change is intended before approving.</span></div>`;
+  }
+
+  // Auto-passed within a tolerance although the DOM changed: say so, and
+  // never ask for an approval there is nothing to give.
+  if (snapshot.autoPassed && snapshot.dom?.changed && snapshot.dom.summary) {
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${snapshot.autoPassed}</code> criterion — within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
   }
 
   // Style-only only when the DOM is unchanged: a class or style attribute

@@ -1358,3 +1358,81 @@ describe('@testivai/mcp explainSnapshot with a size mismatch', () => {
     expect(explainSnapshot(root, 'home').layers.pixel.sizeMismatch).toBeNull();
   });
 });
+
+/**
+ * A DOM change never decides the status on its own: the pixels do. A passed
+ * snapshot whose DOM differs (nothing visible changed, or within a configured
+ * tolerance) is reported as such, with nothing to approve.
+ */
+describe('@testivai/mcp verdictFor on a passed snapshot whose DOM changed', () => {
+  const summary = { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 };
+
+  it('with no pixel above the threshold: nothing visible changed, but the DOM differs', () => {
+    expect(
+      verdictFor({ name: 'x', status: 'passed', diffPercent: 0, dom: { changed: true, noiseHint: false, summary, styleCheck: 'match' } }),
+    ).toBe(
+      'passed — nothing visible changed, but the DOM differs (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
+        'hidden or off-screen content, or markup with no painted effect; nothing to approve',
+    );
+  });
+
+  it('auto-passed within a tolerance: says the DOM changed too, and what to check', () => {
+    expect(
+      verdictFor({ name: 'x', status: 'passed', diffPercent: 0.2, autoPassed: 'threshold', dom: { changed: true, noiseHint: false, summary, styleCheck: 'match' } }),
+    ).toBe(
+      "passed — auto-passed by the configured 'threshold' criterion: 0.20% pixels differ, within its tolerance; " +
+        'the DOM also changed (4 added, 0 removed, 0 attribute changes, 2 text changes) — nothing to approve, but check the tolerance is meant to cover a markup change',
+    );
+  });
+
+  it('a plain pass with an identical DOM is unchanged', () => {
+    expect(verdictFor({ name: 'x', status: 'passed', diffPercent: 0, dom: { changed: false, noiseHint: false, summary: null } })).toBe('passed — no visual change');
+  });
+});
+
+describe('@testivai/mcp explainSnapshot on a passed snapshot whose DOM changed', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-dompass-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const writeResults = (snapshots: unknown[]) => {
+    const dir = path.join(root, 'visual-report');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'results.json'),
+      JSON.stringify({ version: '2.4.0', timestamp: 't', summary: { total: snapshots.length, passed: snapshots.length, changed: 0, newSnapshots: 0 }, snapshots }),
+    );
+  };
+
+  it('guidance reports the DOM change as information, never as something to approve', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      { name: 'home', status: 'passed', diffPercent: 0, dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 } } },
+    ]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance).toContain(
+      'Nothing visible changed (no pixel above the threshold), but the DOM differs (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
+        'hidden or off-screen content, or markup with no painted effect. Nothing to approve; worth knowing if the change was meant to be visible.',
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/confirm the change is intended before approving/);
+  });
+
+  it('an auto-passed snapshot keeps its auto-pass line and adds the DOM note', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      { name: 'home', status: 'passed', diffPercent: 0.2, autoPassed: 'threshold', dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } } },
+    ]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance).toContain("This diff auto-passed via the 'threshold' criterion — reported for transparency, no action needed.");
+    expect(e.guidance).toContain(
+      'The DOM also changed (1 added, 0 removed, 0 attribute changes) within that tolerance. Nothing to approve, but check the tolerance is meant to cover a markup change.',
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/before approving/);
+  });
+});

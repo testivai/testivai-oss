@@ -186,8 +186,8 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
 
     // DOM-level signal. Only meaningful when both sides captured DOM.
     // Computed whenever the two files differ at all (pixels, dimensions, or
-    // a re-encode with identical pixels): applyPassCriteria needs it, since a
-    // changed DOM is never passed. Byte-identical 'passed' skips the work —
+    // a re-encode with identical pixels), so a passed snapshot whose DOM
+    // changed can say so. Byte-identical 'passed' skips the work —
     // identical bytes are already the strongest possible signal.
     if (result.status === 'changed') {
       const baselineDom = store.readDom(name);
@@ -252,11 +252,13 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
     shiftTolerance = 0,
   } = criteria;
 
-  // A page whose dimensions changed, or whose DOM changed, is never passed,
-  // whatever the pixel counts say: content was added or removed, or the
-  // viewport differs. The zero-count path below used to pass a grown page
-  // whose candidate had been truncated to the baseline's height.
-  if (result.sizeMismatch || result.dom?.changed) return;
+  // A page whose dimensions changed is never passed, whatever the pixel
+  // counts say: content was added or removed, or the viewport differs. The
+  // zero-count path below used to pass a grown page whose candidate had been
+  // truncated to the baseline's height. A DOM change on its own never
+  // decides the status: visible output is the contract, so the pixels do,
+  // and the report says when a passed snapshot's DOM differs.
+  if (result.sizeMismatch) return;
 
   // Nothing above the per-pixel threshold: visually identical. Guard on
   // totalPixels — the PNG-decode-failure path reports diffCount 0 with

@@ -381,7 +381,7 @@ function sizeChangeVerdict(snapshot: SnapshotResult): string {
   const grew = sm.candidate.height > sm.baseline.height;
   const s = snapshot.dom?.summary;
   const dom = snapshot.dom?.changed
-    ? ` and the DOM changed${s ? ` (${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''})` : ''}`
+    ? ` and the DOM changed${s ? ` (${domSummaryDetail(s)})` : ''}`
     : snapshot.dom
       ? ` with an identical DOM, so the ${grew ? 'extra' : 'lost'} height is layout, not ${grew ? 'new' : 'removed'} elements`
       : '';
@@ -391,15 +391,30 @@ function sizeChangeVerdict(snapshot: SnapshotResult): string {
   );
 }
 
+/** The DOM summary's counts: "4 added, 0 removed, 0 attribute changes, 2 text changes". */
+function domSummaryDetail(s: NonNullable<DomInfo['summary']>): string {
+  return `${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''}`;
+}
+
 /** One-line, agent-oriented verdict for a snapshot. */
 export function verdictFor(snapshot: SnapshotResult): string {
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
   const notCompared = stylesNotCompared(snapshot.dom);
   const shape = matchedStylesShape(snapshot);
   if (snapshot.status === 'passed') {
-    if (!snapshot.autoPassed) return 'passed — no visual change';
+    // A DOM change never decides the status: the pixels do. A pass whose DOM
+    // differs is information, with nothing to approve.
+    const domChanged = snapshot.dom?.changed && snapshot.dom.summary ? domSummaryDetail(snapshot.dom.summary) : null;
+    if (!snapshot.autoPassed) {
+      return domChanged
+        ? `passed — nothing visible changed, but the DOM differs (${domChanged}): hidden or off-screen content, or markup with no painted effect; nothing to approve`
+        : 'passed — no visual change';
+    }
     // An auto-pass is a configured tolerance: the pixel diff is still there.
     const verdict = `passed — auto-passed by the configured '${snapshot.autoPassed}' criterion: ${pct}, within its tolerance`;
+    if (domChanged) {
+      return `${verdict}; the DOM also changed (${domChanged}) — nothing to approve, but check the tolerance is meant to cover a markup change`;
+    }
     if (snapshot.autoPassed === 'noise' && notCompared) {
       return `${verdict}; styles were not compared (${NOT_COMPARED_REASON[notCompared]}), so a stylesheet-only change is not ruled out — look at the diff`;
     }
@@ -437,9 +452,7 @@ export function verdictFor(snapshot: SnapshotResult): string {
   }
   if (snapshot.dom?.changed) {
     const s = snapshot.dom.summary;
-    const detail = s
-      ? ` (${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''})`
-      : '';
+    const detail = s ? ` (${domSummaryDetail(s)})` : '';
     return `changed (${pct}) and the DOM changed${detail} — a real structural change; confirm it is intended before approving`;
   }
   // Style-only change: the DOM is identical but computed styles differ. This is
@@ -715,8 +728,17 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
     guidance.push('All attributed regions are pure shifts (elements moved, content unchanged) — usually a layout/spacing change upstream, not a content change.');
   }
   if (snapshot.dom?.changed && snapshot.dom.summary) {
-    const s = snapshot.dom.summary;
-    guidance.push(`The DOM changed structurally (${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''}) — confirm the change is intended before approving.`);
+    const detail = domSummaryDetail(snapshot.dom.summary);
+    if (pending) {
+      guidance.push(`The DOM changed structurally (${detail}) — confirm the change is intended before approving.`);
+    } else if (!snapshot.autoPassed) {
+      // Passed with no pixel above the threshold: the DOM change is
+      // information, not something to approve.
+      guidance.push(
+        `Nothing visible changed (no pixel above the threshold), but the DOM differs (${detail}): hidden or off-screen content, ` +
+          'or markup with no painted effect. Nothing to approve; worth knowing if the change was meant to be visible.',
+      );
+    }
   }
   if (snapshot.autoPassed === 'noise' && notCompared) {
     // A noise auto-pass that did not require a style match (older results).
@@ -732,6 +754,11 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
     );
   } else if (snapshot.autoPassed) {
     guidance.push(`This diff auto-passed via the '${snapshot.autoPassed}' criterion — reported for transparency, no action needed.`);
+    if (snapshot.dom?.changed && snapshot.dom.summary) {
+      guidance.push(
+        `The DOM also changed (${domSummaryDetail(snapshot.dom.summary)}) within that tolerance. Nothing to approve, but check the tolerance is meant to cover a markup change.`,
+      );
+    }
   }
   if (snapshot.maskWarnings?.length) {
     guidance.push(`Mask warnings: ${snapshot.maskWarnings.join('; ')} — some configured masks could not be applied.`);

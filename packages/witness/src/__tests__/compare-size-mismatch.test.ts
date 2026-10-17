@@ -146,7 +146,7 @@ describe('compareAll with a size mismatch', () => {
     expect(byName['same-changed'].diffCount).toBe(400);
   });
 
-  it('(e) a zero-count diff whose DOM changed stays changed; with an identical DOM it still passes', () => {
+  it('(e) a zero-count diff passes whether or not the DOM changed: the pixels decide, the DOM change is reported', () => {
     // Same pixels, different bytes (another deflate level) → decode equal,
     // diffCount 0. The DOM decides.
     const data = solidRgba(200, 300);
@@ -167,8 +167,15 @@ describe('compareAll with a size mismatch', () => {
 
     expect(byName['dom-changed'].diffCount).toBe(0);
     expect(byName['dom-changed'].dom?.changed).toBe(true);
-    expect(byName['dom-changed'].status).toBe('changed');
+    expect(byName['dom-changed'].status).toBe('passed');
     expect(byName['dom-changed'].autoPassed).toBeUndefined();
+
+    // The report says it: nothing visible changed, but the DOM differs.
+    fs.mkdirSync(reportDir, { recursive: true });
+    generateResults(results, reportDir);
+    const html = renderHtml(JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8')));
+    expect(html).toContain('Passed — nothing visible changed, but the DOM differs (4 added, 2 text)');
+    expect(html).not.toMatch(/Structural change/);
 
     expect(byName['dom-same'].diffCount).toBe(0);
     expect(byName['dom-same'].dom?.changed).toBe(false);
@@ -260,7 +267,7 @@ describe('compareAll with a size mismatch', () => {
   });
 });
 
-describe('applyPassCriteria never passes a size or DOM change', () => {
+describe('applyPassCriteria: a size change is never passed, a DOM change never decides the status', () => {
   const base = (): SnapshotResult => ({
     name: 's',
     status: 'changed',
@@ -290,17 +297,22 @@ describe('applyPassCriteria never passes a size or DOM change', () => {
     expect(r.autoPassed).toBeUndefined();
   });
 
-  it('a zero-count diff whose DOM changed stays changed', () => {
+  // Visible output is the contract: a DOM change with no pixel above the
+  // threshold (hidden content, markup with no painted effect) is a pass that
+  // the verdict reports, not a failure.
+  it('a zero-count diff whose DOM changed passes, with no auto-pass marker', () => {
     const r: SnapshotResult = {
       ...base(),
       dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 } },
     };
     applyPassCriteria(r, {});
-    expect(r.status).toBe('changed');
+    expect(r.status).toBe('passed');
     expect(r.autoPassed).toBeUndefined();
   });
 
-  it('a DOM change is not passed by maxDiffPercent either', () => {
+  // maxDiffPercent / maxDiffPixels are the user's pixel tolerance: a DOM
+  // change within it is auto-passed as before, and reported as such.
+  it('a DOM change within maxDiffPercent is auto-passed by the threshold criterion', () => {
     const r: SnapshotResult = {
       ...base(),
       diffPercent: 0.2,
@@ -308,8 +320,43 @@ describe('applyPassCriteria never passes a size or DOM change', () => {
       dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } },
     };
     applyPassCriteria(r, { maxDiffPercent: 1 });
+    expect(r.status).toBe('passed');
+    expect(r.autoPassed).toBe('threshold');
+  });
+
+  it('a DOM change above maxDiffPercent stays changed', () => {
+    const r: SnapshotResult = {
+      ...base(),
+      diffPercent: 2,
+      diffCount: 2000,
+      dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } },
+    };
+    applyPassCriteria(r, { maxDiffPercent: 1 });
     expect(r.status).toBe('changed');
-    expect(r.autoPassed).toBeUndefined();
+  });
+
+  it('an auto-passed snapshot whose DOM changed says so in the report, without asking for approval', () => {
+    const snapshot: SnapshotResult = {
+      name: 'tolerated',
+      status: 'passed',
+      diffPercent: 0.2,
+      diffCount: 200,
+      totalPixels: 100000,
+      autoPassed: 'threshold',
+      baselinePath: 'images/tolerated/baseline.png',
+      currentPath: 'images/tolerated/current.png',
+      diffPath: 'images/tolerated/diff.png',
+      dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 }, styleCheck: 'match' },
+    };
+    const html = renderHtml({
+      version: '2.4.0',
+      timestamp: 't',
+      summary: { total: 1, passed: 1, changed: 0, newSnapshots: 0 },
+      snapshots: [snapshot],
+    });
+    expect(html).toContain('Auto-passed via the <code>threshold</code> criterion — within the configured tolerance, but the DOM differs (1 added)');
+    expect(html).not.toMatch(/before approving/);
+    expect(html).not.toMatch(/Structural change/);
   });
 
   it('a zero-count diff with no size or DOM change still passes (the fast path is kept)', () => {
