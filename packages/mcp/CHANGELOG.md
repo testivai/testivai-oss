@@ -1,5 +1,16 @@
 # @testivai/mcp
 
+## 0.8.0
+
+### Minor Changes
+
+- 8f3f72c: Cover missing baselines: names in results.json `missingBaselines`, committed baselines that got no capture this run (the test was removed, renamed or skipped, or failed before it captured). `get_visual_results` counts them in its header and gives each one a verdict line saying there is nothing to approve and how to accept a removal; `explain_snapshot` returns status `missing` with the committed baseline files (found through `baselinesDir`, `{platform}` included) and what to check instead; `get_diff` returns the committed baseline screenshot only. The `triage-visual-diff` rubric gets a row for them (intended change, bug or possible bug, never a glitch), its next steps say an intended removal deletes the baseline directory because approving does nothing, and `review-visual-changes` no longer stops when the only finding is a missing baseline. A name is looked up only when results.json lists it as missing, and never resolves outside the baselines directory. With several missing baselines, `get_visual_results` gives the verdict once and a short line per name, so a partial run (`--grep`, a matrix lane) stays small; a baseline directory that is not on this machine (stale results, or another platform's `{platform}`) is said, with no removal command. `explain_snapshot` for a new snapshot names the missing baselines it may replace (a rename). `review-visual-changes` explains missing baselines in step 2 and offers deleting one, not approving it, in step 4. The removal command in the next steps names the project's own baselines directory. With no `snapshot` argument, `triage-visual-diff` now triages new snapshots too, as the CI review already did, as well as missing baselines.
+
+### Patch Changes
+
+- Updated dependencies [18ef81d]
+  - @testivai/witness@2.2.1
+
 ## 0.7.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [18ef81d]
+  - @testivai/witness@2.2.1
+
 ## 2.0.5
 
 ### Patch Changes
