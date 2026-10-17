@@ -59,8 +59,16 @@ const report = (...snapshots: SnapshotResult[]): string => {
 
 /** The snapshot cards only: the sidebar explains every case, so keep it out. */
 const mainOf = (html: string): string => html.slice(html.indexOf('<main'));
-/** Text with tags stripped. */
-const text = (html: string) => html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+/** Text with tags stripped, repeated until nothing changes so no tag survives a pass. */
+const text = (html: string) => {
+  let out = html;
+  let previous: string;
+  do {
+    previous = out;
+    out = out.replace(/<[^>]*>/g, '');
+  } while (out !== previous);
+  return out.replace(/\s+/g, ' ');
+};
 
 describe('report verdicts with capture provenance', () => {
   it('identical DOM, matching styles, a browser bump: rendering drift, never "likely render noise"', () => {

@@ -75,7 +75,8 @@ function makeDriver(overrides: Partial<WitnessDriver> & { dom?: string } = {}) {
       const nav = { language: 'de-DE', userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0' };
       const intl = { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: 'Europe/Berlin' }) }) };
       // eslint-disable-next-line no-new-func
-      return new Function('window', 'navigator', 'Intl', script.replace(/^return /, 'return '))(win, nav, intl);
+      // The adapter sends 'return ' + the probe expression: a valid function body as is.
+      return new Function('window', 'navigator', 'Intl', script)(win, nav, intl);
     }
     if (script.includes('cloneNode')) {
       let result = dom;

@@ -194,8 +194,10 @@ export function browserFromUserAgent(ua: string): CaptureEnvironment['browser'] 
   }
   const firefox = /\bFirefox\/([\d.]+)/.exec(ua);
   if (firefox) return { name: 'firefox', version: firefox[1] };
-  const safari = /\bVersion\/([\d.]+).*\bSafari\//.exec(ua);
-  if (safari) return { name: 'webkit', version: safari[1] };
+  // Two linear matches, not /Version\/([\d.]+).*Safari\//: that pattern
+  // backtracks quadratically on a long run of dots.
+  const safari = /\bVersion\/([\d.]+)/.exec(ua);
+  if (safari && /\bSafari\//.test(ua.slice(safari.index + safari[0].length))) return { name: 'webkit', version: safari[1] };
   return null;
 }
 

@@ -152,6 +152,16 @@ describe('browserFromUserAgent', () => {
   it('is null for anything else', () => {
     expect(browserFromUserAgent('curl/8.5.0')).toBeNull();
     expect(browserFromUserAgent('')).toBeNull();
+    expect(browserFromUserAgent('SomeTool Version/2.1')).toBeNull();
+  });
+
+  it('runs in linear time on a user agent with a long run of dots (no regex backtracking)', () => {
+    // A user agent comes from the page under test. "Version/" followed by
+    // 100k dots and no "Safari/" took seconds with a backtracking pattern.
+    const ua = `Version/${'.'.repeat(100_000)}`;
+    const start = performance.now();
+    expect(browserFromUserAgent(ua)).toBeNull();
+    expect(performance.now() - start).toBeLessThan(200);
   });
 });
 
