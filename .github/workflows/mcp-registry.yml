@@ -13,8 +13,9 @@ name: MCP Registry
 # The server name ai.testiv/mcp needs proof of owning testiv.ai: mcp-publisher
 # signs in with the Ed25519 private key whose public key is in the testiv.ai
 # DNS TXT record. That key can publish any server under ai.testiv/*, so it is
-# a secret on the mcp-registry-publish environment, which only the main branch
-# can deploy to. Setup: CONTRIBUTING.md, "MCP Registry listing".
+# a secret (MCP_PRIVATE_KEY: the key.pem file, its base64 line or its hex) on
+# the mcp-registry-publish environment, which only the main branch can deploy
+# to. Setup: CONTRIBUTING.md, "MCP Registry listing".
 
 on:
   workflow_call:
@@ -79,12 +80,15 @@ jobs:
         env:
           MCP_PRIVATE_KEY: ${{ secrets.MCP_PRIVATE_KEY }}
           DOMAIN: ${{ steps.check.outputs.domain }}
+        # The secret may be the key.pem file, its base64 line or the key's hex;
+        # mcp-publisher takes hex only. GitHub masks the secret's own text in
+        # logs, not the hex made from it, so the hex is masked before use.
         run: |
-          if [ -z "$MCP_PRIVATE_KEY" ]; then
-            echo "::error::No MCP_PRIVATE_KEY secret on the mcp-registry-publish environment: add the hex Ed25519 private key whose public key is in the $DOMAIN TXT record (CONTRIBUTING.md, \"MCP Registry listing\")."
+          if ! KEY_HEX="$(node scripts/mcp-registry.js key-hex)"; then
             exit 1
           fi
-          "$RUNNER_TEMP/mcp-publisher" login dns --domain "$DOMAIN" --private-key "$MCP_PRIVATE_KEY"
+          echo "::add-mask::$KEY_HEX"
+          "$RUNNER_TEMP/mcp-publisher" login dns --domain "$DOMAIN" --private-key "$KEY_HEX"
 
       - name: Publish server.json
         id: publish

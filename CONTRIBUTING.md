@@ -84,17 +84,16 @@ To list a version that is on npm but not in the registry (a release from before 
 
 One-time setup, by a maintainer:
 
-1. The name `ai.testiv/mcp` needs proof of owning `testiv.ai`: the `testiv.ai` DNS TXT record holds an Ed25519 public key (`v=MCPv1; k=ed25519; p=…`), and the workflow signs in with the matching private key, as 64 hex characters. If that key is lost, make a new pair and replace the TXT record ([registry guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx)):
+1. The name `ai.testiv/mcp` needs proof of owning `testiv.ai`: the `testiv.ai` DNS TXT record holds an Ed25519 public key (`v=MCPv1; k=ed25519; p=…`), and the workflow signs in with the matching private key. If that key is lost, make a new pair and replace the TXT record ([registry guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/authentication.mdx)):
 
    ```bash
    openssl genpkey -algorithm Ed25519 -out key.pem
    echo "testiv.ai. IN TXT \"v=MCPv1; k=ed25519; p=$(openssl pkey -in key.pem -pubout -outform DER | tail -c 32 | base64)\""
-   openssl pkey -in key.pem -noout -text | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n'   # the private key, hex
    ```
 
-2. That key can publish any server under `ai.testiv/*`. In **Settings → Environments**, create the environment `mcp-registry-publish`, limit its deployment branches to `main`, and add the hex private key there as the secret `MCP_PRIVATE_KEY`, not as a repository secret. A required reviewer on the environment makes each publish wait for approval.
+2. That key can publish any server under `ai.testiv/*`. In **Settings → Environments**, create the environment `mcp-registry-publish`, limit its deployment branches to `main`, and add the private key there as the secret `MCP_PRIVATE_KEY`, not as a repository secret: paste the whole `key.pem` file. Its base64 line alone, or the key's 64 hex characters, work too; `scripts/mcp-registry.js key-hex` turns any of them into the hex `mcp-publisher` takes. A required reviewer on the environment makes each publish wait for approval.
 
-Without the secret, the workflow fails at the login step and says what is missing.
+Without the secret, or with a value that is none of those, the workflow fails at the login step and says what is wrong, without printing the value.
 
 ## Code Style
 

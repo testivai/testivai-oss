@@ -1,3 +1,5 @@
+import * as childProcess from 'node:child_process';
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -255,6 +257,126 @@ describe('main (the CLI the workflow runs)', () => {
     expect(lines.join('\n')).toMatch(/::error::.*check.*verify/);
     expect(calls).toEqual([]);
   });
+
+  // stdout carries the key, so its errors must not go there: the workflow
+  // captures stdout into a variable, which would swallow them.
+  it('key-hex prints only the hex on stdout, and errors only on stderr', async () => {
+    const { fetch } = fakeFetch({});
+    const errors: string[] = [];
+    const err = (line: string) => errors.push(line);
+
+    const key = ed25519();
+    expect(await script.main(['key-hex'], { env: { MCP_PRIVATE_KEY: key.pem }, fetch, sleep, log, err })).toBe(0);
+    expect(lines).toEqual([key.hex]);
+    expect(errors).toEqual([]);
+
+    lines = [];
+    expect(await script.main(['key-hex'], { env: {}, fetch, sleep, log, err })).toBe(1);
+    expect(lines).toEqual([]);
+    expect(errors.join('\n')).toMatch(/^::error::.*MCP_PRIVATE_KEY.*mcp-registry-publish/);
+  });
+});
+
+// The key as `openssl genpkey -algorithm Ed25519` writes it, and the 32-byte
+// seed mcp-publisher takes as hex: the last 32 bytes of the 48-byte PKCS#8 DER.
+function ed25519() {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  const der = privateKey.export({ format: 'der', type: 'pkcs8' });
+  const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+  return {
+    pem,
+    body: pem.split('\n')[1],
+    hex: der.subarray(der.length - 32).toString('hex'),
+    publicPem: publicKey.export({ format: 'pem', type: 'spki' }).toString(),
+  };
+}
+
+// MCP_PRIVATE_KEY as people paste it. mcp-publisher only takes hex, and a
+// secret holding the .pem file, then its base64 line, failed the first runs.
+describe('privateKeyHex', () => {
+  it('takes the 64 hex characters as they are, in lower case', () => {
+    const { hex } = ed25519();
+    expect(script.privateKeyHex(hex)).toBe(hex);
+    expect(script.privateKeyHex(` ${hex.toUpperCase()}\n`)).toBe(hex);
+  });
+
+  it('takes the hex in the layout `openssl pkey -noout -text` prints', () => {
+    const { hex } = ed25519();
+    const pairs = hex.match(/../g) ?? [];
+    const layout = `    ${pairs.slice(0, 15).join(':')}:\n    ${pairs.slice(15, 30).join(':')}:\n    ${pairs.slice(30).join(':')}`;
+    expect(script.privateKeyHex(layout)).toBe(hex);
+  });
+
+  it('takes the key.pem file', () => {
+    const { pem, hex } = ed25519();
+    expect(script.privateKeyHex(pem)).toBe(hex);
+    expect(script.privateKeyHex(`\r\n${pem.replace(/\n/g, '\r\n')}\r\n`)).toBe(hex);
+  });
+
+  it("takes the key.pem file's base64 line alone", () => {
+    const { body, hex } = ed25519();
+    expect(body).toMatch(/^MC4CAQAw/);
+    expect(script.privateKeyHex(body)).toBe(hex);
+  });
+
+  it('takes the key.pem file pasted on one line, with or without escaped newlines', () => {
+    const { pem, hex } = ed25519();
+    expect(script.privateKeyHex(pem.trim().replace(/\n/g, '\\n'))).toBe(hex);
+    expect(script.privateKeyHex(pem.trim().replace(/\n/g, ' '))).toBe(hex);
+  });
+
+  it('refuses an empty value', () => {
+    expect(() => script.privateKeyHex('  \n')).toThrow(/empty/);
+    expect(() => script.privateKeyHex(undefined)).toThrow(/empty/);
+  });
+
+  it('refuses a private key of another type, naming the type', () => {
+    const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'secp384r1' });
+    const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+    expect(() => script.privateKeyHex(pem)).toThrow(/\bec\b.*Ed25519/);
+  });
+
+  // The DNS record's p= value is the public key, a common mix-up.
+  it('refuses a public key and text that is no key, without repeating the value', () => {
+    const { publicPem } = ed25519();
+    const publicBody = publicPem.split('\n')[1];
+    for (const value of [publicPem, publicBody, 'not a key', `${'ab'.repeat(31)}`]) {
+      let message = '';
+      try {
+        script.privateKeyHex(value);
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toMatch(/not an Ed25519 private key.*\.pem.*hex/);
+      expect(message).not.toContain(value.trim().slice(0, 12));
+    }
+  });
+});
+
+// The command as the workflow runs it: a real process, real stdout and stderr.
+describe('node scripts/mcp-registry.js key-hex', () => {
+  const run = (key?: string) =>
+    childProcess.spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'mcp-registry.js'), 'key-hex'], {
+      env: { ...process.env, MCP_PRIVATE_KEY: key ?? '' },
+      encoding: 'utf8',
+    });
+
+  it('prints the hex for a key.pem file', () => {
+    const { pem, hex } = ed25519();
+    const res = run(pem);
+    expect({ status: res.status, stdout: res.stdout, stderr: res.stderr }).toEqual({
+      status: 0,
+      stdout: `${hex}\n`,
+      stderr: '',
+    });
+  });
+
+  it('prints nothing on stdout, and the error on stderr, for a bad value', () => {
+    const res = run('not a key');
+    expect(res.status).toBe(1);
+    expect(res.stdout).toBe('');
+    expect(res.stderr).toMatch(/^::error::MCP_PRIVATE_KEY is not an Ed25519 private key/);
+  });
 });
 
 // The workflows themselves only run on GitHub, so their wiring is pinned here.
@@ -352,17 +474,62 @@ describe('.github/workflows/mcp-registry.yml', () => {
     expect(run.indexOf('sha256sum -c')).toBeLessThan(run.indexOf('tar '));
   });
 
-  // testiv.ai publishes its key as a DNS TXT record; it serves no
-  // /.well-known/mcp-registry-auth file for HTTP login.
-  it('logs in by DNS to the domain the server name is under, refusing an empty key first', () => {
-    const login = step('login');
-    expect(login.env).toEqual({
+  it('gives the login step the key and the domain', () => {
+    expect(step('login').env).toEqual({
       MCP_PRIVATE_KEY: '${{ secrets.MCP_PRIVATE_KEY }}',
       DOMAIN: '${{ steps.check.outputs.domain }}',
     });
-    const run = login.run ?? '';
-    expect(run).toMatch(/^if \[ -z "\$MCP_PRIVATE_KEY" \]/);
-    expect(run).toMatch(/mcp-publisher" login dns --domain "\$DOMAIN" --private-key "\$MCP_PRIVATE_KEY"\s*$/);
+  });
+
+  // The login step's own script, run by bash against a stand-in mcp-publisher
+  // that records its arguments.
+  describe('the login step, run', () => {
+    let runner: string;
+    beforeEach(() => {
+      runner = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-registry-runner-'));
+      const fake = path.join(runner, 'mcp-publisher');
+      fs.writeFileSync(fake, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RUNNER_TEMP/args"\necho "mcp-publisher ran"\n');
+      fs.chmodSync(fake, 0o755);
+    });
+    afterEach(() => {
+      fs.rmSync(runner, { recursive: true, force: true });
+    });
+    const runLogin = (key: string) =>
+      childProcess.spawnSync('bash', ['-e', '-c', step('login').run ?? ''], {
+        cwd: repoRoot,
+        env: { ...process.env, RUNNER_TEMP: runner, MCP_PRIVATE_KEY: key, DOMAIN: 'testiv.ai' },
+        encoding: 'utf8',
+      });
+    const args = () => fs.readFileSync(path.join(runner, 'args'), 'utf8');
+
+    // testiv.ai publishes its key as a DNS TXT record; it serves no
+    // /.well-known/mcp-registry-auth file for HTTP login.
+    it('logs in by DNS with the hex of a key.pem secret', () => {
+      const { pem, hex } = ed25519();
+      const res = runLogin(pem);
+      expect(res.status).toBe(0);
+      expect(args()).toBe(`login\ndns\n--domain\ntestiv.ai\n--private-key\n${hex}\n`);
+    });
+
+    // GitHub masks the secret's own text in logs, not the hex made from it.
+    it('masks the hex before mcp-publisher runs', () => {
+      const { body, hex } = ed25519();
+      const res = runLogin(body);
+      expect(res.status).toBe(0);
+      const mask = res.stdout.indexOf(`::add-mask::${hex}\n`);
+      expect(mask).toBeGreaterThan(-1);
+      expect(mask).toBeLessThan(res.stdout.indexOf('mcp-publisher ran'));
+      expect(res.stdout.replace(`::add-mask::${hex}`, '')).not.toContain(hex);
+    });
+
+    it('stops with the error, before mcp-publisher, on an empty or bad key', () => {
+      for (const key of ['', 'not a key']) {
+        const res = runLogin(key);
+        expect(res.status).not.toBe(0);
+        expect(res.stderr).toMatch(/::error::MCP_PRIVATE_KEY/);
+        expect(fs.existsSync(path.join(runner, 'args'))).toBe(false);
+      }
+    });
   });
 });
 
