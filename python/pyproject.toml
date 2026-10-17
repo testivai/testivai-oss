@@ -9,7 +9,7 @@ description = "Local-first visual regression capture for playwright-python and S
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-authors = [{ name = "TestivAI" }]
+authors = [{ name = "Budi Sugianto" }]
 keywords = ["playwright", "selenium", "visual-regression", "testing", "screenshot-testing", "pytest"]
 classifiers = [
   "Framework :: Pytest",
