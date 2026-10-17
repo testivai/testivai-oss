@@ -1220,3 +1220,219 @@ describe('@testivai/mcp missing baselines', () => {
     expect((lib.explainSnapshot(root, 'catalog') as import('../lib').SnapshotExplanation).guidance.join('\n')).not.toMatch(/Missing baselines this run/);
   });
 });
+
+/**
+ * results.json 2.4.0: `sizeMismatch` when the candidate's dimensions differ
+ * from the baseline's. witness pads the two to max width × max height and
+ * counts every padded pixel as changed, so such a snapshot is never passed;
+ * the verdict says what the size change means before anything else, since
+ * the pixel layers describe the padding.
+ */
+describe('@testivai/mcp verdictFor with a size mismatch', () => {
+  const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
+  const taller = { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } };
+  const wider = { baseline: { width: 1280, height: 800 }, candidate: { width: 1440, height: 800 } };
+
+  it('a taller page with DOM additions: the page grew, content was added, confirm before approving', () => {
+    expect(
+      verdictFor({
+        name: 'products',
+        status: 'changed',
+        diffPercent: 7.49,
+        sizeMismatch: taller,
+        dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 }, styleCheck: 'match' },
+      }),
+    ).toBe(
+      'changed (7.49% pixels differ) — page grew 190 px (baseline 1280×2348 → current 1280×2538) and the DOM changed (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
+        "content was added below the baseline's height, and every pixel of the added band counts as changed; confirm it is intended before approving",
+    );
+  });
+
+  it('a shorter page with an identical DOM: the page shrank, the missing band is layout', () => {
+    expect(
+      verdictFor({
+        name: 'products',
+        status: 'changed',
+        diffPercent: 7.49,
+        sizeMismatch: { baseline: taller.candidate, candidate: taller.baseline },
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      }),
+    ).toBe(
+      'changed (7.49% pixels differ) — page shrank 190 px (baseline 1280×2538 → current 1280×2348) with an identical DOM, so the lost height is layout, not removed elements: ' +
+        'content was removed, and every pixel of the missing band counts as changed; confirm it is intended before approving',
+    );
+  });
+
+  // A width change is almost always the viewport or the device scale, not
+  // the page; and an identical DOM with matching styles must not read as
+  // noise just because the padding dominates the diff.
+  it('a width change points at the viewport or device scale and is never called noise', () => {
+    const verdict = verdictFor({
+      name: 'home',
+      status: 'changed',
+      diffPercent: 11.11,
+      sizeMismatch: wider,
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+    });
+    expect(verdict).toBe(
+      'changed (11.11% pixels differ) — width changed 1280 → 1440: viewport or device scale differs (baseline 1280×800 → current 1440×800), so this is not a page change ' +
+        "and the diff is on a padded canvas that does not describe the page; re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended",
+    );
+    expect(verdict).not.toMatch(NOISE_ADVICE);
+  });
+
+  it('without DOM data, the size change is still the verdict', () => {
+    expect(verdictFor({ name: 'x', status: 'changed', diffPercent: 25, sizeMismatch: taller })).toBe(
+      'changed (25.00% pixels differ) — page grew 190 px (baseline 1280×2348 → current 1280×2538): ' +
+        "content was added below the baseline's height, and every pixel of the added band counts as changed; confirm it is intended before approving",
+    );
+  });
+});
+
+describe('@testivai/mcp explainSnapshot with a size mismatch', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-size-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const writeResults = (snapshots: unknown[]) => {
+    const dir = path.join(root, 'visual-report');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'results.json'),
+      JSON.stringify({ version: '2.4.0', timestamp: 't', summary: { total: snapshots.length, passed: 0, changed: snapshots.length, newSnapshots: 0 }, snapshots }),
+    );
+  };
+
+  it('carries the two sizes in the pixel layer and leads the guidance with the size change, not the diff shape', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      {
+        name: 'products',
+        status: 'changed',
+        diffPercent: 7.49,
+        totalPixels: 1280 * 2538,
+        regions: [{ x: 0, y: 2348, width: 1280, height: 190, diffPixels: 243200, diffPercent: 100 }],
+        sizeMismatch: { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } },
+        dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 }, styleCheck: 'match' },
+      },
+    ]);
+    const e = explainSnapshot(root, 'products');
+    expect(e.layers.pixel.sizeMismatch).toEqual({ baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } });
+    expect(e.guidance[0]).toBe(
+      'The current capture is 1280×2538, the baseline 1280×2348: page grew 190 px. The two were padded to the larger size and every ' +
+        'padded pixel counts as changed, so diffPercent, the regions and the diff image describe the added band before anything else. ' +
+        "Content was added below the baseline's height: read the DOM summary for what, and look at the current image there.",
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/concentrated in one area|likely render noise/i);
+  });
+
+  it('a width change: guidance says the viewport or device scale differs and withholds the noise reading', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      {
+        name: 'home',
+        status: 'changed',
+        diffPercent: 0.4,
+        sizeMismatch: { baseline: { width: 1280, height: 800 }, candidate: { width: 1440, height: 800 } },
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      },
+    ]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance[0]).toBe(
+      'The current capture is 1440×800, the baseline 1280×800: width changed 1280 → 1440: viewport or device scale differs. The two were padded to the larger size and every ' +
+        'padded pixel counts as changed, so diffPercent, the regions and the diff image describe the padding, not the page. ' +
+        "This is not a page change: re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/likely render noise|do not block/i);
+  });
+
+  it('a snapshot without sizeMismatch has null in the pixel layer', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([{ name: 'home', status: 'changed', diffPercent: 0.4, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } }]);
+    expect(explainSnapshot(root, 'home').layers.pixel.sizeMismatch).toBeNull();
+  });
+});
+
+/**
+ * A DOM change never decides the status on its own: the pixels do. A passed
+ * snapshot whose DOM differs (nothing visible changed, or within a configured
+ * tolerance) is reported as such, with nothing to approve.
+ */
+describe('@testivai/mcp verdictFor on a passed snapshot whose DOM changed', () => {
+  const summary = { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 };
+
+  it('with no pixel above the threshold: nothing visible changed, but the DOM differs', () => {
+    expect(
+      verdictFor({ name: 'x', status: 'passed', diffPercent: 0, dom: { changed: true, noiseHint: false, summary, styleCheck: 'match' } }),
+    ).toBe(
+      'passed — nothing visible changed, but the DOM differs (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
+        'hidden or off-screen content, or markup with no painted effect; nothing to approve',
+    );
+  });
+
+  it('auto-passed within a tolerance: says the DOM changed too, and what to check', () => {
+    expect(
+      verdictFor({ name: 'x', status: 'passed', diffPercent: 0.2, autoPassed: 'threshold', dom: { changed: true, noiseHint: false, summary, styleCheck: 'match' } }),
+    ).toBe(
+      "passed — auto-passed by the configured 'threshold' criterion: 0.20% pixels differ, within its tolerance; " +
+        'the DOM also changed (4 added, 0 removed, 0 attribute changes, 2 text changes) — nothing to approve, but check the tolerance is meant to cover a markup change',
+    );
+  });
+
+  it('a plain pass with an identical DOM is unchanged', () => {
+    expect(verdictFor({ name: 'x', status: 'passed', diffPercent: 0, dom: { changed: false, noiseHint: false, summary: null } })).toBe('passed — no visual change');
+  });
+});
+
+describe('@testivai/mcp explainSnapshot on a passed snapshot whose DOM changed', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-dompass-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const writeResults = (snapshots: unknown[]) => {
+    const dir = path.join(root, 'visual-report');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'results.json'),
+      JSON.stringify({ version: '2.4.0', timestamp: 't', summary: { total: snapshots.length, passed: snapshots.length, changed: 0, newSnapshots: 0 }, snapshots }),
+    );
+  };
+
+  it('guidance reports the DOM change as information, never as something to approve', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      { name: 'home', status: 'passed', diffPercent: 0, dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 } } },
+    ]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance).toContain(
+      'Nothing visible changed (no pixel above the threshold), but the DOM differs (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
+        'hidden or off-screen content, or markup with no painted effect. Nothing to approve; worth knowing if the change was meant to be visible.',
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/confirm the change is intended before approving/);
+  });
+
+  it('an auto-passed snapshot keeps its auto-pass line and adds the DOM note', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      { name: 'home', status: 'passed', diffPercent: 0.2, autoPassed: 'threshold', dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } } },
+    ]);
+    const e = explainSnapshot(root, 'home');
+    expect(e.guidance).toContain("This diff auto-passed via the 'threshold' criterion — reported for transparency, no action needed.");
+    expect(e.guidance).toContain(
+      'The DOM also changed (1 added, 0 removed, 0 attribute changes) within that tolerance. Nothing to approve, but check the tolerance is meant to cover a markup change.',
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/before approving/);
+  });
+});

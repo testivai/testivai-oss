@@ -398,3 +398,123 @@ describe('heatmap diff rendering', () => {
     expect(out[oi + 1]).toBe(47);
   });
 });
+
+/**
+ * Size mismatch with explicit `dimensions`: the caller knows both sizes, so
+ * the engine can normalize a width difference too (the inference path
+ * assumes a shared width), and with 'pad' every padded pixel counts as
+ * changed — content below (or beside) the baseline is a change, whatever
+ * color it has.
+ */
+describe('size mismatch with explicit dimensions', () => {
+  it('counts every padded row as changed for a taller candidate with an identical overlap', () => {
+    const baseline = createSolidBuffer(10, 10, 128, 128, 128);
+    const candidate = createSolidBuffer(10, 12, 128, 128, 128);
+    const output = createDiffBuffer(10, 12);
+
+    const result = diff(baseline, candidate, output, 10, 10, {
+      handleSizeMismatch: 'pad',
+      dimensions: { baseline: { width: 10, height: 10 }, candidate: { width: 10, height: 12 } },
+    });
+
+    expect(result.sizeMismatch).toEqual({
+      baseline: { width: 10, height: 10 },
+      candidate: { width: 10, height: 12 },
+      normalized: { width: 10, height: 12 },
+    });
+    expect(result.totalPixels).toBe(120);
+    expect(result.diffCount).toBe(20);
+    expect(result.isIdentical).toBe(false);
+    // The padded rows are heat in the diff image (the core loop's own heat
+    // where the pad's RGB differs, deep red where it does not), never the
+    // grayscale wash.
+    for (let y = 10; y < 12; y++) {
+      for (let x = 0; x < 10; x++) {
+        const i = (y * 10 + x) * 4;
+        expect(output[i + 3]).toBe(255);
+        expect(output[i]).toBeGreaterThanOrEqual(211); // yellow → red: r stays high
+        expect(output[i + 2]).toBeLessThan(60); // and b low; the wash is r = g = b
+      }
+    }
+    // The overlap is untouched (washed background, no heat).
+    expect(output[3]).toBe(255);
+    expect(output[0]).toBe(output[1]);
+  });
+
+  it('counts padded pixels even when the candidate there is black (the pad color)', () => {
+    // The core loop compares RGB only: black content over a transparent
+    // black pad is invisible to it. The pad must be flagged explicitly.
+    const baseline = createSolidBuffer(10, 10, 0, 0, 0);
+    const candidate = createSolidBuffer(10, 12, 0, 0, 0);
+    const output = createDiffBuffer(10, 12);
+
+    const result = diff(baseline, candidate, output, 10, 10, {
+      handleSizeMismatch: 'pad',
+      dimensions: { baseline: { width: 10, height: 10 }, candidate: { width: 10, height: 12 } },
+    });
+
+    expect(result.diffCount).toBe(20);
+  });
+
+  it('pads a wider candidate without misaligning rows: the diff is the right-hand strip only', () => {
+    const baseline = createBufferWithBlock(10, 10, 255, 255, 255, 2, 2, 4, 4, 255, 0, 0);
+    const candidate = createBufferWithBlock(14, 10, 255, 255, 255, 2, 2, 4, 4, 255, 0, 0);
+    const output = createDiffBuffer(14, 10);
+
+    const result = diff(baseline, candidate, output, 10, 10, {
+      handleSizeMismatch: 'pad',
+      detectRegions: true,
+      regionOptions: { minSize: 1 },
+      dimensions: { baseline: { width: 10, height: 10 }, candidate: { width: 14, height: 10 } },
+    });
+
+    expect(result.sizeMismatch!.normalized).toEqual({ width: 14, height: 10 });
+    expect(result.diffCount).toBe(40);
+    expect(result.regions).toEqual([
+      expect.objectContaining({ x: 10, y: 0, width: 4, height: 10, diffPixels: 40 }),
+    ]);
+  });
+
+  it('counts a shorter candidate\'s missing rows as changed', () => {
+    const baseline = createSolidBuffer(10, 12, 200, 200, 200);
+    const candidate = createSolidBuffer(10, 10, 200, 200, 200);
+    const output = createDiffBuffer(10, 12);
+
+    const result = diff(baseline, candidate, output, 10, 12, {
+      handleSizeMismatch: 'pad',
+      dimensions: { baseline: { width: 10, height: 12 }, candidate: { width: 10, height: 10 } },
+    });
+
+    expect(result.diffCount).toBe(20);
+    expect(result.sizeMismatch!.candidate).toEqual({ width: 10, height: 10 });
+  });
+
+  it('with crop, nothing is padded and the identical overlap is identical', () => {
+    const baseline = createSolidBuffer(10, 10, 128, 128, 128);
+    const candidate = createSolidBuffer(10, 12, 128, 128, 128);
+    const output = createDiffBuffer(10, 10);
+
+    const result = diff(baseline, candidate, output, 10, 10, {
+      handleSizeMismatch: 'crop',
+      dimensions: { baseline: { width: 10, height: 10 }, candidate: { width: 10, height: 12 } },
+    });
+
+    expect(result.diffCount).toBe(0);
+    expect(result.isIdentical).toBe(true);
+    expect(result.sizeMismatch!.normalized).toEqual({ width: 10, height: 10 });
+  });
+
+  it('equal dimensions change nothing', () => {
+    const baseline = createSolidBuffer(10, 10, 128, 128, 128);
+    const candidate = createSolidBuffer(10, 10, 128, 128, 128);
+    const output = createDiffBuffer(10, 10);
+
+    const result = diff(baseline, candidate, output, 10, 10, {
+      handleSizeMismatch: 'pad',
+      dimensions: { baseline: { width: 10, height: 10 }, candidate: { width: 10, height: 10 } },
+    });
+
+    expect(result.diffCount).toBe(0);
+    expect(result.sizeMismatch).toBeUndefined();
+  });
+});

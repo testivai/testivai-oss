@@ -153,9 +153,9 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.3.0",
+  "version": "2.4.0",
   "timestamp": "<ISO>",
-  "summary": { "total": 2, "passed": 1, "changed": 1, "newSnapshots": 0, "missing": 1 },
+  "summary": { "total": 3, "passed": 1, "changed": 2, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
   "snapshots": [
     {
@@ -189,10 +189,31 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
       "diffPath":  "images/footer/diff.png",
       "dom": { "changed": false, "noiseHint": true, "summary": null, "styleCheck": "match" },
       "autoPassed": "noise"
+    },
+    {
+      "name": "products",
+      "status": "changed",
+      "diffPercent": 7.49,
+      "sizeMismatch": { "baseline": { "width": 1280, "height": 2348 },
+                        "candidate": { "width": 1280, "height": 2538 } },
+      "dom": { "changed": true, "noiseHint": false,
+               "summary": { "added": 4, "removed": 0, "attributeChanges": 0, "textChanges": 2 } }
     }
   ]
 }
 ```
+
+`sizeMismatch` (schema 2.4.0) is present when the current capture's dimensions differ
+from the baseline's. The two are padded to max width × max height before diffing and
+every padded pixel counts as changed, so `totalPixels`, `diffCount` and `regions` are on
+that canvas and the snapshot is never `passed`: no pass criterion applies to a snapshot
+with `sizeMismatch`. A DOM change on its own never decides the status: the pixels do
+(a zero-count diff passes, a diff within `maxDiffPercent` / `maxDiffPixels` auto-passes),
+and the report, the MCP verdicts and the action say when a passed snapshot's DOM differs. A
+height change is content added or removed (read it with `dom.summary`); a width change
+is almost always the viewport or device scale factor, not the page: word it that way
+(`describeSizeChange` / `formatSizeMismatch` in `packages/witness/src/report/size-mismatch.ts`,
+shared by the report, MCP and the action).
 
 When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
 `"match"` → likely render noise (not proof) only when the diff is also small and

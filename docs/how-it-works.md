@@ -76,7 +76,8 @@ Local-mode diff is performed by `@testivai/witness/report` (`compareAll` in `rep
 2. For each, look up `baselines/<name>/screenshot.png`.
 3. If no baseline exists → status `new` (you'll commit the temp file as the baseline).
 4. If buffers are byte-identical → status `passed`.
-5. Otherwise → status `changed` with a percent-diff estimate (subject to threshold from `.testivai/config.json`).
+5. If the two images have different dimensions, both are padded to the larger width and height and every padded pixel counts as changed; the result records both sizes in `sizeMismatch`, and the snapshot is never auto-passed. A taller or shorter page is content added or removed (the DOM diff says what); a different width is almost always the viewport or device scale factor, not the page, and the report says so.
+6. Otherwise → status `changed` with a percent-diff estimate (subject to threshold from `.testivai/config.json`).
 
 The threshold is configurable:
 
@@ -92,7 +93,7 @@ The threshold is configurable:
 }
 ```
 
-`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) **and** whose diff is not concentrated in one area pass too (it never passes a diff whose styles were not compared or changed, or whose regions all fit in a box covering at most a third of the page); with `shiftTolerance` set, diffs made only of small pure element shifts pass. Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
+`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) **and** whose diff is not concentrated in one area pass too (it never passes a diff whose styles were not compared or changed, or whose regions all fit in a box covering at most a third of the page); with `shiftTolerance` set, diffs made only of small pure element shifts pass. No criterion passes a snapshot whose dimensions changed (`sizeMismatch`), whatever its pixel count. A DOM change never decides the status on its own: the pixels do, and the report says when a passed snapshot's DOM differs (nothing visible changed, or within a tolerance). Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
 
 ### When pixels differ and the DOM is identical
 

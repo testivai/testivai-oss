@@ -45,13 +45,16 @@ export interface GenerateReportOptions {
  * @returns The report data
  */
 /**
- * results.json schema version. 2.3.0 adds top-level `missingBaselines[]`
+ * results.json schema version. 2.4.0 adds per-snapshot `sizeMismatch`
+ * (the baseline's and the candidate's dimensions when they differ; the diff
+ * is then on a canvas of max width × max height with every padded pixel
+ * counted as changed). 2.3.0 added top-level `missingBaselines[]`
  * and `summary.missing` (baselines that received no capture this run — the
  * coverage-loss signal). 2.2.0 added per-snapshot `regions[]` (clustered
  * diff bounding boxes), `masks[]` (applied masks with their source — the
  * audit trail), and `maskWarnings[]`. All additive.
  */
-export const RESULTS_SCHEMA_VERSION = '2.3.0';
+export const RESULTS_SCHEMA_VERSION = '2.4.0';
 
 /**
  * Write results.json for an already-computed set of snapshot results.

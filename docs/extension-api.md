@@ -103,12 +103,12 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.3.0",         // results.json SCHEMA version
+  "version": "2.4.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
-    "total": 5,
+    "total": 6,
     "passed": 2,
-    "changed": 2,
+    "changed": 3,
     "newSnapshots": 1,
     "missing": 1             // baselines that received no capture this run
   },
@@ -210,6 +210,26 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "pageShift": { "dy": -1, "belowY": 120, "count": 4 }
     },
     {
+      "name": "products",
+      "status": "changed",    // never passed: the dimensions changed
+      "diffPercent": 7.49,
+      "diffCount": 243200,    // on the padded canvas: every padded pixel counts
+      "totalPixels": 3248640, // 1280 × 2538, the larger of the two sizes
+      "baselinePath": "images/products/baseline.png",
+      "currentPath":  "images/products/current.png",
+      "diffPath":     "images/products/diff.png",
+      "sizeMismatch": {       // the two sizes; a height change is content
+        "baseline":  { "width": 1280, "height": 2348 },   // added or removed, a
+        "candidate": { "width": 1280, "height": 2538 }    // width change the viewport
+      },
+      "dom": {
+        "changed": true,
+        "summary": { "added": 4, "removed": 0, "attributeChanges": 0, "textChanges": 2 },
+        "noiseHint": false
+      },
+      "regions": [ { "x": 0, "y": 2348, "width": 1280, "height": 190, "diffPixels": 243200, "diffPercent": 100 } ]
+    },
+    {
       "name": "fresh-baseline",
       "status": "new",
       "diffPercent": 0,
@@ -235,7 +255,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].status` | enum | yes | `passed` &#124; `changed` &#124; `new` |
 | `snapshots[].diffPercent` | number | yes | 0–100. 0 for `new` and for a `passed` snapshot with no pixel above `threshold`; an auto-passed snapshot keeps its diff percentage |
 | `snapshots[].diffCount` | number | yes | absolute count of differing pixels |
-| `snapshots[].totalPixels` | number | yes | total pixels compared (0 for `new`, for a byte-identical `passed` snapshot, and for a `changed` snapshot whose PNG failed to decode) |
+| `snapshots[].totalPixels` | number | yes | total pixels compared (0 for `new`, for a byte-identical `passed` snapshot, and for a `changed` snapshot whose PNG failed to decode); with `sizeMismatch`, the padded canvas (max width × max height) |
 | `snapshots[].baselinePath` | string | optional | relative path under `<reportDir>/`; absent for `new` |
 | `snapshots[].currentPath` | string | optional | relative path under `<reportDir>/` |
 | `snapshots[].diffPath` | string | optional | present whenever the two PNGs differ byte-wise and decode: `changed`, auto-passed, or a `passed` snapshot with no pixel above `threshold`; absent for byte-identical passes, `new`, and a `changed` snapshot whose PNG failed to decode |
@@ -251,8 +271,9 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].pageShift` | object | optional | whole-page uniform displacement: `{ dy, belowY, count }`. Requires element maps on both sides |
 | `snapshots[].masks` | array | optional | masks applied to this comparison, resolved to pixels: `{ x, y, width, height, source }`. Present when non-empty |
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
-| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs) |
+| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
+| `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is content added or removed (read it with `dom.summary`); a width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |
 
 ### Schema versioning
 

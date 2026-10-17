@@ -115722,6 +115722,39 @@ function describeRegions(shape) {
   return `${n} region${n === 1 ? "" : "s"} within ${shape.box.width}\xD7${shape.box.height} px${share}`;
 }
 
+// ../packages/witness/src/report/size-mismatch.ts
+function sizeMismatchKind(sm) {
+  if (sm.baseline.width !== sm.candidate.width) return "width";
+  if (sm.baseline.height !== sm.candidate.height) return "height";
+  return null;
+}
+var signed = (px) => `${px > 0 ? "+" : "-"}${Math.abs(px)} px`;
+function formatSizes(sm) {
+  const { baseline: b, candidate: c } = sm;
+  return `baseline ${b.width}\xD7${b.height} \u2192 current ${c.width}\xD7${c.height}`;
+}
+function formatSizeMismatch(sm) {
+  const { baseline: b, candidate: c } = sm;
+  const dw = c.width - b.width;
+  const dh = c.height - b.height;
+  if (dw === 0 && dh === 0) return formatSizes(sm);
+  const delta = dw !== 0 && dh !== 0 ? `${signed(dw)} wide, ${signed(dh)} tall` : dw !== 0 ? `${signed(dw)} wide` : signed(dh);
+  return `${formatSizes(sm)} (${delta})`;
+}
+function describeSizeChange(sm) {
+  const { baseline: b, candidate: c } = sm;
+  const kind = sizeMismatchKind(sm);
+  if (kind === "width") {
+    const height = b.height !== c.height ? ` (and height ${b.height} \u2192 ${c.height})` : "";
+    return `width changed ${b.width} \u2192 ${c.width}${height}: viewport or device scale differs`;
+  }
+  if (kind === "height") {
+    const dh = c.height - b.height;
+    return `page ${dh > 0 ? "grew" : "shrank"} ${Math.abs(dh)} px`;
+  }
+  return "dimensions unchanged";
+}
+
 // src/status.ts
 var STATUS_CONTEXT = "TestivAI / visual";
 function resolveStatusContext(input) {
@@ -115808,6 +115841,17 @@ function formatDiffPercent(snapshot2) {
 }
 function renderDomHintMarkdown(snapshot2) {
   const lines = [];
+  const size = snapshot2.sizeMismatch;
+  if (size) {
+    const change = `**Size changed \u2014 ${describeSizeChange(size)}** (${formatSizes(size)})`;
+    if (sizeMismatchKind(size) === "width") {
+      lines.push(`> ${change}, so this is not a page change; the diff is on a padded canvas and does not describe the page. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.`);
+    } else if (size.candidate.height > size.baseline.height) {
+      lines.push(`> ${change}: content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.`);
+    } else {
+      lines.push(`> ${change}: content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.`);
+    }
+  }
   const styleChanges = snapshot2.dom?.styleCheck === "mismatch" ? snapshot2.dom.styleChanges : void 0;
   const styleOnly = Boolean(styleChanges && !snapshot2.dom?.changed);
   if (styleOnly && styleChanges) {
@@ -115821,7 +115865,8 @@ function renderDomHintMarkdown(snapshot2) {
     lines.push(`> **Layout shift** \u2014 everything below y=${p.belowY} moved ${p.dy > 0 ? "down" : "up"} ${Math.abs(p.dy)}px (${p.count} elements together). Look *above* that line for inserted/removed content.`);
   }
   if (snapshot2.dom && !styleOnly) {
-    if (snapshot2.dom.noiseHint) {
+    if (snapshot2.dom.noiseHint && size) {
+    } else if (snapshot2.dom.noiseHint) {
       if (snapshot2.dom.styleCheck === "match") {
         const shape = diffShape({ ...snapshot2, diffPercent: snapshot2.diffPercent ?? snapshot2.diffPercentage });
         if (shape.kind === "concentrated") {
@@ -115880,8 +115925,9 @@ ${summaryLine} \u2014 **${summary2.total} total**
     for (const snapshot2 of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot2);
       const domHint = renderDomHintMarkdown(snapshot2);
+      const size = snapshot2.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot2.sizeMismatch)}` : "";
       comment += `<details>
-<summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different</summary>
+<summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different${size}</summary>
 
 ${domHint}
 \`\`\`

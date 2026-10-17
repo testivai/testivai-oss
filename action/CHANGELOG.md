@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The PR comment reads `sizeMismatch` from `results.json` (`@testivai/witness` schema 2.4.0): when the current capture's dimensions differ from the baseline's, the snapshot row shows both sizes (`baseline 1280×2348 → current 1280×2538 (+190 px)`) and the body opens with **Size changed**: a taller or shorter page is content added or removed, read with the DOM summary; a width change is the viewport or device scale, not the page. The identical-DOM readings (likely render noise, styles not compared) are withheld for such a snapshot, because its diff is on a padded canvas in which every padded pixel counts as changed
+
 ## [1.2.0] - 2026-10-16
 
 ### Changed

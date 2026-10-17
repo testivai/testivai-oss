@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { buildComment, buildEmptyComment, resolveUpsertMarker, UPSERT_MARKER } from '../comment';
 import { STATUS_CONTEXT } from '../status';
-import type { ResultsData } from '../types';
+import type { ResultsData, SnapshotResult } from '../types';
 
 describe('resolveUpsertMarker', () => {
   it('returns the legacy bare marker for the default status context', () => {
@@ -199,6 +199,60 @@ describe('buildComment', () => {
       expect(comment).toContain('DOM changed');
       expect(comment).toContain('2 added');
       expect(comment).toContain('1 attribute change');
+    });
+
+    // results.json 2.4.0: a candidate whose dimensions differ from the
+    // baseline's. The row shows both sizes; the body says what the change
+    // means (content added or removed, or a viewport change) and never noise.
+    describe('size mismatch', () => {
+      const changedWith = (extra: Partial<SnapshotResult>): ResultsData => ({
+        timestamp: Date.now(),
+        summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
+        snapshots: [{ name: 'products', status: 'changed', diffPercent: 7.49, currentPath: 'p.png', ...extra }],
+      });
+
+      it('shows the two sizes on the snapshot row and says the page grew with the DOM additions', () => {
+        const comment = buildComment(
+          changedWith({
+            sizeMismatch: { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } },
+            dom: { changed: true, noiseHint: false, summary: { added: 4, removed: 0, attributeChanges: 0, textChanges: 2 }, styleCheck: 'match' },
+          }),
+        );
+        expect(comment).toContain('<summary><code>products</code> — 7.49% different · baseline 1280×2348 → current 1280×2538 (+190 px)</summary>');
+        expect(comment).toContain(
+          "> **Size changed — page grew 190 px** (baseline 1280×2348 → current 1280×2538): content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.",
+        );
+        expect(comment).toContain('> **DOM changed** — 4 added, 2 text changes.');
+      });
+
+      it('a width change points at the viewport or device scale and is never called noise', () => {
+        const comment = buildComment(
+          changedWith({
+            sizeMismatch: { baseline: { width: 1280, height: 800 }, candidate: { width: 1440, height: 800 } },
+            dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+          }),
+        );
+        expect(comment).toContain('<summary><code>products</code> — 7.49% different · baseline 1280×800 → current 1440×800 (+160 px wide)</summary>');
+        expect(comment).toContain(
+          "> **Size changed — width changed 1280 → 1440: viewport or device scale differs** (baseline 1280×800 → current 1440×800), so this is not a page change; the diff is on a padded canvas and does not describe the page. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
+        );
+        expect(comment).not.toContain('likely render noise');
+        expect(comment).not.toContain('DOM unchanged');
+      });
+
+      it('a shorter page says content was removed', () => {
+        const comment = buildComment(
+          changedWith({ sizeMismatch: { baseline: { width: 1280, height: 2538 }, candidate: { width: 1280, height: 2348 } } }),
+        );
+        expect(comment).toContain('baseline 1280×2538 → current 1280×2348 (-190 px)');
+        expect(comment).toContain('> **Size changed — page shrank 190 px** (baseline 1280×2538 → current 1280×2348): content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.');
+      });
+
+      it('a row without sizeMismatch is unchanged', () => {
+        const comment = buildComment(changedWith({}));
+        expect(comment).toContain('<summary><code>products</code> — 7.49% different</summary>');
+        expect(comment).not.toContain('Size changed');
+      });
     });
 
     it('omits DOM hint when snapshot has no dom data', () => {
