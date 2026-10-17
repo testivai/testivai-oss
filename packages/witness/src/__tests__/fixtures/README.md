@@ -36,3 +36,26 @@ The last row is kept on purpose. A change to a class that repeats down a long
 page spreads its regions as widely as text-rendering noise does, and the
 regions alone cannot tell them apart. The tests pin that limit so a change to
 the rule is a deliberate one.
+
+## `size-mismatch/` (the taller-candidate false negative, reproduced 2026-10-16)
+
+The DOM snapshots of the scenario in which a capture taller than its baseline
+passed with 0%: a full-page baseline of nine product cards at 1280×2348, then
+one card appended below the fold, so the current capture is 1280×2538. Before
+the fix, `compareAll` sized the diff canvas to the baseline and truncated the
+candidate to it, so the identical overlap gave `diffCount: 0` and
+`applyPassCriteria` reported `passed` while `dom.summary` said
+`{ added: 4, textChanges: 2 }`. The mirror case (a card removed, candidate
+shorter) was caught, because the missing rows were zero-filled.
+
+- `nine-cards.dom.html` — the baseline's DOM (nine `article.card`)
+- `ten-cards.dom.html` — the current capture's DOM (a tenth card appended);
+  `domDiff` reports `{ added: 4, removed: 0, attributeChanges: 0, textChanges: 2 }`,
+  the same summary as the real run
+
+The screenshots are not committed: `compare-size-mismatch.test.ts` draws the
+pages synthetically at the real dimensions (1280×2348 and 1280×2538, one card
+per 190px band, the tenth entirely in the added band so the overlap is
+pixel-identical) and compares them with these DOMs. The test pins what the real
+run must now report: `changed`, `sizeMismatch`, every padded pixel counted,
+and the verdict "page grew 190 px".

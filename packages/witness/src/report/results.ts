@@ -96,6 +96,17 @@ export interface SnapshotResult {
    * months-old baseline deserves a closer look than yesterday's.
    */
   baselineApprovedAt?: string;
+  /**
+   * Present when the candidate's dimensions differ from the baseline's
+   * (schema 2.4.0). The two were padded to max width × max height before
+   * diffing and every padded pixel counts as changed, so `totalPixels`,
+   * `diffCount` and `regions` are on that canvas and a page that grew or
+   * shrank is never passed by any criterion. A height change is content
+   * added or removed (read it with `dom`); a width change is almost always
+   * the viewport or device scale factor differing between the captures, not
+   * the page (report/size-mismatch.ts words both).
+   */
+  sizeMismatch?: { baseline: { width: number; height: number }; candidate: { width: number; height: number } };
 }
 
 export interface ReportSummary {

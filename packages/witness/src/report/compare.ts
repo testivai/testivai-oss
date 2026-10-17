@@ -184,9 +184,11 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
       result.baselineApprovedAt = baselineMeta.updatedAt ?? baselineMeta.createdAt;
     }
 
-    // DOM-level noise hint. Only meaningful when both sides captured DOM.
-    // For 'passed' (pixel-identical) we skip the work — it's already the
-    // strongest possible signal.
+    // DOM-level signal. Only meaningful when both sides captured DOM.
+    // Computed whenever the two files differ at all (pixels, dimensions, or
+    // a re-encode with identical pixels): applyPassCriteria needs it, since a
+    // changed DOM is never passed. Byte-identical 'passed' skips the work —
+    // identical bytes are already the strongest possible signal.
     if (result.status === 'changed') {
       const baselineDom = store.readDom(name);
       const candidateDom = store.readTempDom(name);
@@ -249,6 +251,12 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
     noiseMaxDiffPercent = 1,
     shiftTolerance = 0,
   } = criteria;
+
+  // A page whose dimensions changed, or whose DOM changed, is never passed,
+  // whatever the pixel counts say: content was added or removed, or the
+  // viewport differs. The zero-count path below used to pass a grown page
+  // whose candidate had been truncated to the baseline's height.
+  if (result.sizeMismatch || result.dom?.changed) return;
 
   // Nothing above the per-pixel threshold: visually identical. Guard on
   // totalPixels — the PNG-decode-failure path reports diffCount 0 with
@@ -412,20 +420,29 @@ function compareBuffers(
     const baseline = decodePng(baselineBuffer);
     const candidate = decodePng(candidateBuffer);
 
-    // Use baseline dimensions for the diff canvas; pad/crop candidate if needed
-    const width = baseline.width;
-    const height = baseline.height;
-    const expectedLen = width * height * 4;
+    // The diff canvas is the baseline's size or, when the dimensions differ,
+    // max width × max height: the engine pads the smaller capture and counts
+    // every padded pixel as changed. (Sizing the canvas to the baseline and
+    // truncating the candidate passed a page that grew at 0%, and a width
+    // change misaligned every row.)
+    const sizeMismatch =
+      baseline.width !== candidate.width || baseline.height !== candidate.height
+        ? {
+            baseline: { width: baseline.width, height: baseline.height },
+            candidate: { width: candidate.width, height: candidate.height },
+          }
+        : undefined;
+    const width = Math.max(baseline.width, candidate.width);
+    const height = Math.max(baseline.height, candidate.height);
 
-    const baseline8 = new Uint8ClampedArray(expectedLen);
-    baseline8.set(new Uint8ClampedArray(baseline.data.buffer, baseline.data.byteOffset,
-      Math.min(baseline.data.length, expectedLen)));
+    // Copies, not views: pngjs may hand back a slice of a shared pool at an
+    // unaligned offset, and the engine reads the pixels as Uint32.
+    const baseline8 = new Uint8ClampedArray(baseline.data.length);
+    baseline8.set(baseline.data);
+    const candidate8 = new Uint8ClampedArray(candidate.data.length);
+    candidate8.set(candidate.data);
 
-    const candidate8 = new Uint8ClampedArray(expectedLen);
-    candidate8.set(new Uint8ClampedArray(candidate.data.buffer, candidate.data.byteOffset,
-      Math.min(candidate.data.length, expectedLen)));
-
-    const diffOutput = new Uint8ClampedArray(expectedLen);
+    const diffOutput = new Uint8ClampedArray(width * height * 4);
 
     // Resolve masks against this image's dimensions. Config and per-call
     // specs are resolved separately so the audit trail records the origin.
@@ -436,11 +453,12 @@ function compareBuffers(
     const maskRects = [...fromConfig.rects, ...fromCall.rects];
     const maskWarnings = [...fromConfig.warnings, ...fromCall.warnings];
 
-    const diffResult = diffEngine(baseline8, candidate8, diffOutput, width, height, {
+    const diffResult = diffEngine(baseline8, candidate8, diffOutput, baseline.width, baseline.height, {
       threshold,
       masks: maskRects,
       detectRegions: true,
       regionOptions: maskContext.regionOptions,
+      ...(sizeMismatch ? { handleSizeMismatch: 'pad' as const, dimensions: sizeMismatch } : {}),
     });
 
     // Encode the diff RGBA back to a valid PNG and write it
@@ -462,6 +480,7 @@ function compareBuffers(
       currentPath: `images/${name}/current.png`,
       diffPath: `images/${name}/diff.png`,
     };
+    if (sizeMismatch) result.sizeMismatch = sizeMismatch;
     if (diffResult.regions) result.regions = diffResult.regions;
     if (maskRects.length > 0) result.masks = maskRects;
     if (maskWarnings.length > 0) result.maskWarnings = maskWarnings;

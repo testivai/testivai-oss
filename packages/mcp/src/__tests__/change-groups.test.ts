@@ -268,3 +268,21 @@ describe('groupChanges on real results.json (see fixtures/README.md)', () => {
     ]);
   });
 });
+
+// A size mismatch dominates the pixel signal (every padded pixel counts as
+// changed), so the signals the groups key on describe the padding, not the
+// page: such snapshots are never grouped, even when their DOM and style
+// signals would otherwise match a noise or large-diff group.
+describe('groupChanges with a size mismatch', () => {
+  it('never groups a snapshot whose dimensions changed', () => {
+    const wider = { baseline: { width: 1280, height: 800 }, candidate: { width: 1440, height: 800 } };
+    expect(
+      members([
+        changed('a', { diffPercent: 11, sizeMismatch: wider, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } }),
+        changed('b', { diffPercent: 11, sizeMismatch: wider, dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' } }),
+        noise('c', 'match'),
+        noise('d', 'match'),
+      ]),
+    ).toEqual([['noise', ['c', 'd']]]);
+  });
+});

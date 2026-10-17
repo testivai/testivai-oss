@@ -18,6 +18,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as assert from 'assert';
 
+import { PNG } from 'pngjs';
 import { BaselineStore, generateReport, diff, domDiff } from '@testivai/witness';
 
 function makeRgbaPng(width: number, height: number, fill: [number, number, number, number]): Buffer {
@@ -34,6 +35,29 @@ function makeRgbaPng(width: number, height: number, fill: [number, number, numbe
   }
   return buf;
 }
+
+/** A real PNG: white, with one blue card per 100px row band. */
+function makeCardsPng(width: number, height: number, cards: number): Buffer {
+  const png = new PNG({ width, height });
+  png.data.fill(255);
+  for (let c = 0; c < cards; c++) {
+    for (let y = 20 + c * 100; y < 80 + c * 100; y++) {
+      for (let x = 20; x < width - 20; x++) {
+        const i = (y * width + x) * 4;
+        png.data[i] = 0;
+        png.data[i + 1] = 0;
+        png.data[i + 2] = 255;
+      }
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+const cardsHtml = (count: number): string =>
+  `<html><body><main class="cards">${Array.from(
+    { length: count },
+    (_, i) => `<article class="card"><h3>Card ${i + 1}</h3><p>Description ${i + 1}</p><span class="price">$${i + 1}.00</span></article>`,
+  ).join('')}</main></body></html>`;
 
 async function main(): Promise<void> {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-oss-e2e-'));
@@ -77,17 +101,22 @@ async function main(): Promise<void> {
     store.write('snapshot-dom-change', purpleBaseline, undefined, beforeHtml);
     store.writeTemp('snapshot-dom-change', purpleCurrent, afterHtml);
 
+    // A page that GREW: three cards in a 200×300 baseline, a fourth card
+    // appended → 200×400 current, identical overlap. Used to pass at 0%.
+    store.write('snapshot-taller', makeCardsPng(200, 300, 3), undefined, cardsHtml(3));
+    store.writeTemp('snapshot-taller', makeCardsPng(200, 400, 4), cardsHtml(4));
+
     // New snapshot (no baseline)
     store.writeTemp('snapshot-new', makeRgbaPng(8, 8, [128, 128, 128, 255]));
 
     assert.deepStrictEqual(
       store.list().sort(),
-      ['snapshot-changed', 'snapshot-dom-change', 'snapshot-noise', 'snapshot-passed'],
+      ['snapshot-changed', 'snapshot-dom-change', 'snapshot-noise', 'snapshot-passed', 'snapshot-taller'],
       'baseline list should match seeded baselines',
     );
     assert.deepStrictEqual(
       store.listTemp().sort(),
-      ['snapshot-changed', 'snapshot-dom-change', 'snapshot-new', 'snapshot-noise', 'snapshot-passed'],
+      ['snapshot-changed', 'snapshot-dom-change', 'snapshot-new', 'snapshot-noise', 'snapshot-passed', 'snapshot-taller'],
       'temp list should match seeded temps',
     );
 
@@ -106,9 +135,9 @@ async function main(): Promise<void> {
       autoOpen: false,
     });
 
-    assert.strictEqual(reportData.summary.total, 5, 'should report 5 snapshots');
+    assert.strictEqual(reportData.summary.total, 6, 'should report 6 snapshots');
     assert.strictEqual(reportData.summary.passed, 1, 'should report 1 passed');
-    assert.strictEqual(reportData.summary.changed, 3, 'should report 3 changed');
+    assert.strictEqual(reportData.summary.changed, 4, 'should report 4 changed');
     assert.strictEqual(reportData.summary.newSnapshots, 1, 'should report 1 new');
 
     const reportDir = path.join(projectRoot, 'visual-report');
@@ -121,7 +150,8 @@ async function main(): Promise<void> {
     assert.ok(html.includes('DOM changed'), 'dom-changed badge should appear in HTML report');
 
     const resultsJson = JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8'));
-    assert.strictEqual(resultsJson.snapshots.length, 5);
+    assert.strictEqual(resultsJson.snapshots.length, 6);
+    assert.strictEqual(resultsJson.version, '2.4.0', 'results.json should carry schema 2.4.0');
 
     const byName = Object.fromEntries(resultsJson.snapshots.map((s: any) => [s.name, s]));
 
@@ -138,6 +168,23 @@ async function main(): Promise<void> {
     assert.strictEqual(byName['snapshot-dom-change'].dom.changed, true);
     assert.strictEqual(byName['snapshot-dom-change'].dom.noiseHint, false);
     assert.strictEqual(byName['snapshot-dom-change'].dom.summary.added, 1);
+
+    // snapshot-taller: the page grew → changed, never passed, with both sizes
+    // and the DOM additions; the report row and verdict say so
+    const taller = byName['snapshot-taller'];
+    assert.strictEqual(taller.status, 'changed', 'a taller capture with an identical overlap must be changed');
+    assert.strictEqual(taller.autoPassed, undefined, 'a taller capture is never auto-passed');
+    assert.deepStrictEqual(
+      taller.sizeMismatch,
+      { baseline: { width: 200, height: 300 }, candidate: { width: 200, height: 400 } },
+      'sizeMismatch records both sizes',
+    );
+    assert.strictEqual(taller.totalPixels, 200 * 400, 'the diff canvas is the larger size');
+    assert.strictEqual(taller.diffCount, 200 * 100, 'every padded pixel counts as changed');
+    assert.strictEqual(taller.dom.changed, true);
+    assert.strictEqual(taller.dom.summary.added, 4, 'the appended card adds 4 elements');
+    assert.ok(html.includes('baseline 200×300 → current 200×400 (+100 px)'), 'report row should show both sizes');
+    assert.ok(html.includes('page grew 100 px'), 'report verdict should say the page grew');
 
     // 4. Verify @testivai/witness-playwright entry points load (no browser)
     //    We dynamically require to avoid TS path lookup issues if not built yet.

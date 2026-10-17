@@ -59,6 +59,13 @@ export interface SnapshotResult {
   totalPixels?: number;
   /** Changed-pixel clusters as bounding boxes. */
   regions?: Array<{ x: number; y: number; width: number; height: number }>;
+  /**
+   * witness schema 2.4.0+: the two sizes when the current capture's
+   * dimensions differ from the baseline's. witness pads both to the larger
+   * size and counts every padded pixel as changed, so the snapshot is never
+   * passed and the pixel fields describe the padding.
+   */
+  sizeMismatch?: { baseline: { width: number; height: number }; candidate: { width: number; height: number } };
 }
 
 export interface Summary {

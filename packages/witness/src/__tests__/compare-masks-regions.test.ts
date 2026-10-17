@@ -144,7 +144,7 @@ describe('compareAll with masks and regions', () => {
     expect(split.regions).toHaveLength(2);
   });
 
-  it('results.json carries schema 2.2.0 with regions and masks', () => {
+  it('results.json carries the current schema version with regions and masks', () => {
     writeSnapshot(
       'schema',
       makePng(W, H),
@@ -156,7 +156,7 @@ describe('compareAll with masks and regions', () => {
     generateResults(results, reportDir);
 
     const written = JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8'));
-    expect(written.version).toBe('2.3.0');
+    expect(written.version).toBe('2.4.0');
     expect(written.snapshots[0].regions).toBeDefined();
   });
 

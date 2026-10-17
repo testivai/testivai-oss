@@ -15,6 +15,8 @@ export {
   STYLE_CHECK_DOES_NOT_COVER,
 } from './diff-shape';
 export type { DiffShape, DiffShapeBox, DiffShapeInput } from './diff-shape';
+export { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
+export type { Dimensions, SizeMismatchInfo } from './size-mismatch';
 export type {
   ReportData,
   ReportSummary,

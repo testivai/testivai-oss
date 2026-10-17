@@ -62,22 +62,23 @@ export function diff(
   let effectiveBaseline = baseline8;
   let effectiveCandidate = candidate8;
 
-  // If caller provided handleSizeMismatch and dimensions were embedded,
-  // we need external width/height per buffer. For the simple API the caller
-  // is expected to have already normalized — but we expose normalizeDimensions
-  // as a public utility. Here we just validate.
+  // Dimensions come from `options.dimensions` when the caller knows both;
+  // otherwise a length mismatch is read as a height difference at the shared
+  // width (normalizeDimensions is public for callers that pre-normalize).
   const expectedLen = width * height * 4;
-  if (baseline8.length !== expectedLen || candidate8.length !== expectedLen) {
+  const dims = opts.dimensions;
+  const dimsDiffer =
+    dims !== undefined &&
+    (dims.baseline.width !== dims.candidate.width || dims.baseline.height !== dims.candidate.height);
+  // With 'pad': the overlap of the two sizes; everything outside it on the
+  // canvas is padding and counts as changed (see flagPadding).
+  let overlap: { width: number; height: number } | undefined;
+  if (dimsDiffer || baseline8.length !== expectedLen || candidate8.length !== expectedLen) {
     if (opts.handleSizeMismatch) {
-      // Infer baseline dimensions from baseline8.length and supplied width
-      const baselineHeight = baseline8.length / (width * 4);
-      const candidateHeight = candidate8.length / (width * 4);
-
-      // If widths differ, we need both dimensions — use normalizeDimensions
-      const bw = width;
-      const bh = Math.round(baselineHeight);
-      const cw = width;
-      const ch = Math.round(candidateHeight);
+      const bw = dims ? dims.baseline.width : width;
+      const bh = dims ? dims.baseline.height : Math.round(baseline8.length / (width * 4));
+      const cw = dims ? dims.candidate.width : width;
+      const ch = dims ? dims.candidate.height : Math.round(candidate8.length / (width * 4));
 
       const normalized = normalizeDimensions(
         baseline8, bw, bh,
@@ -89,7 +90,12 @@ export function diff(
       effectiveCandidate = normalized.normalizedCandidate;
       effectiveWidth = normalized.width;
       effectiveHeight = normalized.height;
-      sizeMismatch = normalized.sizeMismatch;
+      if (bw !== cw || bh !== ch) {
+        sizeMismatch = normalized.sizeMismatch;
+        if (opts.handleSizeMismatch === 'pad') {
+          overlap = { width: Math.min(bw, cw), height: Math.min(bh, ch) };
+        }
+      }
 
       // Re-create diff buffer if size changed
       if (diff8.length !== effectiveWidth * effectiveHeight * 4) {
@@ -131,13 +137,21 @@ export function diff(
     opts.enableMinimap,
   );
 
+  // ── Padding counts as changed: a page that grew or shrank is a change
+  //    whatever the added rows contain (the core compares RGB only, so black
+  //    content over the transparent black pad would otherwise be invisible) ─
+  let diffCount = raw.diff;
+  if (overlap) {
+    diffCount += flagPadding(diff8, effectiveWidth, effectiveHeight, overlap.width, overlap.height);
+  }
+
   // ── Compute extended result ─────────────────────────────────────────────
   const totalPixels = effectiveWidth * effectiveHeight;
-  const diffPercent = totalPixels > 0 ? (raw.diff / totalPixels) * 100 : 0;
-  const isIdentical = raw.diff === 0;
+  const diffPercent = totalPixels > 0 ? (diffCount / totalPixels) * 100 : 0;
+  const isIdentical = diffCount === 0;
 
   const result: DiffResult = {
-    diffCount: raw.diff,
+    diffCount,
     cumulatedDiff: raw.cumulatedDiff,
     hash: raw.hash,
     diffPercent,
@@ -166,6 +180,34 @@ export function diff(
   }
 
   return result;
+}
+
+/**
+ * Paint every canvas pixel outside the overlap of the two sizes (the padding
+ * added by normalizeDimensions 'pad') as full-strength heat, unless the core
+ * loop already flagged it, and return how many were newly flagged. Runs
+ * before region detection, so the padded strip clusters into a region.
+ */
+function flagPadding(
+  diff8: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number,
+  overlapWidth: number,
+  overlapHeight: number,
+): number {
+  let flagged = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = y < overlapHeight ? overlapWidth : 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (diff8[i + 3] !== 0) continue; // already heat
+      diff8[i] = 211;     // deep red rgb(211, 47, 47): the strongest heat
+      diff8[i + 1] = 47;
+      diff8[i + 2] = 47;
+      diff8[i + 3] = 255;
+      flagged++;
+    }
+  }
+  return flagged;
 }
 
 /**

@@ -3,6 +3,7 @@
  */
 
 import { describeRegions, diffShape, STYLE_CHECK_DOES_NOT_COVER } from '../../packages/witness/src/report/diff-shape';
+import { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from '../../packages/witness/src/report/size-mismatch';
 import type { ResultsData, SnapshotResult } from './types';
 import { STATUS_CONTEXT } from './status';
 
@@ -52,6 +53,22 @@ function formatDiffPercent(snapshot: SnapshotResult): string {
 function renderDomHintMarkdown(snapshot: SnapshotResult): string {
   const lines: string[] = [];
 
+  // A size change first: the diff is on a padded canvas (every padded pixel
+  // counts as changed), so the identical-DOM readings below describe the
+  // padding and are withheld. A height change is content added or removed;
+  // a width change is the viewport or device scale, never the page.
+  const size = snapshot.sizeMismatch;
+  if (size) {
+    const change = `**Size changed — ${describeSizeChange(size)}** (${formatSizes(size)})`;
+    if (sizeMismatchKind(size) === 'width') {
+      lines.push(`> ${change}, so this is not a page change; the diff is on a padded canvas and does not describe the page. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.`);
+    } else if (size.candidate.height > size.baseline.height) {
+      lines.push(`> ${change}: content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.`);
+    } else {
+      lines.push(`> ${change}: content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.`);
+    }
+  }
+
   // Verdict priority mirrors the witness report: style-only change (real)
   // > page shift (injected content) > structural DOM change > identical DOM
   // (likely noise only when the styles were compared and matched).
@@ -72,7 +89,9 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.dom && !styleOnly) {
-    if (snapshot.dom.noiseHint) {
+    if (snapshot.dom.noiseHint && size) {
+      // Identical DOM on a padded canvas: the size line above says it all.
+    } else if (snapshot.dom.noiseHint) {
       // An identical DOM rules out a stylesheet-only change only when the
       // computed styles were compared too. 'unavailable' and a missing
       // styleCheck (older results.json) mean they were not: unknown, not noise.
@@ -161,9 +180,10 @@ ${summaryLine} — **${summary.total} total**
     for (const snapshot of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot);
       const domHint = renderDomHintMarkdown(snapshot);
+      const size = snapshot.sizeMismatch ? ` · ${formatSizeMismatch(snapshot.sizeMismatch)}` : '';
 
       comment += `<details>
-<summary><code>${snapshot.name}</code> — ${diffPercent}% different</summary>
+<summary><code>${snapshot.name}</code> — ${diffPercent}% different${size}</summary>
 
 ${domHint}
 \`\`\`

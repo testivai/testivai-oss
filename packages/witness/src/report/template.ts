@@ -10,7 +10,8 @@
  */
 
 import { describeRegions, diffShape, NOISE_MAX_DIFF_PERCENT, STYLE_CHECK_DOES_NOT_COVER } from './diff-shape';
-import type { ReportData, SnapshotResult } from './results';
+import type { ReportData, SnapshotDomSignal, SnapshotResult } from './results';
+import { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
 
 /**
  * Render a standalone HTML report from report data.
@@ -150,6 +151,7 @@ export function renderHtml(data: ReportData): string {
     /* Identical DOM and styles, but a diff concentrated in one area or large: not noise, a warning look */
     .verdict.v-unexplained { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-style { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
+    .verdict.v-size { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-structural { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
     .verdict.v-new { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
@@ -442,6 +444,9 @@ function renderStats(snapshot: SnapshotResult): string {
       `Diff: ${snapshot.diffPercent.toFixed(2)}% (${snapshot.diffCount} pixels)${snapshot.autoPassed ? ` — auto-passed: ${autoPassNote(snapshot)}` : ''}`,
     );
   }
+  if (snapshot.sizeMismatch) {
+    parts.push(escapeHtml(formatSizeMismatch(snapshot.sizeMismatch)));
+  }
   if (snapshot.baselineApprovedAt) {
     const d = new Date(snapshot.baselineApprovedAt);
     if (!Number.isNaN(d.getTime())) {
@@ -491,8 +496,9 @@ function renderAnalysis(snapshot: SnapshotResult): string {
 
 /**
  * Verdict headline: one plain-language line synthesizing the layers, in
- * priority order — new snapshot > style-only change (real) > page shift
- * (injected content) > structural DOM change > identical DOM > auto-pass.
+ * priority order — new snapshot > size change (the page grew or shrank, or
+ * the viewport differs) > style-only change (real) > page shift (injected
+ * content) > structural DOM change > identical DOM > auto-pass.
  *
  * Identical DOM is only "likely render noise" when the computed styles were
  * compared and match (styleCheck 'match') AND the diff is small and
@@ -507,6 +513,22 @@ function renderVerdict(snapshot: SnapshotResult): string {
 
   if (snapshot.status === 'new') {
     return `<div class="verdict v-new"><span>First capture — no baseline yet. Review the image, then approve to make it the baseline.</span></div>`;
+  }
+
+  // A size change outranks every other reading: the diff is on a padded
+  // canvas, so the pixel layers describe the padding before anything else.
+  if (snapshot.sizeMismatch) {
+    const change = `${escapeHtml(describeSizeChange(snapshot.sizeMismatch))} (${escapeHtml(formatSizes(snapshot.sizeMismatch))})`;
+    if (sizeMismatchKind(snapshot.sizeMismatch) === 'width') {
+      return `<div class="verdict v-size"><span>Size changed — ${change} between the two captures, so this is not a page change. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.</span></div>`;
+    }
+    const grew = snapshot.sizeMismatch.candidate.height > snapshot.sizeMismatch.baseline.height;
+    const dom = snapshot.dom?.changed && snapshot.dom.summary
+      ? `; DOM ${escapeHtml(summarizeDom(snapshot.dom.summary))}`
+      : snapshot.dom && !snapshot.dom.changed
+        ? '; DOM identical, so the extra height is layout, not new elements'
+        : '';
+    return `<div class="verdict v-size"><span>Size changed — ${change}${dom}: content was ${grew ? 'added' : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed. Look at the current image ${grew ? "below the baseline's height" : 'for what is gone'} and confirm the change is intended before approving.</span></div>`;
   }
 
   // Style-only only when the DOM is unchanged: a class or style attribute
@@ -524,13 +546,7 @@ function renderVerdict(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.dom?.changed && snapshot.dom.summary) {
-    const s = snapshot.dom.summary;
-    const parts: string[] = [];
-    if (s.added > 0) parts.push(`${s.added} added`);
-    if (s.removed > 0) parts.push(`${s.removed} removed`);
-    if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute`);
-    if (s.textChanges) parts.push(`${s.textChanges} text`);
-    return `<div class="verdict v-structural"><span>Structural change — the DOM differs (${escapeHtml(parts.join(', ') || 'structural difference')}). Review the diff and confirm the change is intended before approving.</span></div>`;
+    return `<div class="verdict v-structural"><span>Structural change — the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Review the diff and confirm the change is intended before approving.</span></div>`;
   }
 
   if (snapshot.dom?.noiseHint) {
@@ -554,6 +570,16 @@ function renderVerdict(snapshot: SnapshotResult): string {
   }
 
   return '';
+}
+
+/** The DOM summary's non-zero buckets: "4 added, 2 text". */
+function summarizeDom(s: NonNullable<SnapshotDomSignal['summary']>): string {
+  const parts: string[] = [];
+  if (s.added > 0) parts.push(`${s.added} added`);
+  if (s.removed > 0) parts.push(`${s.removed} removed`);
+  if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute`);
+  if (s.textChanges) parts.push(`${s.textChanges} text`);
+  return parts.join(', ') || 'structural difference';
 }
 
 /**

@@ -26,6 +26,17 @@ export interface DiffOptions {
   masks?: import('./mask').MaskRect[];
   /** How to handle size mismatches between baseline and candidate */
   handleSizeMismatch?: 'pad' | 'crop' | 'error';
+  /**
+   * The dimensions of each buffer, for callers that know both (a decoded
+   * PNG pair). With `handleSizeMismatch`, the engine normalizes them itself,
+   * a width difference included; without this, a length mismatch is read as
+   * a height difference at the shared `width`. With 'pad', every padded
+   * pixel counts as changed and is painted as full-strength heat, so content
+   * added below or beside the baseline is a change whatever its color.
+   * `diff8` must then hold max width × max height pixels: a smaller buffer
+   * is replaced internally and the caller does not see the image.
+   */
+  dimensions?: { baseline: { width: number; height: number }; candidate: { width: number; height: number } };
 }
 
 export interface RegionOptions {

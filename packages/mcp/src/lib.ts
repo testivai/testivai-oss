@@ -5,10 +5,14 @@ import { BaselineStore, resolveBaselinesDir } from '@testivai/witness/baselines'
 import { shellArg } from './tool-meta';
 import {
   describeRegions,
+  describeSizeChange,
   diffShape,
+  formatSizes,
   NOISE_MAX_DIFF_PERCENT,
+  sizeMismatchKind,
   STYLE_CHECK_DOES_NOT_COVER,
   type DiffShape,
+  type SizeMismatchInfo,
 } from '@testivai/witness/report';
 
 /** Subset of the semver-governed results.json contract this server reads. */
@@ -49,6 +53,13 @@ export interface SnapshotResult {
   pageShift?: { dy: number; belowY: number; count: number };
   autoPassed?: 'threshold' | 'noise' | 'shift';
   maskWarnings?: string[];
+  /**
+   * results.json 2.4.0+: the two sizes when the candidate's dimensions differ
+   * from the baseline's. witness pads both to max width × max height and
+   * counts every padded pixel as changed, so the pixel layers describe the
+   * padding and such a snapshot is never passed.
+   */
+  sizeMismatch?: SizeMismatchInfo;
 }
 
 export interface ResultsFile {
@@ -352,6 +363,34 @@ function matchedStylesShape(snapshot: SnapshotResult): DiffShape | null {
   return diffShape(snapshot);
 }
 
+/**
+ * The verdict for a snapshot whose dimensions changed. A height change is
+ * content added or removed below the fold (the DOM summary says what); a
+ * width change is almost always the viewport or the device scale factor, so
+ * it is never described as a page change.
+ */
+function sizeChangeVerdict(snapshot: SnapshotResult): string {
+  const sm = snapshot.sizeMismatch as SizeMismatchInfo;
+  const change = `${describeSizeChange(sm)} (${formatSizes(sm)})`;
+  if (sizeMismatchKind(sm) === 'width') {
+    return (
+      `${change}, so this is not a page change and the diff is on a padded canvas that does not describe the page; ` +
+      "re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended"
+    );
+  }
+  const grew = sm.candidate.height > sm.baseline.height;
+  const s = snapshot.dom?.summary;
+  const dom = snapshot.dom?.changed
+    ? ` and the DOM changed${s ? ` (${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''})` : ''}`
+    : snapshot.dom
+      ? ` with an identical DOM, so the ${grew ? 'extra' : 'lost'} height is layout, not ${grew ? 'new' : 'removed'} elements`
+      : '';
+  return (
+    `${change}${dom}: content was ${grew ? "added below the baseline's height" : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed; ` +
+    'confirm it is intended before approving'
+  );
+}
+
 /** One-line, agent-oriented verdict for a snapshot. */
 export function verdictFor(snapshot: SnapshotResult): string {
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
@@ -371,6 +410,9 @@ export function verdictFor(snapshot: SnapshotResult): string {
     return verdict;
   }
   if (snapshot.status === 'new') return 'new snapshot — no baseline yet; a human should review and approve it';
+  // A size change outranks every other reading: the diff is on a padded
+  // canvas, so shape, noise hint and style check describe the padding.
+  if (snapshot.sizeMismatch) return `changed (${pct}) — ${sizeChangeVerdict(snapshot)}`;
   if (notCompared) {
     return (
       `changed (${pct}) but the DOM is structurally identical and styles were not compared (${NOT_COMPARED_REASON[notCompared]}) — ` +
@@ -525,6 +567,13 @@ export interface SnapshotExplanation {
        * snapshot or a pass with no pixel diff.
        */
       shape: DiffShape | null;
+      /**
+       * results.json 2.4.0+: the baseline's and the current capture's sizes
+       * when they differ. The diff is then on a canvas of the larger size
+       * with every padded pixel counted as changed, so the fields above
+       * describe the padding. Null when the sizes match or are not recorded.
+       */
+      sizeMismatch: SizeMismatchInfo | null;
     };
     /** Element-level evidence: which elements, moved vs changed. */
     element: {
@@ -595,14 +644,36 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   // a diff pending review; a passed snapshot has nothing pending approval
   // (an auto-pass gets its own line below), so the verdict and guidance agree.
   const pending = snapshot.status === 'changed';
-  if (pending && notCompared) {
+  // A size change first: the pixel layers describe the padding, so the
+  // shape, noise and styles-not-compared readings below do not apply.
+  const sized = snapshot.sizeMismatch !== undefined;
+  if (snapshot.sizeMismatch) {
+    const sm = snapshot.sizeMismatch;
+    const sizes = `The current capture is ${sm.candidate.width}×${sm.candidate.height}, the baseline ${sm.baseline.width}×${sm.baseline.height}: ${describeSizeChange(sm)}.`;
+    const padded = 'The two were padded to the larger size and every padded pixel counts as changed, so diffPercent, the regions and the diff image describe';
+    if (sizeMismatchKind(sm) === 'width') {
+      guidance.push(
+        `${sizes} ${padded} the padding, not the page. ` +
+          "This is not a page change: re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
+      );
+    } else {
+      const grew = sm.candidate.height > sm.baseline.height;
+      guidance.push(
+        `${sizes} ${padded} the ${grew ? 'added' : 'missing'} band before anything else. ` +
+          (grew
+            ? "Content was added below the baseline's height: read the DOM summary for what, and look at the current image there."
+            : 'Content was removed: read the DOM summary for what, and compare the images (get_diff) for what is gone.'),
+      );
+    }
+  }
+  if (pending && !sized && notCompared) {
     const why = notCompared === 'absent' ? 'these results have no style check' : 'no comparable style digests on both sides';
     guidance.push(
       'Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is ' +
         `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
         'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
     );
-  } else if (pending && shape?.kind === 'concentrated' && shape.box) {
+  } else if (pending && !sized && shape?.kind === 'concentrated' && shape.box) {
     const regionList = snapshot.regions ?? [];
     const element = sharedElement(regionList);
     const mapsTo = element ? `, and ${regionList.length === 1 ? 'the region' : 'every region'} maps to \`${element}\`` : '';
@@ -613,7 +684,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'so this is a bad capture (a torn or partly blank render, a shifted band, a bad baseline) or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && shape?.kind === 'large') {
+  } else if (pending && !sized && shape?.kind === 'large') {
     // diffShape treats an unknown size as not small; say so rather than claim a share.
     const size =
       snapshot.diffPercent === undefined
@@ -625,7 +696,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'machines that captured the baseline and the current image; it can also be a bad capture or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && snapshot.dom?.noiseHint) {
+  } else if (pending && !sized && snapshot.dom?.noiseHint) {
     guidance.push('Pixels differ but the DOM is structurally identical, style digests match, and the diff is small and scattered — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
   }
   if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.changed) {
@@ -677,6 +748,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         regionCount: snapshot.regions?.length ?? 0,
         regions,
         shape: snapshot.status === 'changed' || snapshot.autoPassed ? diffShape(snapshot) : null,
+        sizeMismatch: snapshot.sizeMismatch ?? null,
       },
       element: {
         pageShift: snapshot.pageShift ?? null,
@@ -822,6 +894,9 @@ function signatureOf(s: SnapshotResult): Signature | null {
   if (s.status !== 'changed') return null;
   // No DOM data means a structural change cannot be ruled out.
   if (!s.dom || s.dom.changed) return null;
+  // A size change: every padded pixel counts as changed, so the signals
+  // below describe the padding, not the page. Never grouped.
+  if (s.sizeMismatch) return null;
 
   if (s.dom.styleCheck === 'mismatch') {
     const changes = s.dom.styleChanges;
