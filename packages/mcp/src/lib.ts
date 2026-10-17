@@ -7,6 +7,7 @@ import {
   describeRegions,
   describeSizeChange,
   diffShape,
+  explainHeightChange,
   formatSizes,
   NOISE_MAX_DIFF_PERCENT,
   sizeMismatchKind,
@@ -365,9 +366,11 @@ function matchedStylesShape(snapshot: SnapshotResult): DiffShape | null {
 
 /**
  * The verdict for a snapshot whose dimensions changed. A height change is
- * content added or removed below the fold (the DOM summary says what); a
- * width change is almost always the viewport or the device scale factor, so
- * it is never described as a page change.
+ * read with the DOM signal and the page shift (explainHeightChange): the band
+ * at the bottom is the new height, not where the change is, and an identical
+ * DOM is the same content laid out differently, never content added. A width
+ * change is almost always the viewport or the device scale factor, so it is
+ * never described as a page change.
  */
 function sizeChangeVerdict(snapshot: SnapshotResult): string {
   const sm = snapshot.sizeMismatch as SizeMismatchInfo;
@@ -378,17 +381,11 @@ function sizeChangeVerdict(snapshot: SnapshotResult): string {
       "re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended"
     );
   }
-  const grew = sm.candidate.height > sm.baseline.height;
   const s = snapshot.dom?.summary;
-  const dom = snapshot.dom?.changed
-    ? ` and the DOM changed${s ? ` (${domSummaryDetail(s)})` : ''}`
-    : snapshot.dom
-      ? ` with an identical DOM, so the ${grew ? 'extra' : 'lost'} height is layout, not ${grew ? 'new' : 'removed'} elements`
-      : '';
-  return (
-    `${change}${dom}: content was ${grew ? "added below the baseline's height" : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed; ` +
-    'confirm it is intended before approving'
-  );
+  const identical = Boolean(snapshot.dom && !snapshot.dom.changed);
+  const dom = snapshot.dom?.changed ? ` and the DOM changed${s ? ` (${domSummaryDetail(s)})` : ''}` : identical ? ' with an identical DOM' : '';
+  const reading = explainHeightChange(sm, { dom: snapshot.dom, pageShift: snapshot.pageShift });
+  return `${change}${dom}: ${reading}; ${identical ? 'compare the images (get_diff) before approving' : 'confirm it is intended before approving'}`;
 }
 
 /** The DOM summary's counts: "4 added, 0 removed, 0 attribute changes, 2 text changes". */
@@ -663,19 +660,18 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   if (snapshot.sizeMismatch) {
     const sm = snapshot.sizeMismatch;
     const sizes = `The current capture is ${sm.candidate.width}×${sm.candidate.height}, the baseline ${sm.baseline.width}×${sm.baseline.height}: ${describeSizeChange(sm)}.`;
-    const padded = 'The two were padded to the larger size and every padded pixel counts as changed, so diffPercent, the regions and the diff image describe';
     if (sizeMismatchKind(sm) === 'width') {
       guidance.push(
-        `${sizes} ${padded} the padding, not the page. ` +
+        `${sizes} The two were padded to the larger size and every padded pixel counts as changed, so diffPercent, the regions and the diff image describe the padding, not the page. ` +
           "This is not a page change: re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
       );
     } else {
+      // The band is the new height, not where the change is (explainHeightChange).
       const grew = sm.candidate.height > sm.baseline.height;
+      const reading = explainHeightChange(sm, { dom: snapshot.dom, pageShift: snapshot.pageShift });
       guidance.push(
-        `${sizes} ${padded} the ${grew ? 'added' : 'missing'} band before anything else. ` +
-          (grew
-            ? "Content was added below the baseline's height: read the DOM summary for what, and look at the current image there."
-            : 'Content was removed: read the DOM summary for what, and compare the images (get_diff) for what is gone.'),
+        `${sizes} The two were padded to the larger size, so diffPercent, the regions and the diff image describe the ${grew ? 'added' : 'missing'} band before anything else. ` +
+          `${reading.charAt(0).toUpperCase()}${reading.slice(1)}.`,
       );
     }
   }
