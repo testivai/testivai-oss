@@ -395,6 +395,7 @@ interface Job {
   needs?: string | string[];
   if?: string;
   uses?: string;
+  secrets?: Record<string, string> | 'inherit';
   steps?: Step[];
 }
 const readWorkflow = (file: string) =>
@@ -418,6 +419,16 @@ describe('.github/workflows/mcp-registry.yml', () => {
 
   it('runs when release.yml calls it or a maintainer dispatches it, and on nothing else', () => {
     expect(Object.keys(wf.on).sort()).toEqual(['workflow_call', 'workflow_dispatch']);
+  });
+
+  // A called workflow gets an environment secret only when the caller passes
+  // it; otherwise it is an empty string, with no error. The release of mcp
+  // 0.8.0 reached the login step with an empty key that way. Requiring it
+  // makes a caller that forgets fail before the job starts.
+  it('requires the caller to pass MCP_PRIVATE_KEY', () => {
+    const call = wf.on.workflow_call as { secrets?: Record<string, { required?: boolean }> };
+    expect(Object.keys(call?.secrets ?? {})).toEqual(['MCP_PRIVATE_KEY']);
+    expect(call.secrets?.MCP_PRIVATE_KEY.required).toBe(true);
   });
 
   it('reads the repository and nothing more', () => {
@@ -541,6 +552,12 @@ describe('.github/workflows/release.yml MCP Registry job', () => {
     expect(job.uses).toBe('./.github/workflows/mcp-registry.yml');
     expect(job.needs).toBe('release');
     expect(job.permissions).toEqual({ contents: 'read' });
+  });
+
+  // By name, not `secrets: inherit`: the called job gets this one secret, and
+  // the value comes from the mcp-registry-publish environment it runs in.
+  it('passes MCP_PRIVATE_KEY by name, and no other secret', () => {
+    expect(job.secrets).toEqual({ MCP_PRIVATE_KEY: '${{ secrets.MCP_PRIVATE_KEY }}' });
   });
 
   it('runs only when the release published @testivai/mcp', () => {

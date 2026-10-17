@@ -19,6 +19,14 @@ name: MCP Registry
 
 on:
   workflow_call:
+    # A called workflow gets an environment secret only when its caller
+    # passes it; otherwise the secret is an empty string and nothing says so.
+    # release.yml passes it by name, and `required` fails a caller that
+    # forgets before this job starts.
+    secrets:
+      MCP_PRIVATE_KEY:
+        description: 'The testiv.ai signing key; its value comes from the mcp-registry-publish environment'
+        required: true
   workflow_dispatch:
 
 permissions:

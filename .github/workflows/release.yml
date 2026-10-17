@@ -147,6 +147,10 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/mcp-registry.yml
+    # Passed by name: without it the called job's environment secret is empty.
+    # The value is the mcp-registry-publish environment's, where the job runs.
+    secrets:
+      MCP_PRIVATE_KEY: ${{ secrets.MCP_PRIVATE_KEY }}
 
   # A release is only real if a stranger can install it.
   #
