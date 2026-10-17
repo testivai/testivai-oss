@@ -172,13 +172,13 @@ CI — GitHub Actions
       screenshot.png             committed reference screenshot
       dom.html                   committed DOM snapshot
       elements.json              element map (boxes + computed-style digests); optional
-      metadata.json              { name, timestamp, viewport, ... }
+      metadata.json              { name, createdAt, updatedAt, environment, ... } (environment frozen on approve)
   temp/                          gitignored — current run artifacts
     <name>/
       screenshot.png
       dom.html
       elements.json
-      metadata.json
+      metadata.json              { environment, masks, ... } written by the adapter (capture provenance)
 ```
 
 ---
@@ -189,10 +189,13 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.4.0",
+  "version": "2.5.0",
   "timestamp": "<ISO>",
-  "summary": { "total": 3, "passed": 1, "changed": 2, "newSnapshots": 0, "missing": 1 },
+  "summary": { "total": 4, "passed": 1, "changed": 3, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
+  "environment": { "os": { "platform": "linux", "distro": "ubuntu 24.04" },
+                   "browser": { "name": "chromium", "version": "141.0.7390.37" },
+                   "adapter": { "captureMethod": "full-page:cdp" } },
   "snapshots": [
     {
       "name": "homepage",
@@ -234,10 +237,36 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
                         "candidate": { "width": 1280, "height": 2538 } },
       "dom": { "changed": true, "noiseHint": false,
                "summary": { "added": 4, "removed": 0, "attributeChanges": 0, "textChanges": 2 } }
+    },
+    {
+      "name": "pricing-table",
+      "status": "changed",
+      "diffPercent": 0.62,
+      "dom": { "changed": false, "noiseHint": true, "summary": null, "styleCheck": "match" },
+      "environment": { "delta": ["browser.version", "framework.version"],
+                       "renderingDelta": ["browser.version"],
+                       "baseline":  { "browser": { "name": "chromium", "version": "130.0.6723.58" } },
+                       "candidate": { "browser": { "name": "chromium", "version": "141.0.7390.37" } } }
     }
   ]
 }
 ```
+
+`environment` (schema 2.5.0) is capture provenance: each adapter records where a capture
+came from (OS and distro, browser and version, framework, adapter and capture method,
+render settings, CI) in the capture's `metadata.json`, and approving freezes it into the
+baseline's. Per snapshot, `environment` is present when both sides recorded one: `delta`
+lists every differing field, `renderingDelta` the ones that can change rendering
+(framework, adapter and driver versions, the CI runner image and the project are
+context only), and both blocks are included when they differ. Pixels differ, the DOM is
+identical, styles `"match"`, the diff is not concentrated in one area and
+`renderingDelta` is non-empty → **rendering drift**, the environment changed and the page
+did not (`isRenderingDrift` in `packages/witness/src/report/environment.ts`): never word
+it as render noise. Config `environmentPolicy`: `"warn"` (default) never changes a
+status; `"strict"` makes a rendering change `changed` whatever the pixels say
+(`environment.policy: "strict"`); `"separate"` has the adapters key snapshots
+`<name>__<browser>__<platform>`. The run-level `environment` is the fields every capture
+of the run agrees on.
 
 `sizeMismatch` (schema 2.4.0) is present when the current capture's dimensions differ
 from the baseline's. The two are padded to max width × max height before diffing and

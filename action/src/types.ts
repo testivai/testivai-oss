@@ -66,6 +66,19 @@ export interface SnapshotResult {
    * passed and the pixel fields describe the padding.
    */
   sizeMismatch?: { baseline: { width: number; height: number }; candidate: { width: number; height: number } };
+  /**
+   * witness schema 2.5.0+: capture provenance, when the baseline and the
+   * current capture both recorded their environment. `renderingDelta` lists
+   * the changes that can affect rendering; with an identical DOM and matching
+   * styles the diff is rendering drift (the machine changed, not the page).
+   */
+  environment?: {
+    delta: string[];
+    renderingDelta: string[];
+    baseline?: import('../../packages/witness/src/capture/environment').CaptureEnvironment;
+    candidate?: import('../../packages/witness/src/capture/environment').CaptureEnvironment;
+    policy?: 'strict';
+  };
 }
 
 export interface Summary {

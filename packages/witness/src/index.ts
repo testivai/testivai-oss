@@ -41,6 +41,30 @@ export {
 } from './capture/settle';
 export type { SettleState } from './capture/settle';
 
+// Capture provenance — the environment block every adapter records.
+export {
+  applyEnvironmentPolicyToName,
+  browserFromUserAgent,
+  buildCaptureEnvironment,
+  CAPTURE_METHODS,
+  collectHostEnvironment,
+  detectCi,
+  distroFromOsRelease,
+  ENVIRONMENT_POLICIES,
+  parseEnvironmentVariant,
+  parseRenderProbe,
+  readEnvironment,
+  RENDER_PROBE_EXPRESSION,
+} from './capture/environment';
+export type {
+  CaptureEnvironment,
+  CaptureEnvironmentParts,
+  EnvironmentPolicy,
+  HostEnvironment,
+  HostSources,
+  RenderEnvironment,
+} from './capture/environment';
+
 export { BaselineStore } from './baselines';
 export type { BaselineMetadata } from './baselines';
 

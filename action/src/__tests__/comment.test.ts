@@ -255,6 +255,65 @@ describe('buildComment', () => {
       });
     });
 
+    // results.json 2.5.0: capture provenance. Identical DOM, matching styles
+    // and a changed rendering environment is rendering drift: say so, never
+    // "likely render noise", and say it once at the top when shared.
+    describe('capture provenance', () => {
+      const env = (version: string, captureMethod = 'full-page:cdp') => ({
+        os: { platform: 'linux', release: '6.8.0', arch: 'x64' },
+        browser: { name: 'chromium', version },
+        adapter: { name: '@testivai/witness-playwright', version: '2.0.7', captureMethod },
+      });
+      const bump = { delta: ['browser.version'], renderingDelta: ['browser.version'], baseline: env('130.0.6723.58'), candidate: env('141.0.7390.37') };
+      const sameDom = { changed: false, noiseHint: true, summary: null, styleCheck: 'match' as const };
+      const results = (...snapshots: SnapshotResult[]): ResultsData => ({
+        timestamp: Date.now(),
+        summary: { total: snapshots.length, passed: 0, changed: snapshots.length, newSnapshots: 0 },
+        snapshots,
+      });
+      const snap = (name: string, extra: Partial<SnapshotResult>): SnapshotResult => ({ name, status: 'changed', diffPercent: 0.4, currentPath: 'x.png', ...extra });
+
+      it('drift: its own line, never likely render noise', () => {
+        const comment = buildComment(results(snap('home', { dom: sameDom, environment: bump })));
+        expect(comment).toContain(
+          '> **Rendering drift** — chromium 130.0.6723.58 → 141.0.7390.37 since the baseline, and the DOM and computed styles are identical: the machine changed, not the page. Re-baseline once the images are confirmed to match apart from rendering.',
+        );
+        expect(comment).not.toContain('likely render noise');
+      });
+
+      it('several snapshots sharing a change: one line at the top, before the snapshots', () => {
+        const comment = buildComment(results(snap('home', { dom: sameDom, environment: bump }), snap('about', { dom: sameDom, environment: bump })));
+        const line =
+          '> **Environment changed since the baselines** (chromium 130.0.6723.58 → 141.0.7390.37): 2 diffs are rendering drift (DOM and computed styles identical), not page changes; re-baseline them once the images are confirmed.';
+        expect(comment).toContain(line);
+        expect(comment.indexOf(line)).toBeLessThan(comment.indexOf('#### Changed Snapshots'));
+      });
+
+      it('strict policy: says the policy made it changed', () => {
+        const comment = buildComment(results(snap('home', { diffPercent: 0, environment: { ...bump, policy: 'strict' } })));
+        expect(comment).toContain(
+          '> **Environment changed (strict policy)** — chromium 130.0.6723.58 → 141.0.7390.37 since the baseline; environmentPolicy "strict" makes it changed whatever its pixels say. Approving re-baselines it in this environment.',
+        );
+      });
+
+      it('a size change from another capture method says how it was captured', () => {
+        const method = { delta: ['adapter.captureMethod'], renderingDelta: ['adapter.captureMethod'], baseline: env('141.0.7390.37'), candidate: env('141.0.7390.37', 'viewport:webdriver') };
+        const comment = buildComment(
+          results(snap('home', { sizeMismatch: { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 720 } }, dom: sameDom, environment: method })),
+        );
+        expect(comment).toContain(
+          '> **Capture method changed** — full page (CDP) → viewport (WebDriver) since the baseline (baseline 1280×2348 → current 1280×720): the size change comes from how the screenshot was taken, not from the page.',
+        );
+      });
+
+      it('a real change keeps its line and gets the environment change as context', () => {
+        const dom = { changed: true, noiseHint: false, summary: { added: 2, removed: 0, attributeChanges: 0 } };
+        const comment = buildComment(results(snap('home', { dom, environment: bump })));
+        expect(comment).toContain('> **DOM changed** — 2 added.');
+        expect(comment).toContain('> The environment also changed since the baseline (chromium 130.0.6723.58 → 141.0.7390.37), which can add rendering differences of its own.');
+      });
+    });
+
     it('omits DOM hint when snapshot has no dom data', () => {
       const results: ResultsData = {
         timestamp: Date.now(),

@@ -17,10 +17,23 @@ export {
 export type { DiffShape, DiffShapeBox, DiffShapeInput } from './diff-shape';
 export { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
 export type { Dimensions, SizeMismatchInfo } from './size-mismatch';
+export {
+  commonEnvironment,
+  describeCaptureMethod,
+  describeEnvironmentChange,
+  diffEnvironments,
+  environmentChangeGroups,
+  environmentChangeLine,
+  isRenderingDrift,
+  snapshotEnvironmentChange,
+} from './environment';
+export type { EnvironmentChangeGroup, EnvironmentSnapshotInput } from './environment';
+export type { CaptureEnvironment, RenderEnvironment } from '../capture/environment';
 export type {
   ReportData,
   ReportSummary,
   SnapshotResult,
   SnapshotStatus,
   SnapshotDomSignal,
+  SnapshotEnvironment,
 } from './results';

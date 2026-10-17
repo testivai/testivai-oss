@@ -13,6 +13,8 @@ import type { ReportData, ReportSummary, SnapshotResult} from './results';
 import { renderHtml } from './template';
 import { loadLocalConfig } from '../config/local-config';
 import { BaselineStore } from '../baselines/store';
+import { type CaptureEnvironment, parseEnvironmentVariant, readEnvironment } from '../capture/environment';
+import { commonEnvironment } from './environment';
 
 export interface GenerateReportOptions {
   projectRoot: string;
@@ -45,7 +47,12 @@ export interface GenerateReportOptions {
  * @returns The report data
  */
 /**
- * results.json schema version. 2.4.0 adds per-snapshot `sizeMismatch`
+ * results.json schema version. 2.5.0 adds capture provenance: per-snapshot
+ * `environment` (what changed between the environment the baseline was
+ * captured in and the current capture's: `delta`, `renderingDelta`, both
+ * blocks when they differ, and `policy: "strict"` when that policy made the
+ * snapshot changed) and the run-level `environment` (the fields every capture
+ * of the run agrees on). 2.4.0 added per-snapshot `sizeMismatch`
  * (the baseline's and the candidate's dimensions when they differ; the diff
  * is then on a canvas of max width × max height with every padded pixel
  * counted as changed). 2.3.0 added top-level `missingBaselines[]`
@@ -54,7 +61,7 @@ export interface GenerateReportOptions {
  * diff bounding boxes), `masks[]` (applied masks with their source — the
  * audit trail), and `maskWarnings[]`. All additive.
  */
-export const RESULTS_SCHEMA_VERSION = '2.4.0';
+export const RESULTS_SCHEMA_VERSION = '2.5.0';
 
 /**
  * Write results.json for an already-computed set of snapshot results.
@@ -103,6 +110,7 @@ export function generateReport(options: GenerateReportOptions): ReportData {
     mask: localConfig.mask,
     diffRegions: localConfig.diffRegions,
     volatileAttributes: localConfig.volatileAttributes,
+    environmentPolicy: localConfig.environmentPolicy,
   };
   const snapshots = compareAll(compareOptions);
 
@@ -110,12 +118,33 @@ export function generateReport(options: GenerateReportOptions): ReportData {
   // (a deleted/renamed test silently stops guarding its page). Reported
   // always; gated only via `--fail-on-missing` / config `failOnMissing`,
   // because filtered runs (`--grep`) legitimately skip most baselines.
+  // Under environmentPolicy "separate", a baseline keyed for another
+  // environment (another browser or platform) is not this run's to capture,
+  // so only baselines of an environment this run captured can be missing.
   const store = new BaselineStore(projectRoot);
-  const capturedNames = new Set(store.listTemp());
-  const missingBaselines = store.list().filter((n) => !capturedNames.has(n));
+  const capturedNames = store.listTemp();
+  const captured = new Set(capturedNames);
+  const variantKey = (v: { browser: string; platform: string }) => `${v.browser}__${v.platform}`;
+  const capturedVariants = new Set(
+    capturedNames.map(parseEnvironmentVariant).filter((v): v is NonNullable<typeof v> => v !== null).map(variantKey),
+  );
+  const missingBaselines = store.list().filter((n) => {
+    if (captured.has(n)) return false;
+    if (localConfig.environmentPolicy !== 'separate') return true;
+    const variant = parseEnvironmentVariant(n);
+    return variant === null || capturedVariants.has(variantKey(variant));
+  });
+
+  // 1.6. Run-level capture provenance: the fields every capture of this run
+  // that recorded an environment agrees on.
+  const environment = commonEnvironment(
+    capturedNames
+      .map((n) => readEnvironment(store.readTempMetadata(n)?.environment))
+      .filter((e): e is CaptureEnvironment => e !== null),
+  );
 
   // 2-3. Build summary + report data
-  const reportData = buildReportData(snapshots, version, missingBaselines);
+  const reportData = buildReportData(snapshots, version, missingBaselines, environment);
 
   // 4. Write results.json
   const resultsPath = path.join(reportDir, 'results.json');
@@ -139,6 +168,7 @@ function buildReportData(
   snapshots: SnapshotResult[],
   version: string,
   missingBaselines: string[] = [],
+  environment: Partial<CaptureEnvironment> | null = null,
 ): ReportData {
   const summary: ReportSummary = {
     total: snapshots.length,
@@ -153,6 +183,7 @@ function buildReportData(
     summary,
     snapshots,
     missingBaselines,
+    ...(environment ? { environment } : {}),
   };
 }
 
