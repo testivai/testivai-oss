@@ -76,7 +76,7 @@ Local-mode diff is performed by `@testivai/witness/report` (`compareAll` in `rep
 2. For each, look up `baselines/<name>/screenshot.png`.
 3. If no baseline exists → status `new` (you'll commit the temp file as the baseline).
 4. If buffers are byte-identical → status `passed`.
-5. If the two images have different dimensions, both are padded to the larger width and height and every padded pixel counts as changed; the result records both sizes in `sizeMismatch`, and the snapshot is never auto-passed. A taller or shorter page is content added or removed (the DOM diff says what); a different width is almost always the viewport or device scale factor, not the page, and the report says so.
+5. If the two images have different dimensions, both are padded to the larger width and height and every padded pixel counts as changed; the result records both sizes in `sizeMismatch`, and the snapshot is never auto-passed. A taller or shorter page is read with the DOM diff and the page shift: the padded band at the bottom is the new height, not where the change is, so a page shift places the change, the DOM diff says what changed, and an identical DOM means the same content laid out taller or shorter (restyled, or fonts and rendering that differ between machines), not content added or removed. A different width is almost always the viewport or device scale factor, not the page, and the report says so.
 6. Otherwise → status `changed` with a percent-diff estimate (subject to threshold from `.testivai/config.json`).
 
 The threshold is configurable:

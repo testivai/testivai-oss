@@ -1233,7 +1233,7 @@ describe('@testivai/mcp verdictFor with a size mismatch', () => {
   const taller = { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } };
   const wider = { baseline: { width: 1280, height: 800 }, candidate: { width: 1440, height: 800 } };
 
-  it('a taller page with DOM additions: the page grew, content was added, confirm before approving', () => {
+  it('a taller page with DOM additions and no page shift: the DOM says what changed, not where', () => {
     expect(
       verdictFor({
         name: 'products',
@@ -1244,11 +1244,33 @@ describe('@testivai/mcp verdictFor with a size mismatch', () => {
       }),
     ).toBe(
       'changed (7.49% pixels differ) — page grew 190 px (baseline 1280×2348 → current 1280×2538) and the DOM changed (4 added, 0 removed, 0 attribute changes, 2 text changes): ' +
-        "content was added below the baseline's height, and every pixel of the added band counts as changed; confirm it is intended before approving",
+        'the DOM summary says what changed; every pixel of the added band at the bottom counts as changed, but the change itself can be anywhere on the page; confirm it is intended before approving',
     );
   });
 
-  it('a shorter page with an identical DOM: the page shrank, the missing band is layout', () => {
+  // Found dogfooding testivai-example: the demo inserts a banner near the
+  // top, so the page grows 73 px and everything below y=203 moves down. The
+  // added band at the bottom is the new height, not where the banner is.
+  it('a taller page with a page shift: look above the shift, not below the baseline height', () => {
+    const verdict = verdictFor({
+      name: 'home',
+      status: 'changed',
+      diffPercent: 15.53,
+      sizeMismatch: { baseline: { width: 1280, height: 876 }, candidate: { width: 1280, height: 949 } },
+      pageShift: { dy: 73, belowY: 203, count: 25 },
+      dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0, textChanges: 1 }, styleCheck: 'match' },
+    });
+    expect(verdict).toBe(
+      'changed (15.53% pixels differ) — page grew 73 px (baseline 1280×876 → current 1280×949) and the DOM changed (1 added, 0 removed, 0 attribute changes, 1 text changes): ' +
+        'everything below y=203 moved down 73 px, so look above that line; every pixel of the added band at the bottom counts as changed; confirm it is intended before approving',
+    );
+    expect(verdict).not.toMatch(/below the baseline's height/);
+  });
+
+  // Also found dogfooding: run locally against baselines captured in CI, a
+  // page came out 5 px taller with the DOM and styles identical. Nothing was
+  // added; another machine's fonts laid the same content out taller.
+  it('a shorter page with an identical DOM: the same content laid out shorter, never content removed', () => {
     expect(
       verdictFor({
         name: 'products',
@@ -1258,8 +1280,9 @@ describe('@testivai/mcp verdictFor with a size mismatch', () => {
         dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
       }),
     ).toBe(
-      'changed (7.49% pixels differ) — page shrank 190 px (baseline 1280×2538 → current 1280×2348) with an identical DOM, so the lost height is layout, not removed elements: ' +
-        'content was removed, and every pixel of the missing band counts as changed; confirm it is intended before approving',
+      'changed (7.49% pixels differ) — page shrank 190 px (baseline 1280×2538 → current 1280×2348) with an identical DOM: ' +
+        'no elements were added or removed, so the same content is laid out shorter (often fonts or rendering that differ between machines); ' +
+        'every pixel of the missing band at the bottom counts as changed; compare the images (get_diff) before approving',
     );
   });
 
@@ -1284,7 +1307,7 @@ describe('@testivai/mcp verdictFor with a size mismatch', () => {
   it('without DOM data, the size change is still the verdict', () => {
     expect(verdictFor({ name: 'x', status: 'changed', diffPercent: 25, sizeMismatch: taller })).toBe(
       'changed (25.00% pixels differ) — page grew 190 px (baseline 1280×2348 → current 1280×2538): ' +
-        "content was added below the baseline's height, and every pixel of the added band counts as changed; confirm it is intended before approving",
+        'every pixel of the added band at the bottom counts as changed, but the change itself can be anywhere on the page; confirm it is intended before approving',
     );
   });
 });
@@ -1325,10 +1348,11 @@ describe('@testivai/mcp explainSnapshot with a size mismatch', () => {
     const e = explainSnapshot(root, 'products');
     expect(e.layers.pixel.sizeMismatch).toEqual({ baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } });
     expect(e.guidance[0]).toBe(
-      'The current capture is 1280×2538, the baseline 1280×2348: page grew 190 px. The two were padded to the larger size and every ' +
-        'padded pixel counts as changed, so diffPercent, the regions and the diff image describe the added band before anything else. ' +
-        "Content was added below the baseline's height: read the DOM summary for what, and look at the current image there.",
+      'The current capture is 1280×2538, the baseline 1280×2348: page grew 190 px. The two were padded to the larger size, ' +
+        'so diffPercent, the regions and the diff image describe the added band before anything else. ' +
+        'The DOM summary says what changed; every pixel of the added band at the bottom counts as changed, but the change itself can be anywhere on the page.',
     );
+    expect(e.guidance.join(' ')).not.toMatch(/below the baseline's height/);
     expect(e.guidance.join(' ')).not.toMatch(/concentrated in one area|likely render noise/i);
   });
 
@@ -1350,6 +1374,27 @@ describe('@testivai/mcp explainSnapshot with a size mismatch', () => {
         "This is not a page change: re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
     );
     expect(e.guidance.join(' ')).not.toMatch(/likely render noise|do not block/i);
+  });
+
+  it('a taller page with an identical DOM: guidance says nothing was added, and withholds the noise reading', () => {
+    const { explainSnapshot } = require('../lib');
+    writeResults([
+      {
+        name: 'products',
+        status: 'changed',
+        diffPercent: 5.97,
+        sizeMismatch: { baseline: { width: 1280, height: 786 }, candidate: { width: 1280, height: 796 } },
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      },
+    ]);
+    const e = explainSnapshot(root, 'products');
+    expect(e.guidance[0]).toBe(
+      'The current capture is 1280×796, the baseline 1280×786: page grew 10 px. The two were padded to the larger size, ' +
+        'so diffPercent, the regions and the diff image describe the added band before anything else. ' +
+        'No elements were added or removed, so the same content is laid out taller (often fonts or rendering that differ between machines); ' +
+        'every pixel of the added band at the bottom counts as changed.',
+    );
+    expect(e.guidance.join(' ')).not.toMatch(/content was added|below the baseline's height|read the DOM summary|likely render noise/i);
   });
 
   it('a snapshot without sizeMismatch has null in the pixel layer', () => {
