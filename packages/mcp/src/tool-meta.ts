@@ -35,6 +35,8 @@ export const TOOL_META = {
       'A pixel diff is likely render noise when the DOM and the computed styles both match and the diff is small and scattered; ' +
       'a diff whose DOM and computed styles match but that is concentrated in one area or over 1% of pixels gets its own verdict, not noise: ' +
       'it is a bad capture or a change the style check does not cover (size, overflow, transform, images…), so look at the diff (get_diff) before approving; ' +
+      'when the environment the snapshot was captured in changed since the baseline (a browser build, OS or distro, device scale, capture method…) ' +
+      'and the DOM and computed styles match, the verdict is rendering drift: the machine changed, not the page, never noise; ' +
       'a style-only change (identical DOM, different computed styles) is a real change, not noise, ' +
       'and so is any DOM change — both need human review. ' +
       'When the styles were not compared (style check unavailable), the verdict says so and does not call the diff noise: ' +
@@ -103,6 +105,9 @@ export const REVIEW_PROMPT = {
     '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
     '   and which case it is:',
     '   - likely render noise (identical DOM and computed styles match, and the diff is small and scattered; still not proof),',
+    '   - rendering drift (identical DOM and computed styles match, and the environment changed since the baseline:',
+    '     a browser build, OS or distro, device scale or capture method; the verdict names it): the machine changed, not the page,',
+    '     so compare the images (get_diff) and, if they match apart from rendering, re-baseline once the human agrees; never call it noise,',
     '   - concentrated in one area or large (identical DOM and computed styles match, but the diff sits in one area',
     '     or is over 1% of pixels): a bad capture or a change the style check does not cover, so call get_diff(name)',
     '     and compare the images; do not call it noise,',
@@ -194,6 +199,7 @@ export const TRIAGE_PROMPT = {
       '|---|---|',
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       '| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |',
+      '| environment.renderingDelta non-empty, DOM unchanged and styleCheck "match" (rendering drift) | The environment the snapshot was captured in changed since the baseline (the verdict names what: a browser build, OS or distro, device scale, capture method) and the page did not: a glitch of the environment, not render noise. If the change under test itself changed the environment (a Playwright or browser upgrade, a new CI image), it is an intended change. Either way the next step is to re-baseline from this environment once the images match apart from rendering; if they differ in more than rendering, judge that difference on its own. |',
       '| DOM unchanged and styleCheck "match" | Usually render noise, but only when the diff is small and scattered. A larger diff, or one confined to one area, is either a bad capture or a change the style check cannot see: it compares colors, fonts, borders, spacing, display, opacity, visibility and shadows, and does not cover size, overflow, position, transform, text decoration, filters, pseudo-elements, or images and other assets. See "Bad captures" below. |',
       '| DOM unchanged, styleCheck "unavailable" or missing | Styles not compared: it could be render noise or a stylesheet-only change, so it is not a glitch on the DOM evidence alone. Look at the images; a visible styling difference is a real change, and the signs of a bad capture listed below can also come from a stylesheet change here. |',
       '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',

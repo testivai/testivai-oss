@@ -237,9 +237,10 @@ describe('compareAll with a size mismatch', () => {
       expect(data.summary).toMatchObject({ total: 1, passed: 0, changed: 1 });
     });
 
-    it('writes results.json at schema 2.4.0 with the sizeMismatch field', () => {
-      expect(RESULTS_SCHEMA_VERSION).toBe('2.4.0');
-      expect(data.version).toBe('2.4.0');
+    it('writes results.json at the current schema (sizeMismatch arrived in 2.4.0) with the sizeMismatch field', () => {
+      const [major, minor] = RESULTS_SCHEMA_VERSION.split('.').map(Number);
+      expect(major === 2 && minor >= 4).toBe(true);
+      expect(data.version).toBe(RESULTS_SCHEMA_VERSION);
       expect(data.snapshots[0].sizeMismatch).toEqual({
         baseline: { width: 1280, height: 2348 },
         candidate: { width: 1280, height: 2538 },

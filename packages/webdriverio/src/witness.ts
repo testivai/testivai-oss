@@ -21,7 +21,20 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { BaselineStore, DEFAULT_MAX_ELEMENTS, loadLocalConfig, type CollectedElement } from '@testivai/witness';
+import {
+  applyEnvironmentPolicyToName,
+  BaselineStore,
+  CAPTURE_METHODS,
+  DEFAULT_MAX_ELEMENTS,
+  installedPackageVersion,
+  loadLocalConfig,
+  RENDER_PROBE_EXPRESSION,
+  webDriverEnvironment,
+  type CollectedElement,
+} from '@testivai/witness';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ADAPTER_VERSION: string = require('../package.json').version;
 import { elementMapScript, isPageElementMap, toViewportElementMap } from './element-map';
 import type { WitnessBrowser, WitnessOptions } from './types';
 
@@ -120,10 +133,33 @@ export async function witness(
     name = `${name}__${options.variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase()}`;
   }
 
+  const localConfig = loadLocalConfig(process.cwd());
+
+  // Capture provenance: what the page is rendered with, measured before
+  // anything is injected, plus the session's capabilities. Best-effort.
+  let renderProbe: unknown = null;
+  if (typeof browser.execute === 'function') {
+    try {
+      renderProbe = await browser.execute<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
+    } catch {
+      // no probe: no render settings recorded
+    }
+  }
+  const environment = webDriverEnvironment({
+    capabilities: browser.capabilities,
+    probe: renderProbe,
+    adapter: { name: '@testivai/witness-webdriverio', version: ADAPTER_VERSION, captureMethod: CAPTURE_METHODS.WEBDRIVER_VIEWPORT },
+    framework: { name: 'webdriverio', version: installedPackageVersion('webdriverio') },
+  });
+  name = applyEnvironmentPolicyToName(
+    name,
+    { browser: { name: environment?.browser.name ?? 'unknown' }, os: { platform: process.platform } },
+    localConfig.environmentPolicy,
+  );
+
   // 0. Prepare the page: stabilization CSS (animations/caret/fonts — the
   //    flake killers) + ignoreSelectors from config.json and this call,
   //    injected as one style tag and removed after the capture.
-  const localConfig = loadLocalConfig(process.cwd());
   const stabilize = options.stabilize ?? localConfig.stabilize;
   const ignoreSelectors = [
     ...new Set([...(localConfig.ignoreSelectors ?? []), ...(options.ignoreSelectors ?? [])]),
@@ -198,6 +234,13 @@ export async function witness(
   // 4. Write to .testivai/temp/<name>/
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
+  if (environment) {
+    try {
+      store.writeTempMetadata(name, { name, environment });
+    } catch {
+      // without it the compare cannot tell rendering drift from noise for this capture
+    }
+  }
   if (elementMap) {
     try {
       const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);

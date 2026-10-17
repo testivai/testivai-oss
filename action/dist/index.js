@@ -3594,8 +3594,8 @@ var require_webidl = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural}: ${context6.types.join(", ")}.`;
+      const plural2 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural2}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -10960,9 +10960,9 @@ var require_pluralizer = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural) {
+      constructor(singular, plural2) {
         this.singular = singular;
-        this.plural = plural;
+        this.plural = plural2;
       }
       pluralize(count) {
         const one = count === 1;
@@ -22512,8 +22512,8 @@ var require_webidl2 = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural}: ${context6.types.join(", ")}.`;
+      const plural2 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural2}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -29115,9 +29115,9 @@ var require_pluralizer2 = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural) {
+      constructor(singular, plural2) {
         this.singular = singular;
-        this.plural = plural;
+        this.plural = plural2;
       }
       pluralize(count) {
         const one = count === 1;
@@ -44575,20 +44575,20 @@ var require_ms = __commonJS({
     function fmtLong(ms) {
       var msAbs = Math.abs(ms);
       if (msAbs >= d) {
-        return plural(ms, msAbs, d, "day");
+        return plural2(ms, msAbs, d, "day");
       }
       if (msAbs >= h) {
-        return plural(ms, msAbs, h, "hour");
+        return plural2(ms, msAbs, h, "hour");
       }
       if (msAbs >= m) {
-        return plural(ms, msAbs, m, "minute");
+        return plural2(ms, msAbs, m, "minute");
       }
       if (msAbs >= s) {
-        return plural(ms, msAbs, s, "second");
+        return plural2(ms, msAbs, s, "second");
       }
       return ms + " ms";
     }
-    function plural(ms, msAbs, n, name) {
+    function plural2(ms, msAbs, n, name) {
       var isPlural = msAbs >= n * 1.5;
       return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
     }
@@ -58890,11 +58890,11 @@ var require_baseFlatten = __commonJS({
 var require_flatten = __commonJS({
   "../node_modules/.pnpm/lodash@4.18.1/node_modules/lodash/flatten.js"(exports2, module2) {
     var baseFlatten = require_baseFlatten();
-    function flatten(array) {
+    function flatten2(array) {
       var length = array == null ? 0 : array.length;
       return length ? baseFlatten(array, 1) : [];
     }
-    module2.exports = flatten;
+    module2.exports = flatten2;
   }
 });
 
@@ -66671,7 +66671,7 @@ var require_file3 = __commonJS({
   "../node_modules/.pnpm/archiver-utils@5.0.2/node_modules/archiver-utils/file.js"(exports2, module2) {
     var fs9 = require_graceful_fs();
     var path5 = require("path");
-    var flatten = require_flatten();
+    var flatten2 = require_flatten();
     var difference = require_difference();
     var union = require_union();
     var isPlainObject3 = require_isPlainObject();
@@ -66680,7 +66680,7 @@ var require_file3 = __commonJS({
     var pathSeparatorRe = /[\/\\]/g;
     var processPatterns = function(patterns, fn) {
       var result = [];
-      flatten(patterns).forEach(function(pattern) {
+      flatten2(patterns).forEach(function(pattern) {
         var exclusion = pattern.indexOf("!") === 0;
         if (exclusion) {
           pattern = pattern.slice(1);
@@ -66773,7 +66773,7 @@ var require_file3 = __commonJS({
           return;
         }
         if (Array.isArray(obj.src)) {
-          obj.src = flatten(obj.src);
+          obj.src = flatten2(obj.src);
         } else {
           obj.src = [obj.src];
         }
@@ -66802,7 +66802,7 @@ var require_file3 = __commonJS({
               var src;
               if (!("result" in fn)) {
                 src = obj.src;
-                src = Array.isArray(src) ? flatten(src) : [src];
+                src = Array.isArray(src) ? flatten2(src) : [src];
                 fn.result = file.expand(expandOptions, src);
               }
               return fn.result;
@@ -115755,6 +115755,156 @@ function describeSizeChange(sm) {
   return "dimensions unchanged";
 }
 
+// ../packages/witness/src/report/environment.ts
+function flatten(env) {
+  const flat = /* @__PURE__ */ new Map();
+  const put = (key, value) => {
+    if (value === void 0 || value === null) return;
+    flat.set(key, String(value));
+  };
+  for (const [section, value] of Object.entries(env)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [field, inner] of Object.entries(value)) {
+        if (section === "render" && field === "viewport" && inner && typeof inner === "object") {
+          const vp = inner;
+          put("render.viewport", `${vp.width}x${vp.height}`);
+        } else if (inner === null || typeof inner !== "object") {
+          put(`${section}.${field}`, inner);
+        }
+      }
+    } else {
+      put(section, value);
+    }
+  }
+  return flat;
+}
+var MECHANISMS = {
+  cdp: "CDP",
+  playwright: "Playwright",
+  stitched: "scroll and stitch",
+  firefox: "Firefox",
+  webdriver: "WebDriver"
+};
+function describeCaptureMethod(method) {
+  const m = /^(full-page|viewport):([a-z0-9-]+)$/.exec(method);
+  if (!m) return method;
+  return `${m[1] === "full-page" ? "full page" : "viewport"} (${MECHANISMS[m[2]] ?? m[2]})`;
+}
+var ORDER = [
+  "browser",
+  "browser.channel",
+  "browser.headless",
+  "os.platform",
+  "os.distro",
+  "os.release",
+  "os.arch",
+  "render.viewport",
+  "render.deviceScaleFactor",
+  "render.colorScheme",
+  "render.reducedMotion",
+  "render.locale",
+  "render.timezone",
+  "adapter.captureMethod",
+  "container",
+  "label"
+];
+var LABELS = {
+  "browser.channel": "channel",
+  "browser.headless": "headless",
+  "os.platform": "OS",
+  "os.release": "OS release",
+  "os.arch": "arch",
+  "render.viewport": "viewport",
+  "render.deviceScaleFactor": "device scale",
+  "render.colorScheme": "color scheme",
+  "render.reducedMotion": "reduced motion",
+  "render.locale": "locale",
+  "render.timezone": "time zone",
+  "ci.provider": "CI",
+  "ci.runnerImage": "runner image",
+  project: "project"
+};
+var yesNo = (v) => v === "true" ? "yes" : "no";
+function describeEnvironmentChange(baseline, candidate, fields) {
+  const a = flatten(baseline);
+  const b = flatten(candidate);
+  const set = new Set(fields);
+  const parts = [];
+  const rank = (key) => {
+    const i = ORDER.indexOf(key);
+    return i === -1 ? ORDER.length : i;
+  };
+  if (set.has("browser.name") || set.has("browser.version")) {
+    const side = (f, withName) => [withName ? f.get("browser.name") : void 0, f.get("browser.version")].filter(Boolean).join(" ");
+    const sameName = a.get("browser.name") === b.get("browser.name");
+    parts.push({ rank: rank("browser"), text: `${side(a, true)} \u2192 ${side(b, !sameName)}` });
+  }
+  for (const field of set) {
+    if (field === "browser.name" || field === "browser.version") continue;
+    const left = a.get(field);
+    const right = b.get(field);
+    let text;
+    if (field === "browser.headless" || field === "container") {
+      text = `${field === "container" ? "container" : "headless"} ${yesNo(left)} \u2192 ${yesNo(right)}`;
+    } else if (field === "label") {
+      text = `environment label ${left || "none"} \u2192 ${right || "none"}`;
+    } else if (field === "os.distro") {
+      text = `${left ?? "unknown"} \u2192 ${right ?? "unknown"}`;
+    } else if (field === "adapter.captureMethod") {
+      text = `capture method ${describeCaptureMethod(left ?? "?")} \u2192 ${describeCaptureMethod(right ?? "?")}`;
+    } else if (/^(framework|adapter|driver)\.version$/.test(field)) {
+      const owner = field.split(".")[0];
+      text = `${b.get(`${owner}.name`) ?? owner} ${left ?? "?"} \u2192 ${right ?? "?"}`;
+    } else {
+      text = `${LABELS[field] ?? field} ${left ?? "none"} \u2192 ${right ?? "none"}`;
+    }
+    parts.push({ rank: rank(field), text });
+  }
+  return parts.sort((x, y) => x.rank - y.rank).map((p) => p.text).join(", ");
+}
+var SIZE_FIELDS = ["render.viewport", "render.deviceScaleFactor", "adapter.captureMethod"];
+function isRenderingDrift(snapshot2) {
+  if (snapshot2.status !== "changed" && !(snapshot2.status === "passed" && snapshot2.autoPassed)) return false;
+  const rendering = snapshot2.environment?.renderingDelta ?? [];
+  if (rendering.length === 0) return false;
+  const dom = snapshot2.dom;
+  if (!dom || dom.changed || dom.styleCheck !== "match") return false;
+  if (snapshot2.sizeMismatch) return rendering.some((f) => SIZE_FIELDS.includes(f));
+  return diffShape(snapshot2).kind !== "concentrated";
+}
+function snapshotEnvironmentChange(snapshot2) {
+  const e = snapshot2.environment;
+  if (!e || e.renderingDelta.length === 0 || !e.baseline || !e.candidate) return null;
+  return describeEnvironmentChange(e.baseline, e.candidate, e.renderingDelta);
+}
+function environmentChangeGroups(snapshots) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const s of snapshots) {
+    if (s.status !== "changed" && !(s.status === "passed" && s.autoPassed)) continue;
+    const change = snapshotEnvironmentChange(s);
+    if (!change) continue;
+    const group = groups.get(change) ?? { change, snapshots: [], drift: [] };
+    group.snapshots.push(s.name);
+    if (isRenderingDrift(s)) group.drift.push(s.name);
+    groups.set(change, group);
+  }
+  return [...groups.values()].sort((x, y) => y.snapshots.length - x.snapshots.length);
+}
+var plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+function environmentChangeLine(group) {
+  const n = group.snapshots.length;
+  const d = group.drift.length;
+  const head = `Environment changed since the baselines (${group.change})`;
+  if (d === n) {
+    return `${head}: ${plural(n, "diff is", "diffs are")} rendering drift (DOM and computed styles identical), not page changes; re-baseline ${n === 1 ? "it" : "them"} once the images are confirmed.`;
+  }
+  if (d === 0) {
+    return `${head} for ${plural(n, "snapshot", "snapshots")}; each also has a change the environment does not explain, so review ${n === 1 ? "it" : "them"} on ${n === 1 ? "its" : "their"} own.`;
+  }
+  const rest = n - d;
+  return `${head} for ${plural(n, "snapshot", "snapshots")}: ${d} ${d === 1 ? "is" : "are"} rendering drift (DOM and computed styles identical); ${rest} also ${rest === 1 ? "has" : "have"} a change the environment does not explain, review ${rest === 1 ? "it" : "them"} on ${rest === 1 ? "its" : "their"} own.`;
+}
+
 // src/status.ts
 var STATUS_CONTEXT = "TestivAI / visual";
 function resolveStatusContext(input) {
@@ -115839,9 +115989,10 @@ function formatDiffPercent(snapshot2) {
   const value = snapshot2.diffPercent ?? snapshot2.diffPercentage ?? 0;
   return value.toFixed(2);
 }
-function renderDomHintMarkdown(snapshot2) {
+function renderDomHintMarkdown(snapshot2, include2 = {}) {
   const lines = [];
-  const size = snapshot2.sizeMismatch;
+  const { size: withSize = true, identicalDom: withIdenticalDom = true } = include2;
+  const size = withSize ? snapshot2.sizeMismatch : void 0;
   if (size) {
     const change = `**Size changed \u2014 ${describeSizeChange(size)}** (${formatSizes(size)})`;
     if (sizeMismatchKind(size) === "width") {
@@ -115865,7 +116016,7 @@ function renderDomHintMarkdown(snapshot2) {
     lines.push(`> **Layout shift** \u2014 everything below y=${p.belowY} moved ${p.dy > 0 ? "down" : "up"} ${Math.abs(p.dy)}px (${p.count} elements together). Look *above* that line for inserted/removed content.`);
   }
   if (snapshot2.dom && !styleOnly) {
-    if (snapshot2.dom.noiseHint && size) {
+    if (snapshot2.dom.noiseHint && (size || !withIdenticalDom)) {
     } else if (snapshot2.dom.noiseHint) {
       if (snapshot2.dom.styleCheck === "match") {
         const shape = diffShape({ ...snapshot2, diffPercent: snapshot2.diffPercent ?? snapshot2.diffPercentage });
@@ -115894,6 +116045,32 @@ function renderDomHintMarkdown(snapshot2) {
   }
   return lines.length > 0 ? lines.join("\n") + "\n\n" : "";
 }
+function renderSnapshotHints(snapshot2) {
+  const change = snapshotEnvironmentChange(snapshot2);
+  if (!change) return renderDomHintMarkdown(snapshot2);
+  const env = snapshot2.environment;
+  if (env.policy === "strict") {
+    return `> **Environment changed (strict policy)** \u2014 ${change} since the baseline; environmentPolicy "strict" makes it changed whatever its pixels say. Approving re-baselines it in this environment.
+
+` + renderDomHintMarkdown(snapshot2);
+  }
+  if (snapshot2.sizeMismatch && env.baseline && env.candidate && env.renderingDelta.includes("adapter.captureMethod")) {
+    const from = describeCaptureMethod(env.baseline.adapter.captureMethod);
+    const to = describeCaptureMethod(env.candidate.adapter.captureMethod);
+    return `> **Capture method changed** \u2014 ${from} \u2192 ${to} since the baseline (${formatSizes(snapshot2.sizeMismatch)}): the size change comes from how the screenshot was taken, not from the page. Re-baseline with this capture method, or capture the way the baseline was.
+
+` + renderDomHintMarkdown(snapshot2, { size: false, identicalDom: false });
+  }
+  if (isRenderingDrift(snapshot2)) {
+    const size = snapshot2.sizeMismatch ? ` That also explains the size change (${formatSizeMismatch(snapshot2.sizeMismatch)}).` : "";
+    return `> **Rendering drift** \u2014 ${change} since the baseline, and the DOM and computed styles are identical: the machine changed, not the page. Re-baseline once the images are confirmed to match apart from rendering.${size}
+
+` + renderDomHintMarkdown(snapshot2, { size: false, identicalDom: false });
+  }
+  return renderDomHintMarkdown(snapshot2) + `> The environment also changed since the baseline (${change}), which can add rendering differences of its own.
+
+`;
+}
 function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER) {
   const { summary: summary2, snapshots } = results;
   const summaryLine = [
@@ -115913,6 +116090,13 @@ ${summaryLine} \u2014 **${summary2.total} total**
 
 `;
   }
+  for (const group of environmentChangeGroups(snapshots).filter((g) => g.snapshots.length >= 2)) {
+    const line = environmentChangeLine(group).replace(/^Environment changed since the baselines/, "**Environment changed since the baselines**");
+    const names = group.snapshots.slice(0, 10).map((n) => `\`${n}\``).join(", ") + (group.snapshots.length > 10 ? ", \u2026" : "");
+    comment += `> ${line} Snapshots: ${names}.
+
+`;
+  }
   const missing = results.missingBaselines ?? [];
   if (missing.length > 0) {
     comment += `> **${missing.length} baseline${missing.length === 1 ? "" : "s"} received no capture this run** \u2014 ${missing.slice(0, 5).map((n) => `\`${n}\``).join(", ")}${missing.length > 5 ? ", \u2026" : ""}. If a test was removed intentionally, delete its baseline; otherwise coverage just shrank.
@@ -115924,7 +116108,7 @@ ${summaryLine} \u2014 **${summary2.total} total**
     comment += "#### Changed Snapshots\n\n";
     for (const snapshot2 of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot2);
-      const domHint = renderDomHintMarkdown(snapshot2);
+      const domHint = renderSnapshotHints(snapshot2);
       const size = snapshot2.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot2.sizeMismatch)}` : "";
       comment += `<details>
 <summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different${size}</summary>

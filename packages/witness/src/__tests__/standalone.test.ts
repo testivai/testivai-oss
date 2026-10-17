@@ -1,5 +1,6 @@
 import { filterCrawledLinks, pageNameFromUrl, parseViewport, resolvePages } from '../standalone/crawl';
 import { chromeLaunchArgs, findChrome, needsNoSandbox } from '../standalone/launcher';
+import { standaloneEnvironment } from '../standalone/run';
 
 describe('standalone witness helpers', () => {
   describe('pageNameFromUrl', () => {
@@ -117,5 +118,33 @@ describe('standalone witness helpers', () => {
       expect(args).toContain('--user-data-dir=/tmp/profile');
       expect(args[args.length - 1]).toBe('about:blank');
     });
+  });
+});
+
+/**
+ * Capture provenance for `testivai witness <url>`: the crawler drives its
+ * own headless Chrome over CDP and takes full-page CDP screenshots; there is
+ * no test framework.
+ */
+describe('standaloneEnvironment', () => {
+  const host = { os: { platform: 'linux', release: '6.8.0', arch: 'x64' } };
+  const probe = {
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 1,
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36',
+  };
+
+  it('records Chrome from the CDP product, the CLI as the adapter, a full-page CDP capture and the render probe', () => {
+    expect(standaloneEnvironment({ probe, product: 'HeadlessChrome/141.0.7390.54', host })).toEqual({
+      os: host.os,
+      browser: { name: 'chromium', version: '141.0.7390.54', headless: true },
+      adapter: { name: '@testivai/witness', version: expect.stringMatching(/^\d+\.\d+\.\d+/), captureMethod: 'full-page:cdp' },
+      render: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
+    });
+  });
+
+  it('without the CDP product, the probe\'s user agent; without either, chromium with an unknown version', () => {
+    expect(standaloneEnvironment({ probe, product: undefined, host }).browser).toEqual({ name: 'chromium', version: '141.0.7390.37', headless: true });
+    expect(standaloneEnvironment({ probe: null, product: undefined, host }).browser).toEqual({ name: 'chromium', version: null });
   });
 });

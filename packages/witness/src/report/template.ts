@@ -12,6 +12,14 @@
 import { describeRegions, diffShape, NOISE_MAX_DIFF_PERCENT, STYLE_CHECK_DOES_NOT_COVER } from './diff-shape';
 import type { ReportData, SnapshotDomSignal, SnapshotResult } from './results';
 import { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
+import {
+  describeCaptureMethod,
+  describeEnvironmentChange,
+  environmentChangeGroups,
+  environmentChangeLine,
+  isRenderingDrift,
+  snapshotEnvironmentChange,
+} from './environment';
 
 /**
  * Render a standalone HTML report from report data.
@@ -23,6 +31,9 @@ export function renderHtml(data: ReportData): string {
   const newSnapshots = snapshots.filter((s) => s.status === 'new');
   const passed = snapshots.filter((s) => s.status === 'passed');
   const missing = data.missingBaselines ?? [];
+  // One line per environment change shared by two or more snapshots; a
+  // single snapshot's own verdict already says it.
+  const envGroups = environmentChangeGroups(snapshots).filter((g) => g.snapshots.length >= 2);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -151,6 +162,10 @@ export function renderHtml(data: ReportData): string {
     /* Identical DOM and styles, but a diff concentrated in one area or large: not noise, a warning look */
     .verdict.v-unexplained { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-style { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
+    .verdict.v-drift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+    .env-notice { background: var(--info-bg); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 13px; color: var(--info); }
+    .env-notice code { background: var(--code-bg); border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+    .env-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
     .verdict.v-size { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-structural { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
@@ -290,6 +305,15 @@ export function renderHtml(data: ReportData): string {
   </aside>
 
   <main class="main">
+    ${envGroups
+      .map(
+        (g) => `
+    <div class="env-notice">
+      <div>${escapeHtml(environmentChangeLine(g))}</div>
+      ${g.snapshots.slice(0, 20).map((n) => `<code>${escapeHtml(n)}</code>`).join(' ')}${g.snapshots.length > 20 ? ' …' : ''}
+    </div>`,
+      )
+      .join('')}
     ${missing.length > 0 ? `
     <div class="missing-notice">
       <div class="m-title">${missing.length} baseline${missing.length === 1 ? '' : 's'} received no capture this run</div>
@@ -480,7 +504,7 @@ function autoPassNote(snapshot: SnapshotResult): string {
  */
 function renderAnalysis(snapshot: SnapshotResult): string {
   const verdict = renderVerdict(snapshot);
-  const layers = [renderDomHint(snapshot), renderRegions(snapshot), renderMasks(snapshot)].filter(Boolean).join('');
+  const layers = [renderDomHint(snapshot), renderEnvironment(snapshot), renderRegions(snapshot), renderMasks(snapshot)].filter(Boolean).join('');
   if (!verdict && !layers) return '';
 
   return `
@@ -509,6 +533,36 @@ function renderAnalysis(snapshot: SnapshotResult): string {
  * warning too: a bad capture, or a change the style check does not cover.
  */
 function renderVerdict(snapshot: SnapshotResult): string {
+  if (snapshot.status === 'new') return baseVerdict(snapshot);
+  const change = snapshotEnvironmentChange(snapshot);
+  if (change && snapshot.environment?.policy === 'strict') {
+    return `<div class="verdict v-size"><span>Environment changed (strict policy) — ${escapeHtml(change)} since the baseline. environmentPolicy is "strict", so this snapshot is changed whatever its pixels say (${snapshot.diffPercent.toFixed(2)}% differ). Approve it to re-baseline in this environment, or capture it in the baseline's.</span></div>`;
+  }
+  const env = snapshot.environment;
+  if (change && env?.baseline && env.candidate && snapshot.sizeMismatch && env.renderingDelta.includes('adapter.captureMethod')) {
+    const from = describeCaptureMethod(env.baseline.adapter.captureMethod);
+    const to = describeCaptureMethod(env.candidate.adapter.captureMethod);
+    const dom = snapshot.dom?.changed && snapshot.dom.summary ? ` The DOM also changed (${escapeHtml(summarizeDom(snapshot.dom.summary))}): review that on its own.` : '';
+    return `<div class="verdict v-drift"><span>Capture method changed — ${escapeHtml(from)} → ${escapeHtml(to)} since the baseline (${escapeHtml(formatSizes(snapshot.sizeMismatch))}): the size change comes from how the screenshot was taken, not from the page. Re-baseline with this capture method, or capture the way the baseline was.${dom}</span></div>`;
+  }
+  if (change && isRenderingDrift(snapshot)) {
+    const size = snapshot.sizeMismatch ? `; that also explains the size change (${escapeHtml(formatSizeMismatch(snapshot.sizeMismatch))})` : '';
+    const next =
+      snapshot.status === 'changed'
+        ? 'Re-baseline once the images are confirmed to match apart from rendering.'
+        : `Auto-passed by the '${snapshot.autoPassed}' criterion; re-baseline in this environment so the tolerance keeps measuring the page, not the machine.`;
+    return `<div class="verdict v-drift"><span>Rendering drift — the environment changed since the baseline (${escapeHtml(change)}), and the DOM and computed styles are identical: the machine changed, not the page${size}. ${next}</span></div>`;
+  }
+  const base = baseVerdict(snapshot);
+  if (change && base && (snapshot.status === 'changed' || snapshot.autoPassed)) {
+    const note = ` The environment also changed since the baseline (${escapeHtml(change)}), which can add rendering differences of its own.`;
+    return base.replace(/<\/span><\/div>$/, `${note}</span></div>`);
+  }
+  return base;
+}
+
+/** The verdict without the environment: what the page-side layers say. */
+function baseVerdict(snapshot: SnapshotResult): string {
   // A DOM change never decides the status: the pixels do. A pass whose DOM
   // differs is reported as information, with nothing to approve.
   if (snapshot.status === 'passed' && !snapshot.autoPassed) {
@@ -641,6 +695,13 @@ function renderDomHint(snapshot: SnapshotResult): string {
 
   if (snapshot.dom.noiseHint) {
     if (snapshot.dom.styleCheck === 'match') {
+      if (isRenderingDrift(snapshot)) {
+        return `
+      <div class="dom-hint noise" title="DOM tree and computed styles are identical, and the environment the page was captured in changed since the baseline.">
+        <span class="label">DOM unchanged</span>
+        <span class="summary">— styles verified unchanged; the environment changed since the baseline, so the pixel diff is rendering drift.</span>
+      </div>`;
+      }
       const shape = diffShape(snapshot);
       if (shape.kind === 'concentrated') {
         return `
@@ -688,6 +749,22 @@ function renderDomHint(snapshot: SnapshotResult): string {
       <span class="label">DOM changed</span>
       <span class="summary">— ${escapeHtml(parts.join(', ') || 'structural difference')}.${alsoRestyled}</span>
     </div>`;
+}
+
+/**
+ * The environment layer: every field that changed since the baseline,
+ * rendering changes first and context after. Absent when nothing changed or
+ * a side recorded no environment.
+ */
+function renderEnvironment(snapshot: SnapshotResult): string {
+  const env = snapshot.environment;
+  if (!env || env.delta.length === 0 || !env.baseline || !env.candidate) return '';
+  const context = env.delta.filter((f) => !env.renderingDelta.includes(f));
+  const parts: string[] = [];
+  if (env.renderingDelta.length > 0) parts.push(describeEnvironmentChange(env.baseline, env.candidate, env.renderingDelta));
+  if (context.length > 0) parts.push(`context: ${describeEnvironmentChange(env.baseline, env.candidate, context)}`);
+  return `
+      <div class="env-hint">Environment changed since the baseline — ${escapeHtml(parts.join(' · '))}</div>`;
 }
 
 /**

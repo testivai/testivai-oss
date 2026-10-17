@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { validateLocalConfig } from './validate-config';
+import type { EnvironmentPolicy } from '../capture/environment';
 
 export interface LocalConfig {
   /** Pixel diff threshold (0-1). Default: 0.1 */
@@ -134,6 +135,19 @@ export interface LocalConfig {
    * server's --approval-prompt / --no-approval-prompt flag overrides this.
    */
   mcpApprovalPrompt?: boolean;
+  /**
+   * What a change of capture environment (browser, OS, device scale,
+   * capture method…: the recorded `environment`) since the baseline does:
+   *   - "warn" (default): never changes a status; the report says when a
+   *     diff is rendering drift rather than calling it render noise.
+   *   - "separate": adapters key each snapshot by environment,
+   *     `<name>__<browser>__<platform>`, so each browser and OS gates
+   *     against its own baselines (never keyed by version). Only baselines
+   *     of an environment this run captured can be missing.
+   *   - "strict": a snapshot whose rendering environment changed is
+   *     changed, whatever its pixels say (exit 1 with --fail-on-diff).
+   */
+  environmentPolicy?: EnvironmentPolicy;
 }
 
 const DEFAULT_CONFIG: LocalConfig = {
@@ -145,6 +159,7 @@ const DEFAULT_CONFIG: LocalConfig = {
   noiseAutoPass: false,
   noiseMaxDiffPercent: 1,
   stabilize: true,
+  environmentPolicy: 'warn',
 };
 
 const CONFIG_FILENAME = 'config.json';

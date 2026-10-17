@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The PR comment reads capture provenance from `results.json` (`@testivai/witness` schema 2.5.0): when the baseline and the current capture both recorded their environment and the rendering environment changed (a browser build, OS or distro, device scale, capture method), a diff with an identical DOM and matching styles reads **Rendering drift** with the change named ("chromium 130.0.6723.58 → 141.0.7390.37"), never "likely render noise"; a size change from another capture method reads **Capture method changed**; a snapshot that `environmentPolicy: "strict"` made changed says so; any other reading keeps its line and mentions the environment change as context. When two or more snapshots share one change, the comment says it once at the top with an honest count of how many are drift. The review action's triage rubric (bundled in `dist/review.cjs`) gets a row for rendering drift: a glitch of the environment, or an intended change when the change under test upgraded the environment; re-baseline either way
+
 ## [1.3.0] - 2026-10-17
 
 ### Changed

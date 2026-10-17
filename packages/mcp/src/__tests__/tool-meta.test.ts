@@ -1,4 +1,4 @@
-import { TOOL_META, type ToolMeta } from '../tool-meta';
+import { REVIEW_PROMPT, TOOL_META, TRIAGE_PROMPT, type ToolMeta } from '../tool-meta';
 
 /**
  * The model reads a tool's description before it calls the tool, so the
@@ -441,5 +441,29 @@ describe('toolMetaFor (approval prompt setting)', () => {
         description: metaOf(name).description,
       });
     }
+  });
+});
+
+// Rendering drift (results.json 2.5.0): the environment changed, the page did
+// not. The triage rubric and the review prompt must name it, never as noise.
+describe('rendering drift in the prompts', () => {
+  it('the triage rubric has a row for it: a glitch of the environment, unless the change under test changed the environment', () => {
+    const rubric = TRIAGE_PROMPT.rubric();
+    const row = rubric.split('\n').find((l) => l.startsWith('| environment.renderingDelta'));
+    expect(row).toBeDefined();
+    expect(row).toMatch(/rendering drift/);
+    expect(row).toMatch(/glitch/);
+    expect(row).toMatch(/intended change/);
+    expect(row).toMatch(/re-baseline/i);
+    expect(row).toMatch(/not render noise/);
+    expect(row).not.toMatch(/(usually|likely) render noise/i);
+  });
+
+  it('review-visual-changes lists rendering drift as its own case', () => {
+    expect(REVIEW_PROMPT.text).toMatch(/rendering drift \(identical DOM and computed styles match, and the environment changed since the baseline/);
+  });
+
+  it('get_visual_results says a drift diff is not noise', () => {
+    expect(TOOL_META.get_visual_results.description).toMatch(/rendering drift/);
   });
 });

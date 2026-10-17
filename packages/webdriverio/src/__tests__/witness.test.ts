@@ -221,3 +221,84 @@ describe('witness()', () => {
     });
   });
 });
+
+/**
+ * Capture provenance: witness() records where the capture came from in the
+ * capture's metadata.json, from the session's capabilities and the in-page
+ * render probe. WebDriver's takeScreenshot covers the viewport only.
+ */
+describe('witness() capture provenance', () => {
+  let projectRoot: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-wdio-env-'));
+    originalCwd = process.cwd();
+    process.chdir(projectRoot);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROBE = {
+    viewport: { width: 1280, height: 720 },
+    deviceScaleFactor: 2,
+    colorScheme: 'dark',
+    reducedMotion: 'no-preference',
+    locale: 'en-US',
+    timezone: 'UTC',
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.7390.37 Safari/537.36',
+  };
+
+  /** A browser that answers the render probe and returns the DOM otherwise. */
+  function browserWith(capabilities?: Record<string, unknown>): WitnessBrowser {
+    return {
+      takeScreenshot: jest.fn().mockResolvedValue(ONE_PX_PNG_B64),
+      execute: jest.fn(async (script: unknown) =>
+        typeof script === 'string' && script.includes('prefers-color-scheme') ? PROBE : '<html><body><h1>Hi</h1></body></html>',
+      ) as unknown as WitnessBrowser['execute'],
+      ...(capabilities ? { capabilities } : {}),
+    };
+  }
+
+  const metadata = (name: string) =>
+    JSON.parse(fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', name, 'metadata.json'), 'utf-8'));
+
+  it('records the browser and driver from the capabilities, the adapter, the viewport capture method and the render probe', async () => {
+    await witness(
+      browserWith({
+        browserName: 'chrome',
+        browserVersion: '141.0.7390.37',
+        'goog:chromeOptions': { args: ['--headless=new'] },
+        chrome: { chromedriverVersion: '141.0.7390.37 (abc-refs/branch-heads/7390@{#1})' },
+      }),
+      'home',
+    );
+    const { environment } = metadata('home');
+    expect(environment).toMatchObject({
+      os: { platform: process.platform },
+      browser: { name: 'chromium', version: '141.0.7390.37', channel: 'chrome', headless: true },
+      framework: { name: 'webdriverio' },
+      adapter: { name: '@testivai/witness-webdriverio', captureMethod: 'viewport:webdriver' },
+      driver: { name: 'chromedriver', version: '141.0.7390.37' },
+      render: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2, colorScheme: 'dark', locale: 'en-US', timezone: 'UTC' },
+    });
+    expect(environment.adapter.version).toMatch(/^\d+\.\d+\.\d+/);
+    // The project's own webdriverio, or null when it cannot be resolved: never guessed.
+    expect(environment.framework.version === null || typeof environment.framework.version === 'string').toBe(true);
+  });
+
+  it('without capabilities, the browser comes from the probe\'s user agent', async () => {
+    await witness(browserWith(), 'home');
+    expect(metadata('home').environment.browser).toEqual({ name: 'chromium', version: '141.0.7390.37' });
+  });
+
+  it('environmentPolicy "separate" keys the snapshot <name>__<browser>__<platform>', async () => {
+    fs.mkdirSync(path.join(projectRoot, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.testivai', 'config.json'), JSON.stringify({ environmentPolicy: 'separate' }));
+    await witness(browserWith({ browserName: 'firefox', browserVersion: '143.0' }), 'home');
+    expect(fs.existsSync(path.join(projectRoot, '.testivai', 'temp', `home__firefox__${process.platform}`, 'screenshot.png'))).toBe(true);
+  });
+});

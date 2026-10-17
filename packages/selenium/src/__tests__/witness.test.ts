@@ -64,6 +64,20 @@ function makeDriver(overrides: Partial<WitnessDriver> & { dom?: string } = {}) {
       const fn = new Function('document', 'window', `return ${expr};`);
       return fn(doc, win);
     }
+    if (script.includes('prefers-color-scheme')) {
+      // The render probe: run the real expression against a fake window.
+      const win = {
+        innerWidth: 1366,
+        innerHeight: 768,
+        devicePixelRatio: 1,
+        matchMedia: () => ({ matches: false }),
+      };
+      const nav = { language: 'de-DE', userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0' };
+      const intl = { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: 'Europe/Berlin' }) }) };
+      // eslint-disable-next-line no-new-func
+      // The adapter sends 'return ' + the probe expression: a valid function body as is.
+      return new Function('window', 'navigator', 'Intl', script)(win, nav, intl);
+    }
     if (script.includes('cloneNode')) {
       let result = dom;
       for (const sel of (args[0] as string[]) ?? []) {
@@ -270,5 +284,73 @@ describe('element map capture', () => {
     const dir = path.join(process.cwd(), '.testivai', 'temp', 'map-fails');
     expect(fs.existsSync(path.join(dir, 'screenshot.png'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'elements.json'))).toBe(false);
+  });
+});
+
+/**
+ * Capture provenance: witness() records where the capture came from in the
+ * capture's metadata.json: the session's capabilities, the in-page render
+ * probe, and which path took the screenshot (CDP full page on Chromium,
+ * WebDriver's viewport screenshot elsewhere).
+ */
+describe('witness() capture provenance', () => {
+  let projectRoot: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-selenium-env-'));
+    originalCwd = process.cwd();
+    process.chdir(projectRoot);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  const metadata = (name: string) =>
+    JSON.parse(fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', name, 'metadata.json'), 'utf-8'));
+
+  /** selenium-webdriver's Capabilities: read through get(). */
+  const capabilities = (entries: Record<string, unknown>) => ({ get: (key: string) => entries[key] });
+
+  it('Chrome over CDP: full page, with the browser and chromedriver from getCapabilities()', async () => {
+    const { driver } = makeDriver({
+      sendAndGetDevToolsCommand: jest.fn().mockResolvedValue({ data: ONE_PX_PNG_B64 }),
+      getCapabilities: jest.fn().mockResolvedValue(
+        capabilities({ browserName: 'chrome', browserVersion: '141.0.7390.37', chrome: { chromedriverVersion: '141.0.7390.37 (abc)' } }),
+      ),
+    });
+    await witness(driver, 'home');
+    expect(metadata('home').environment).toMatchObject({
+      os: { platform: process.platform },
+      browser: { name: 'chromium', version: '141.0.7390.37', channel: 'chrome' },
+      framework: { name: 'selenium-webdriver' },
+      adapter: { name: '@testivai/witness-selenium', captureMethod: 'full-page:cdp' },
+      driver: { name: 'chromedriver', version: '141.0.7390.37' },
+      render: { viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1, colorScheme: 'light', locale: 'de-DE', timezone: 'Europe/Berlin' },
+    });
+  });
+
+  it('without CDP the capture is the viewport, and without capabilities the browser comes from the user agent', async () => {
+    const { driver } = makeDriver();
+    await witness(driver, 'home');
+    const { environment } = metadata('home');
+    expect(environment.adapter.captureMethod).toBe('viewport:webdriver');
+    expect(environment.browser).toEqual({ name: 'firefox', version: '143.0' });
+  });
+
+  it('a CDP failure falls back to the viewport, and the method says so', async () => {
+    const { driver } = makeDriver({ sendAndGetDevToolsCommand: jest.fn().mockRejectedValue(new Error('no CDP')) });
+    await witness(driver, 'home');
+    expect(metadata('home').environment.adapter.captureMethod).toBe('viewport:webdriver');
+  });
+
+  it('environmentPolicy "separate" keys the snapshot <name>__<browser>__<platform>', async () => {
+    fs.mkdirSync(path.join(projectRoot, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.testivai', 'config.json'), JSON.stringify({ environmentPolicy: 'separate' }));
+    const { driver } = makeDriver();
+    await witness(driver, 'home');
+    expect(fs.existsSync(path.join(projectRoot, '.testivai', 'temp', `home__firefox__${process.platform}`, 'screenshot.png'))).toBe(true);
   });
 });

@@ -123,7 +123,7 @@ per-snapshot calls) — the first occurrence wins.
 | Dynamic text (timestamps, emails, counters, "ago" strings) | `ignoreSelectors` with `mask` | Blanks the text while preserving the surrounding layout |
 | Data-dependent table/list heights that vary across runs | `ignoreSelectors` with `collapse` | Removes the element from flow so the rest of the page stays aligned |
 | Image/avatar/ad content changing inside a stable container | `ignoreSelectors` with `mask` | Hides the variable content, keeps the container box |
-| Cross-machine anti-aliasing or font-rendering differences | Per-platform baselines ([below](#cross-platform-baselines)), tune `threshold`, or enable `noiseAutoPass` | The report labels these *likely render noise* when the DOM and the computed styles both match and the diff is small and scattered; `noiseAutoPass` passes only those (up to `noiseMaxDiffPercent`), never a diff whose styles were not compared or one concentrated in one area |
+| Cross-machine anti-aliasing or font-rendering differences | Per-platform baselines ([below](#cross-platform-baselines)), tune `threshold`, or enable `noiseAutoPass` | The report labels these *likely render noise* when the DOM and the computed styles both match and the diff is small and scattered; `noiseAutoPass` passes only those (up to `noiseMaxDiffPercent`), never a diff whose styles were not compared or one concentrated in one area. When both captures recorded their environment and the browser, OS or capture method changed, the report calls it *rendering drift* instead: re-baseline, or pin the environment |
 
 :::tip DOM noise hint
 When the pixel diff is non-zero but the DOM is structurally identical, the
@@ -197,6 +197,7 @@ failing the run:
 | `shareUploadCommand` | `string` | — | Storage-agnostic upload hook for `report --share`: shell command with `{file}` placeholder; last stdout line is the shared URL (`aws s3 cp …`, `gsutil`, `rclone`, `curl`) |
 | `volatileAttributes` | `string[]` | `[]` | Attribute names whose *values* the DOM diff ignores (presence still counts) — for per-run URLs in `src`/`srcset` that otherwise poison the noise hint. `blob:` URLs are always normalized |
 | `baselinesDir` | `string` | `.testivai/baselines` | Where baselines live. Supports a `{platform}` token (`darwin`/`linux`/`win32`) for per-OS baselines |
+| `environmentPolicy` | `"warn"` \| `"separate"` \| `"strict"` | `"warn"` | What a change of capture environment since the baseline does: report it (`warn`), key snapshots `<name>__<browser>__<platform>` (`separate`), or make it a change whatever the pixels (`strict`). See [cross-platform baselines](#cross-platform-baselines) |
 | `mcpApprovalPrompt` | `boolean` | `true` | Read by [`@testivai/mcp`](../mcp.md#turning-the-approval-prompt-off): the approve tools ask a person on every call (Claude Code shows its permission prompt even in auto-approving modes). `false` lets them follow the client's own permission settings. The server's `--approval-prompt` / `--no-approval-prompt` flag overrides it |
 
 ### Standalone mode (`testivai witness <url>`)
@@ -356,6 +357,11 @@ Font rasterization differs between macOS, Linux, and Windows — a baseline capt
 ```
 
 Mac devs gate against `baselines-darwin/`, CI gates against `baselines-linux/` — both committed, no cross-OS noise. Remember each platform's baselines must be approved from a run on that platform.
+
+**3. Let provenance tell you.** Every capture from the Playwright, WebdriverIO and Selenium (JS) adapters and `testivai witness <url>` records where it came from (OS and distro, browser and version, capture method, device scale…), and approving freezes it into the baseline. When the environment changed since the baseline and the DOM and styles are identical, the report says *rendering drift* and names the change ("chromium 130.0.6723.58 → 141.0.7390.37, ubuntu 22.04 → ubuntu 24.04"), so a browser upgrade or a new runner image no longer looks like a page change, or like noise to wave through. `npx testivai env --fonts` prints a machine's part of the block, with a fingerprint of its installed fonts: two machines whose fingerprints differ draw text differently. Then choose the policy:
+
+- `"environmentPolicy": "separate"` keys each snapshot by browser and platform (`home__chromium__linux`), like per-platform baselines but in the name, so every tool and the approve action work unchanged; a run reports missing only the baselines of an environment it captured.
+- `"environmentPolicy": "strict"` fails the gate on any rendering change of environment, even with identical pixels: for teams that pin their environment (a container image, `TESTIVAI_ENV_LABEL`) and want an unpinned run to stop.
 
 ## Volatile attributes
 

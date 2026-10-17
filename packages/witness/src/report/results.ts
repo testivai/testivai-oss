@@ -107,6 +107,35 @@ export interface SnapshotResult {
    * the page (report/size-mismatch.ts words both).
    */
   sizeMismatch?: { baseline: { width: number; height: number }; candidate: { width: number; height: number } };
+  /**
+   * Capture provenance (schema 2.5.0): present when the baseline and the
+   * current capture both recorded the environment they were captured in
+   * (metadata.json `environment`). See report/environment.ts.
+   */
+  environment?: SnapshotEnvironment;
+}
+
+/** How the environment of the current capture differs from the baseline's. */
+export interface SnapshotEnvironment {
+  /** Every field that differs, as dotted paths ("browser.version"), sorted. Empty when nothing differs. */
+  delta: string[];
+  /**
+   * The subset of `delta` that can change how the page renders: the
+   * browser, the OS platform, distro and architecture (the OS release on
+   * macOS and Windows), the render settings, the capture method, a
+   * container and the environment label. Framework, adapter and driver
+   * versions, the CI runner image and the project are context only.
+   */
+  renderingDelta: string[];
+  /** The baseline's recorded environment. Present when `delta` is non-empty. */
+  baseline?: import('../capture/environment').CaptureEnvironment;
+  /** The current capture's recorded environment. Present when `delta` is non-empty. */
+  candidate?: import('../capture/environment').CaptureEnvironment;
+  /**
+   * 'strict' when environmentPolicy "strict" made this snapshot changed
+   * because its rendering environment changed, whatever its pixels say.
+   */
+  policy?: 'strict';
 }
 
 export interface ReportSummary {
@@ -129,4 +158,9 @@ export interface ReportData {
   snapshots: SnapshotResult[];
   /** Names of baselines with no capture this run (schema 2.3.0+). */
   missingBaselines?: string[];
+  /**
+   * The environment of this run's captures (schema 2.5.0): the fields every
+   * capture that recorded one agrees on. Absent when none recorded one.
+   */
+  environment?: Partial<import('../capture/environment').CaptureEnvironment>;
 }
