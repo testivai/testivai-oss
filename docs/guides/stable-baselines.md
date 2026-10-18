@@ -297,7 +297,9 @@ drawn at its `max-width: 480px` size. The page itself is unchanged (the DOM,
 element map and computed styles all match the baseline), only the pixels
 differ, so the same commit can read as changed on one run and pass on the next.
 
-So the Playwright adapter and `testivai witness <url>` both:
+So the Playwright adapter, the JavaScript Selenium adapter
+(`@testivai/witness-selenium`, on Chrome and Edge) and `testivai witness <url>`
+all:
 
 1. wait for a freshly rendered frame before measuring and capturing, and
 2. capture until two captures in a row are identical, at most four.

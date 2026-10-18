@@ -77,13 +77,17 @@ CI (GitHub Actions):
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html
 - `src/report/template.ts`   — HTML template for the report
-- `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright adapter)
+- `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)
 - `src/snapshot.ts`          — `witness()` entry point (stabilizes page, applies ignoreSelectors, captures); `testivai.witness` and `snapshot` are kept as aliases
 - `src/config/stabilize.ts`  — capture stabilization CSS + resolution (per-call > project > config.json > default true)
 - `src/capture/full-page.ts` — full-page CDP capture: fresh frame, measure, capture until two in a row match (uses `@testivai/witness` stable-capture)
 - `src/reporter.ts`          — Playwright reporter (reads config, calls compare, generates report)
+
+### @testivai/witness-selenium (`packages/selenium/`)
+- `src/witness.ts`           — `witness()` entry point (stabilizes page, applies ignoreSelectors, captures; viewport screenshot when the driver has no CDP)
+- `src/capture/full-page.ts` — full-page CDP capture on Chrome/Edge: fresh frame, measure, capture until two in a row match (uses `@testivai/witness` stable-capture)
 
 ### @testivai/mcp (`packages/mcp/`)
 - `src/server.ts`            — registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import
