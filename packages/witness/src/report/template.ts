@@ -16,10 +16,25 @@ import { snapshotAnchorId } from './anchor';
 
 export { snapshotAnchorId };
 
+/** A line shown at the top of the report. */
+export interface ReportNotice {
+  text: string;
+  /** Linked after the text; only an https URL is linked. */
+  link?: { href: string; label: string };
+  /** 'warning' for something the reader should weigh (a fork's results). Default 'info'. */
+  tone?: 'info' | 'warning';
+}
+
+export interface RenderOptions {
+  notices?: ReportNotice[];
+  /** Ask search engines not to index the page (a report published to a site). */
+  noindex?: boolean;
+}
+
 /**
  * Render a standalone HTML report from report data.
  */
-export function renderHtml(data: ReportData): string {
+export function renderHtml(data: ReportData, options: RenderOptions = {}): string {
   const { summary, snapshots, version, timestamp } = data;
 
   const changed = snapshots.filter((s) => s.status === 'changed');
@@ -32,7 +47,7 @@ export function renderHtml(data: ReportData): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TestivAI Visual Report</title>
+  ${options.noindex ? '<meta name="robots" content="noindex, nofollow">\n  ' : ''}<title>TestivAI Visual Report</title>
   <style>
     /* ── Theme tokens ─────────────────────────────────────────────────────
        Light is the default (no attribute); html[data-theme="dark"] overrides.
@@ -130,6 +145,11 @@ export function renderHtml(data: ReportData): string {
     .section-title.changed { color: var(--changed); } .section-title.changed::before { background: var(--changed); }
     .section-title.new { color: var(--new); } .section-title.new::before { background: var(--new); }
     .section-title.passed { color: var(--passed); } .section-title.passed::before { background: var(--passed); }
+
+    /* Notices at the top of a published report (run, pull request, fork) */
+    .report-notice { background: var(--info-bg); border: 1px solid var(--border-soft); border-left: 4px solid var(--info); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+    .report-notice.warning { background: var(--new-bg); border-left-color: var(--new); }
+    .report-notice a { color: var(--link); }
 
     /* Snapshot card */
     .snapshot { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
@@ -295,6 +315,7 @@ export function renderHtml(data: ReportData): string {
   </aside>
 
   <main class="main">
+    ${renderNotices(options.notices ?? [])}
     ${missing.length > 0 ? `
     <div class="missing-notice">
       <div class="m-title">${missing.length} baseline${missing.length === 1 ? '' : 's'} received no capture this run</div>
@@ -402,6 +423,26 @@ export function renderHtml(data: ReportData): string {
   </script>
 </body>
 </html>`;
+}
+
+/** The notices at the top of the report; a link only to an https page. */
+function renderNotices(notices: ReportNotice[]): string {
+  return notices
+    .map((n) => {
+      const href = n.link && isHttpsUrl(n.link.href) ? n.link.href : undefined;
+      const link = href && n.link ? ` · <a href="${escapeHtml(href)}">${escapeHtml(n.link.label)}</a>` : '';
+      return `<div class="report-notice ${n.tone === 'warning' ? 'warning' : 'info'}">${escapeHtml(n.text)}${link}</div>`;
+    })
+    .join('\n    ');
+}
+
+function isHttpsUrl(value: string): boolean {
+  if (/[\s"'<>`\\]/.test(value)) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function renderSnapshot(snapshot: SnapshotResult): string {
