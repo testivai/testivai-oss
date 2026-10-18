@@ -39,6 +39,7 @@ Pin to `@v1` for rolling major-version updates, or `@v1.0.0` for a fixed point r
 | `github-token` | GitHub token for posting comments + commit status | Yes | `${{ github.token }}` |
 | `report-dir` | Directory containing `results.json` and the rendered HTML report | Yes | `visual-report` |
 | `fail-on-diff` | Fail workflow if visual changes detected | No | `false` |
+| `fail-on-missing` | Fail workflow if a committed baseline received no capture this run | No | `false` |
 | `upload-artifact` | Upload report as a workflow artifact | No | `true` |
 | `artifact-retention-days` | Days to retain artifact | No | `30` |
 | `artifact-name` | Name of the uploaded artifact | No | `testivai-visual-report` |
@@ -49,7 +50,7 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 ## What it posts
 
 - **PR comment** (upserted via `<!-- testivai-visual-report -->` marker; namespaced per `status-context` for non-default contexts) summarising passed / changed / new counts, with collapsed details for each changed snapshot and approval commands
-- **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff`
+- **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff` and `fail-on-missing`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
 The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison. The action does not filter on the hint: every snapshot with status `changed` is listed with its approve command. A diff becomes `passed` before it reaches the action only through witness pass criteria you configure (`maxDiffPercent`, `maxDiffPixels`, `shiftTolerance`, or `noiseAutoPass`, which passes an identical-DOM diff only when `styleCheck` is "match" and the diff is not concentrated in one area). When pixels differ but the DOM is structurally identical, the computed-style check decides what the comment says:

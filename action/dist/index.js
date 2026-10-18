@@ -116902,27 +116902,42 @@ function determineStatus(results, config) {
       summary: "No captures were found for this run. If that is unexpected, check that the tests ran and that `.testivai/temp/` was produced."
     };
   }
+  const parts = [];
+  if (changed > 0) parts.push(`${changed} changed`);
+  if (added > 0) parts.push(`${added} new`);
+  const label = parts.join(", ");
   if (missing > 0) {
+    const s = missing === 1 ? "" : "s";
     const names = (results.missingBaselines ?? []).slice(0, 10);
     const list = names.length > 0 ? `
 
 ${names.map((n) => `- \`${n}\``).join("\n")}` : "";
-    const detail = `${missing} committed baseline${missing === 1 ? "" : "s"} received no capture this run. A deleted or renamed test stops guarding its page without anything failing.` + list;
-    if (config.failOnMissing) {
+    const detail = `${missing} committed baseline${s} received no capture this run. A deleted or renamed test stops guarding its page without anything failing.` + list;
+    const others = label ? `
+
+Also ${label}: review the diffs in the report artifact, then approve intentional changes with \`/testivai approve\` on this pull request.` : "";
+    const title = `${missing} baseline${s} received no capture${label ? `; ${label}` : ""}`;
+    const failsOnDiff = changed > 0 && config.failOnDiff;
+    const reasons = [];
+    if (failsOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? "" : "s"} changed`);
+    if (config.failOnMissing) reasons.push(`${missing} baseline${s} not covered`);
+    if (reasons.length > 0) {
       return {
         state: "failure",
         conclusion: "failure",
-        description: `${missing} baseline${missing === 1 ? "" : "s"} not covered`,
-        title: `${missing} baseline${missing === 1 ? "" : "s"} received no capture`,
-        summary: detail
+        description: reasons.join(", "),
+        title: failsOnDiff ? `${title} \u2014 visual regression` : title,
+        summary: `Fails the check: ${reasons.join(", ")}.
+
+${detail}${others}`
       };
     }
     return {
       state: "success",
       conclusion: "neutral",
-      description: `${missing} baseline${missing === 1 ? "" : "s"} not covered \u2014 review`,
-      title: `${missing} baseline${missing === 1 ? "" : "s"} received no capture`,
-      summary: detail
+      description: `${missing} baseline${s} not covered${label ? `, ${label}` : ""} \u2014 review`,
+      title,
+      summary: detail + others
     };
   }
   if (changed === 0 && added === 0) {
@@ -116934,10 +116949,6 @@ ${names.map((n) => `- \`${n}\``).join("\n")}` : "";
       summary: "No visual changes need review (diffs within your configured pass criteria count as passed)."
     };
   }
-  const parts = [];
-  if (changed > 0) parts.push(`${changed} changed`);
-  if (added > 0) parts.push(`${added} new`);
-  const label = parts.join(", ");
   if (changed > 0 && config.failOnDiff) {
     return {
       state: "failure",
