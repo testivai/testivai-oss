@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A missing baseline no longer lets a changed snapshot through the gate. When a run had both, the check reported `neutral` ("N baselines not covered — review") even with `fail-on-diff: true`, and the job passed: a pull request that dropped or renamed one snapshot while breaking another got past a required `TestivAI / visual` check. A changed snapshot now fails the check whenever `fail-on-diff` is set, with or without missing baselines; `fail-on-missing` still decides the missing baselines on their own. Missing baselines still lead the check's title and summary, which now also name the changed and new snapshots of the same run, and the description names what failed it. This matches the CLI's exit codes, which rank changed above missing
 - A taller or shorter capture no longer reads as "content was added below the baseline's height" in the PR comment: the padded band at the bottom is the page's new height, not where the change is. The **Size changed** line now uses the same reading as the report and the MCP verdicts (`explainHeightChange` from `@testivai/witness`): a page shift places the change ("everything below y=203 moved down 73 px, so look above that line"; the separate **Layout shift** line is then not repeated), a DOM change says what changed but not where, and an identical DOM is the same content laid out taller or shorter (restyled, or often fonts or rendering that differ between machines), never content added or removed
 
 ## [1.3.0] - 2026-10-17

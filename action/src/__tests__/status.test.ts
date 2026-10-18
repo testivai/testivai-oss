@@ -2,6 +2,8 @@
  * Tests for status builder
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { determineStatus, resolveStatusContext, STATUS_CONTEXT } from '../status';
 import type { ResultsData } from '../types';
 
@@ -175,6 +177,75 @@ describe('determineStatus', () => {
         } as never);
         expect(determineStatus(both, { failOnDiff: false }).title).toContain('received no capture');
       });
+
+      // Missing baselines come first in the message, never in the gate: a
+      // pull request that drops one snapshot must not wave through a change
+      // to another (the CLI's exit codes rank changed above missing too).
+      describe('with changed or new snapshots in the same run', () => {
+        const both = results({
+          total: 3,
+          passed: 1,
+          changed: 2,
+          missing: 1,
+          missingBaselines: ['gone'],
+        } as never);
+
+        it('still fails on the changes when fail-on-diff is set', () => {
+          const s = determineStatus(both, { failOnDiff: true });
+          expect(s.conclusion).toBe('failure');
+          expect(s.state).toBe('failure');
+          expect(s.description).toBe('2 snapshots changed');
+          expect(s.title).toContain('received no capture');
+          expect(s.title).toContain('2 changed');
+        });
+
+        it('fails on the missing baseline alone when only fail-on-missing is set', () => {
+          const s = determineStatus(both, { failOnDiff: false, failOnMissing: true });
+          expect(s.conclusion).toBe('failure');
+          expect(s.description).toBe('1 baseline not covered');
+        });
+
+        it('names both reasons when both inputs fail the run', () => {
+          const s = determineStatus(both, { failOnDiff: true, failOnMissing: true });
+          expect(s.conclusion).toBe('failure');
+          expect(s.description).toBe('2 snapshots changed, 1 baseline not covered');
+        });
+
+        it('stays neutral without either input, and says what else needs review', () => {
+          const s = determineStatus(both, { failOnDiff: false });
+          expect(s.conclusion).toBe('neutral');
+          expect(s.state).toBe('success');
+          expect(s.description).toBe('1 baseline not covered, 2 changed — review');
+          expect(s.summary).toContain('gone');
+          expect(s.summary).toContain('2 changed');
+          expect(s.summary).toContain('/testivai approve');
+        });
+
+        it('never fails on new snapshots, whatever fail-on-diff says', () => {
+          const added = results({
+            total: 2,
+            passed: 1,
+            newSnapshots: 1,
+            missing: 1,
+            missingBaselines: ['gone'],
+          } as never);
+          const s = determineStatus(added, { failOnDiff: true });
+          expect(s.conclusion).toBe('neutral');
+          expect(s.title).toContain('1 new');
+        });
+      });
     });
+  });
+});
+
+describe('docs: what the Action posts', () => {
+  const doc = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'docs', 'github-action.md'), 'utf8');
+  const rows = doc.split('\n').filter((line) => line.startsWith('| ') && /`(failure|neutral|success)`/.test(line));
+
+  it('says a missing baseline does not stop a changed snapshot from failing the check', () => {
+    const both = rows.find((row) => /changed/i.test(row) && /no capture/i.test(row));
+    expect(both).toBeDefined();
+    expect(both).toContain('`fail-on-diff: true`');
+    expect(both).toContain('`failure`');
   });
 });

@@ -78,6 +78,7 @@ A check run whose conclusion reflects what actually needs to happen:
 | Baselines received no capture, `fail-on-missing: false` (default) | **`neutral`** | **no** |
 | Snapshots changed and `fail-on-diff: true` | `failure` | yes |
 | Baselines uncovered and `fail-on-missing: true` | `failure` | yes |
+| Snapshots changed and baselines received no capture in the same run, `fail-on-diff: true` | `failure` (a missing baseline never turns it `neutral`) | yes |
 
 `neutral` is the important one. GitHub's branch protection documentation states
 that *"required status checks must have a successful, skipped, or neutral status

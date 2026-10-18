@@ -48,9 +48,12 @@ export interface VisualStatus {
 /**
  * Decide what to report.
  *
- * Order matters. Missing baselines are checked first: a changed snapshot is a
- * change someone made, but a baseline that received no capture is coverage that
- * silently disappeared, which is the harder failure to notice.
+ * Missing baselines lead the message: a changed snapshot is a change someone
+ * made, but a baseline that received no capture is coverage that silently
+ * disappeared, which is the harder failure to notice. They do not lead the
+ * gate: a changed snapshot in the same run still fails it when fail-on-diff is
+ * set (the CLI's exit codes rank changed above missing too), or a pull request
+ * that drops one snapshot would wave through a change to another.
  */
 export function determineStatus(results: ResultsData, config: StatusConfig): VisualStatus {
   const { summary } = results;
@@ -69,29 +72,44 @@ export function determineStatus(results: ResultsData, config: StatusConfig): Vis
     };
   }
 
+  const parts: string[] = [];
+  if (changed > 0) parts.push(`${changed} changed`);
+  if (added > 0) parts.push(`${added} new`);
+  const label = parts.join(', ');
+
   if (missing > 0) {
+    const s = missing === 1 ? '' : 's';
     const names = (results.missingBaselines ?? []).slice(0, 10);
     const list = names.length > 0 ? `\n\n${names.map((n) => `- \`${n}\``).join('\n')}` : '';
     const detail =
-      `${missing} committed baseline${missing === 1 ? '' : 's'} received no capture this run. ` +
+      `${missing} committed baseline${s} received no capture this run. ` +
       'A deleted or renamed test stops guarding its page without anything failing.' +
       list;
+    // The changed and new snapshots of the same run still need their review.
+    const others = label
+      ? `\n\nAlso ${label}: review the diffs in the report artifact, then approve intentional changes ` +
+        'with `/testivai approve` on this pull request.'
+      : '';
+    const title = `${missing} baseline${s} received no capture${label ? `; ${label}` : ''}`;
 
-    if (config.failOnMissing) {
+    const reasons: string[] = [];
+    if (changed > 0 && config.failOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? '' : 's'} changed`);
+    if (config.failOnMissing) reasons.push(`${missing} baseline${s} not covered`);
+    if (reasons.length > 0) {
       return {
         state: 'failure',
         conclusion: 'failure',
-        description: `${missing} baseline${missing === 1 ? '' : 's'} not covered`,
-        title: `${missing} baseline${missing === 1 ? '' : 's'} received no capture`,
-        summary: detail,
+        description: reasons.join(', '),
+        title,
+        summary: detail + others,
       };
     }
     return {
       state: 'success',
       conclusion: 'neutral',
-      description: `${missing} baseline${missing === 1 ? '' : 's'} not covered — review`,
-      title: `${missing} baseline${missing === 1 ? '' : 's'} received no capture`,
-      summary: detail,
+      description: `${missing} baseline${s} not covered${label ? `, ${label}` : ''} — review`,
+      title,
+      summary: detail + others,
     };
   }
 
@@ -108,11 +126,6 @@ export function determineStatus(results: ResultsData, config: StatusConfig): Vis
       summary: 'No visual changes need review (diffs within your configured pass criteria count as passed).',
     };
   }
-
-  const parts: string[] = [];
-  if (changed > 0) parts.push(`${changed} changed`);
-  if (added > 0) parts.push(`${added} new`);
-  const label = parts.join(', ');
 
   if (changed > 0 && config.failOnDiff) {
     return {
