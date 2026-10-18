@@ -246,9 +246,13 @@ that canvas and the snapshot is never `passed`: no pass criterion applies to a s
 with `sizeMismatch`. A DOM change on its own never decides the status: the pixels do
 (a zero-count diff passes, a diff within `maxDiffPercent` / `maxDiffPixels` auto-passes),
 and the report, the MCP verdicts and the action say when a passed snapshot's DOM differs. A
-height change is content added or removed (read it with `dom.summary`); a width change
-is almost always the viewport or device scale factor, not the page: word it that way
-(`describeSizeChange` / `formatSizeMismatch` in `packages/witness/src/report/size-mismatch.ts`,
+height change is read with the DOM signal and the page shift: the padded band at the
+bottom is the new height, not where the change is (a banner inserted near the top grows
+the page too), so `pageShift` places it, `dom.summary` says what changed, and an identical
+DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that
+differ between machines), never content added or removed. A width change is almost always
+the viewport or device scale factor, not the page. Word it that way (`describeSizeChange` /
+`explainHeightChange` / `formatSizeMismatch` in `packages/witness/src/report/size-mismatch.ts`,
 shared by the report, MCP and the action).
 
 When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:
