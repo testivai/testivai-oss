@@ -64,6 +64,7 @@
 				"packages/witness/src/utils/framework-detect.ts",
 				"packages/witness/src/utils/template-generator.ts",
 				"action/src/__tests__/review-action.test.ts",
+				"action/src/__tests__/publish-action.test.ts",
 				"packages/mcp/src/__tests__/registry-publish.test.ts"
 			],
 			"linter": {

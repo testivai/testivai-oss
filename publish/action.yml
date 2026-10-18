@@ -1,0 +1,126 @@
+name: 'TestivAI Publish Reports'
+description: >
+  Publishes TestivAI visual reports to this repository's GitHub Pages site, so
+  a pull request comment links straight to the report instead of a ZIP: the
+  last runs of each open pull request (forks included) and the latest run on
+  the default branch, each page rebuilt from its run's results and
+  screenshots. The site is rebuilt from scratch every time, so a closed pull
+  request's reports go with the next publish. Who can open the site is
+  GitHub's setting: it publishes only where an admin set Settings → Pages →
+  Source to "GitHub Actions", and a private repository's reports go on a
+  public site only with TESTIVAI_PUBLIC_REPORTS=true. It never checks out or
+  runs the pull request's code.
+author: 'TestivAI'
+
+branding:
+  icon: 'globe'
+  color: 'purple'
+
+inputs:
+  github-token:
+    description: >
+      Token for reading the repository, its Pages settings, runs and
+      artifacts, and for the report links in pull request comments. Needs
+      actions:read, pages:read and pull-requests:write. The default posts as
+      github-actions[bot], the author the action looks for when it updates
+      its own comment on a fork's pull request. The deploy always uses the
+      job's own token.
+    required: false
+    default: ${{ github.token }}
+
+  artifact-name:
+    description: >
+      Name of the report artifact the TestivAI reporter action uploads (its
+      artifact-name input).
+    required: false
+    default: 'testivai-visual-report'
+
+  runs-per-pr:
+    description: >
+      How many of each open pull request's latest runs to publish, 1 to 10.
+      Every publish downloads them all again, so lower it for a repository
+      with many open pull requests.
+    required: false
+    default: '3'
+
+  public-reports:
+    description: >
+      Pass ${{ vars.TESTIVAI_PUBLIC_REPORTS }}. 'true' allows publishing the
+      reports of a private or internal repository to a public Pages site;
+      without it, such a site gets nothing. Set the variable on the
+      github-pages environment, which only admins can configure. A
+      repository variable of the same name counts too when the environment
+      has none, and people with write access can create those, so this guards
+      against publishing by accident; it is not an access control.
+    required: false
+    default: ''
+
+  status-context:
+    description: >
+      The reporter action's status-context, if you set one: the comment to
+      add the links to is that lane's.
+    required: false
+    default: ''
+
+  comment:
+    description: >
+      true (the default) adds the report links to the TestivAI comment on
+      each pull request, and posts a comment with the link on a fork's pull
+      request, whose CI run cannot comment. false leaves comments alone.
+    required: false
+    default: 'true'
+
+outputs:
+  published:
+    description: "'true' when the site was built and deployed, 'false' when the repository's settings say not to."
+    value: ${{ steps.build.outputs.published }}
+  page-url:
+    description: The site's address.
+    value: ${{ steps.deploy.outputs.page_url || steps.build.outputs.page-url }}
+
+runs:
+  using: 'composite'
+  steps:
+    # Reads the Pages settings, then (when they allow it) downloads each
+    # report and rebuilds its page from results.json and the PNGs only.
+    - name: Build the reports site
+      id: build
+      uses: actions/github-script@v9
+      env:
+        TESTIVAI_PUBLISH_LIB: ${{ github.action_path }}/../action/dist/publish.cjs
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        RUNS_PER_PR: ${{ inputs.runs-per-pr }}
+        PUBLIC_REPORTS: ${{ inputs.public-reports }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const publish = require(process.env.TESTIVAI_PUBLISH_LIB);
+          await publish.build({ github, context, core, env: process.env });
+
+    - name: Upload the site
+      if: steps.build.outputs.published == 'true'
+      uses: actions/upload-pages-artifact@v5
+      with:
+        path: ${{ steps.build.outputs.site-dir }}
+
+    # Needs pages:write and id-token:write, and the job's environment set to
+    # github-pages.
+    - name: Deploy to GitHub Pages
+      id: deploy
+      if: steps.build.outputs.published == 'true'
+      uses: actions/deploy-pages@v5
+
+    - name: Add the report links to the pull requests
+      if: steps.build.outputs.published == 'true'
+      uses: actions/github-script@v9
+      env:
+        TESTIVAI_PUBLISH_LIB: ${{ github.action_path }}/../action/dist/publish.cjs
+        STATE_FILE: ${{ steps.build.outputs.state-file }}
+        PAGE_URL: ${{ steps.deploy.outputs.page_url }}
+        COMMENT: ${{ inputs.comment }}
+        STATUS_CONTEXT: ${{ inputs.status-context }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const publish = require(process.env.TESTIVAI_PUBLISH_LIB);
+          await publish.finish({ github, context, core, env: process.env });
