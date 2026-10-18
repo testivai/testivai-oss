@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the reporter deletes the earlier attempts' report before uploading on a re-run, leaving one per run (a failed delete only warns);
   - it writes the run and attempt next to `results.json` (`testivai-run.json`), and the review skips with a warning when it downloaded an earlier attempt's report;
   - the approve action downloads the newest unexpired report by creation time, by ID, instead of `gh run download --name`.
+- The triage rubric (from `@testivai/mcp`) says an unchanged DOM means no element, attribute or text changed, and that the baseline can already contain the change under test, so a text or markup edit never explains an identical-DOM diff. On testivai-site#20 the review called such a diff an intended change because the pull request edited that text, which the approved baseline already had.
+
 - A taller or shorter capture no longer reads as "content was added below the baseline's height" in the PR comment: the padded band at the bottom is the page's new height, not where the change is. The **Size changed** line now uses the same reading as the report and the MCP verdicts (`explainHeightChange` from `@testivai/witness`): a page shift places the change ("everything below y=203 moved down 73 px, so look above that line"; the separate **Layout shift** line is then not repeated), a DOM change says what changed but not where, and an identical DOM is the same content laid out taller or shorter (restyled, or often fonts or rendering that differ between machines), never content added or removed
 
 ## [1.3.0] - 2026-10-17
