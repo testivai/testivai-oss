@@ -424,12 +424,15 @@ describe('finishPublish', () => {
   });
   const ok = async () => ({ status: 200 }) as Response;
 
-  it("checks the public site answers, then updates the branch pull request's comment and posts the fork's", async () => {
+  const DEPLOYED = 'https://testivai.github.io/testivai-example/';
+
+  it("checks the address the deploy reports answers, then updates the branch pull request's comment and posts the fork's", async () => {
     const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
     const fetched: string[] = [];
 
     const result = await finishPublish(api, {
       state: STATE,
+      pageUrl: DEPLOYED,
       comment: true,
       marker: UPSERT_MARKER,
       fetch: async (url) => {
@@ -451,7 +454,7 @@ describe('finishPublish', () => {
     const { api } = fakeApi(world());
     let n = 0;
 
-    const result = await finishPublish(api, { state: STATE, comment: false, marker: UPSERT_MARKER, fetch: async () => ({ status: ++n < 3 ? 404 : 200 }) as Response, delayMs: 0, log });
+    const result = await finishPublish(api, { state: STATE, pageUrl: DEPLOYED, comment: false, marker: UPSERT_MARKER, fetch: async () => ({ status: ++n < 3 ? 404 : 200 }) as Response, delayMs: 0, log });
 
     expect(n).toBe(3);
     expect(result.verified).toBe(true);
@@ -460,7 +463,7 @@ describe('finishPublish', () => {
   it('warns, and still adds the links, when the site never answers (the deploy itself succeeded)', async () => {
     const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
 
-    const result = await finishPublish(api, { state: STATE, comment: true, marker: UPSERT_MARKER, fetch: async () => ({ status: 404 }) as Response, delayMs: 0, retries: 2, log });
+    const result = await finishPublish(api, { state: STATE, pageUrl: DEPLOYED, comment: true, marker: UPSERT_MARKER, fetch: async () => ({ status: 404 }) as Response, delayMs: 0, retries: 2, log });
 
     expect(result.verified).toBe(false);
     expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/did not answer/));
@@ -471,10 +474,22 @@ describe('finishPublish', () => {
     const { api } = fakeApi(world());
     const fetch = jest.fn();
 
-    const result = await finishPublish(api, { state: { ...STATE, visibility: 'private' }, comment: false, marker: UPSERT_MARKER, fetch, delayMs: 0, log });
+    const result = await finishPublish(api, { state: { ...STATE, visibility: 'private' }, pageUrl: DEPLOYED, comment: false, marker: UPSERT_MARKER, fetch, delayMs: 0, log });
 
     expect(fetch).not.toHaveBeenCalled();
     expect(result.verified).toBe('skipped');
+  });
+
+  it('opens only the address the deploy reports, never one read back from the build', async () => {
+    const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+    const fetch = jest.fn();
+
+    const result = await finishPublish(api, { state: STATE, comment: true, marker: UPSERT_MARKER, fetch, delayMs: 0, log });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.verified).toBe('skipped');
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('no address'));
+    expect(calls.update).toHaveLength(1);
   });
 
   it('links the address the deploy reports when it differs from the one GitHub gave before', async () => {
@@ -483,7 +498,7 @@ describe('finishPublish', () => {
     await finishPublish(api, { state: STATE, pageUrl: 'https://reports.example.com/', comment: true, marker: UPSERT_MARKER, fetch: ok, delayMs: 0, log });
 
     expect(calls.update[0][1]).toContain('(https://reports.example.com/pr/14/3-1/)');
-    expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/reports\.example\.com/));
+    expect(log.warning).toHaveBeenCalledWith(expect.stringContaining('deployed the site at https://reports.example.com/'));
   });
 
   it('ignores a deploy address that is not https', async () => {

@@ -3027,22 +3027,24 @@ async function finishPublish(api, options) {
     state = { ...state, siteUrl: deployed, prs: state.prs.map((p) => ({ ...p, url: deployed + p.url.slice(state.siteUrl.length) })) };
   }
   let verified = "skipped";
-  if (state.visibility === "public") {
+  if (state.visibility !== "public") {
+    log.info("The site is private: it is not opened from here (it needs a GitHub sign-in).");
+  } else if (!deployed) {
+    log.info("The deploy reported no address, so the site is not opened from here.");
+  } else {
     const fetchFn = options.fetch ?? ((url) => fetch(url, { redirect: "follow" }));
     const retries = options.retries ?? 6;
     verified = false;
     for (let attempt = 1; attempt <= retries && !verified; attempt++) {
       try {
-        verified = (await fetchFn(state.siteUrl)).status === 200;
+        verified = (await fetchFn(deployed)).status === 200;
       } catch {
         verified = false;
       }
       if (!verified && attempt < retries) await new Promise((r) => setTimeout(r, options.delayMs ?? 1e4));
     }
-    if (verified) log.info(`The site answers at ${state.siteUrl}.`);
-    else log.warning(`The site did not answer at ${state.siteUrl} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
-  } else {
-    log.info("The site is private: it is not opened from here (it needs a GitHub sign-in).");
+    if (verified) log.info(`The site answers at ${deployed}.`);
+    else log.warning(`The site did not answer at ${deployed} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
   }
   if (!options.comment) return { verified };
   for (const published of state.prs) {
