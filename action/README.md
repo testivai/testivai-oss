@@ -106,6 +106,8 @@ Why `action.yml` is at the repo root and the rest is under `action/`:
 
 `action.yml`'s `runs.main:` resolves to `action/dist/index.js`. Consumers `uses: testivai/testivai-oss@v1` (no path).
 
+The companion composite actions load their logic from the same `dist/`: `review/action.yml` (`testivai/testivai-oss/review@v1`, AI triage) runs `dist/review.cjs`, and `publish/action.yml` (`testivai/testivai-oss/publish@v1`, [reports on GitHub Pages](../docs/github-action.md#reports-on-github-pages)) runs `dist/publish.cjs`.
+
 ## Contributing
 
 The action ships as a single bundled file at `action/dist/index.js` (built with `@vercel/ncc`). GitHub Actions runs that file directly from the consumer's checked-out source — there is no install step, no `npm install` at action-runtime — so **`dist/` must be committed** any time the source changes.

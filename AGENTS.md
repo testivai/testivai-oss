@@ -18,15 +18,16 @@ Everything here runs **fully locally** — no account, no API key, no server.
 ## Hard rules — never violate these
 
 1. **pnpm only.** Never run `npm install` or `yarn` in the workspace root or any package.
-   The only exception is inside `action/` (the GitHub Action), which uses plain `npm`.
+   `action/` is a workspace package too: add its dependencies with `pnpm --filter testivai-action add`.
 
 2. **Local-first, OSS-only.** There is no hosted service. Never reference a cloud
    product, dashboard, account, or API key in docs or code. AI explanation is
    bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
    Core vocabulary: pixel diff, DOM diff, noise hint, layered analysis, baselines, threshold.
 
-3. **`action/dist/index.js` must always be committed.** After any change to `action/src/`,
-   rebuild with `cd action && npm run build` and commit the updated `dist/index.js`.
+3. **`action/dist/` must always be committed.** After any change to `action/src/`,
+   rebuild with `cd action && pnpm run build` and commit the updated `dist/index.js`,
+   `dist/review.cjs` and `dist/publish.cjs`.
    CI enforces this.
 
 4. **Every public API change needs a changeset.** Run `pnpm changeset` and commit the
@@ -51,6 +52,7 @@ packages/
 action/         testivai/testivai-oss@v1     GitHub Action: post PR comment + commit status
 approve/        testivai/testivai-oss/approve@v1  GitHub Action: /testivai approve command handler
 review/         testivai/testivai-oss/review@v1   GitHub Action: Claude triages each diff (advisory; enabled: false turns it off)
+publish/        testivai/testivai-oss/publish@v1  GitHub Action: publishes reports to GitHub Pages (rebuilt from checked data) and links them in PR comments
 
 examples/       minimal working examples per framework
 docs/           public Markdown documentation
@@ -158,13 +160,27 @@ CI — GitHub Actions
 | `src/status.ts` | Determines pass/fail commit status |
 | `src/types.ts` | Shared TypeScript interfaces |
 | `src/review.ts` | The review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment |
-| `dist/index.js`, `dist/review.cjs` | Bundled output (esbuild) — **must be committed after every src change** |
+| `src/publish.ts` | The publish action's two github-script steps: `build` (decide, build the site) and `finish` (after the deploy: check it answers, add the links) |
+| `src/publish/pages.ts` | Whether to publish, from the repository's Pages settings; a non-public repository with a public site needs `TESTIVAI_PUBLIC_REPORTS=true` |
+| `src/publish/plan.ts` | Which runs go on the site: each open pull request's last runs (forks included) and the default branch's latest, under a size budget; folders named from numbers only |
+| `src/publish/archive.ts` | Reads an untrusted report ZIP: only results.json, the run stamp and the PNGs, inflated in slices with caps |
+| `src/publish/png.ts` | `checkPng`: a PNG of sane dimensions, or refused |
+| `src/publish/site.ts` | Each run's page rebuilt with the report template from `parseReportData` output (images at numbered paths, CSP, noindex), the index pages and 404 |
+| `src/publish/comments.ts` | The PR comment after a publish: rebuild the reporter's when its run marker matches; a fork gets the bot's own, numbers and links only |
+| `src/publish/build.ts`, `src/publish/api.ts` | The orchestration (`buildSite`, `finishPublish`) and the GitHub API calls it makes |
+| `dist/index.js`, `dist/review.cjs`, `dist/publish.cjs` | Bundled output (esbuild) — **must be committed after every src change** |
 
 ### GitHub Action AI triage (`review/`)
 
 | File | Responsibility |
 |---|---|
 | `action.yml` | Composite action: prepare → `anthropics/claude-code-action@v1` → post; loads `action/dist/review.cjs` |
+
+### GitHub Action Pages publisher (`publish/`)
+
+| File | Responsibility |
+|---|---|
+| `action.yml` | Composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`; never checks out code |
 
 ### GitHub Action approver (`approve/`)
 
@@ -332,13 +348,13 @@ Independent versioning per package. Internal deps cascade at `patch` level.
 ### GitHub Action — semver tags
 
 ```
-action/src/ changed → rebuild dist → cd action && npm run build
-commit dist/index.js
+action/src/ changed → rebuild dist → cd action && pnpm run build
+commit action/dist/ (index.js, review.cjs, publish.cjs)
 push a new semver tag: git tag v1.x.y && git push origin v1.x.y
 CI rolls the v1 major tag automatically
 ```
 
-The `approve/action.yml` composite action has no build step — it ships at the same `v1` tag automatically.
+The `approve/action.yml` composite action has no build step — it ships at the same `v1` tag automatically. The `review/` and `publish/` composite actions load `action/dist/review.cjs` and `action/dist/publish.cjs`, so they ship with the dist at the same tag.
 
 ---
 
@@ -348,7 +364,7 @@ The `approve/action.yml` composite action has no build step — it ships at the 
 |---|---|
 | Branch prefix | `feat/`, `fix/`, `chore/`, `docs/` |
 | Public API change | Must include `pnpm changeset` |
-| Action src change | Must rebuild `action/dist/index.js` and push a semver tag |
+| Action src change | Must rebuild `action/dist/` and push a semver tag |
 | Composite action change | No build step needed |
 | Commit style | Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`) |
 | Tests | `pnpm test` must pass; `pnpm e2e` must pass |
