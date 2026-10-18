@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { parse } from 'yaml';
 import { determineStatus, resolveStatusContext, STATUS_CONTEXT } from '../status';
 import type { ResultsData } from '../types';
 
@@ -167,7 +168,7 @@ describe('determineStatus', () => {
         expect(s.state).toBe('failure');
       });
 
-      it('takes precedence over changes — lost coverage is the harder miss', () => {
+      it('leads the title over changes — lost coverage is the harder miss', () => {
         const both = results({
           total: 3,
           passed: 1,
@@ -195,14 +196,21 @@ describe('determineStatus', () => {
           expect(s.conclusion).toBe('failure');
           expect(s.state).toBe('failure');
           expect(s.description).toBe('2 snapshots changed');
-          expect(s.title).toContain('received no capture');
-          expect(s.title).toContain('2 changed');
+          // The check run shows only the title and summary (index.ts), so they
+          // say what failed it, not just the missing baseline that leads them.
+          expect(s.title).toBe('1 baseline received no capture; 2 changed — visual regression');
+          expect(s.summary).toMatch(/^Fails the check: 2 snapshots changed\.\n\n/);
+          expect(s.summary).toContain('gone');
+          expect(s.summary).toContain('Also 2 changed');
+          expect(s.summary).toContain('/testivai approve');
         });
 
         it('fails on the missing baseline alone when only fail-on-missing is set', () => {
           const s = determineStatus(both, { failOnDiff: false, failOnMissing: true });
           expect(s.conclusion).toBe('failure');
           expect(s.description).toBe('1 baseline not covered');
+          expect(s.title).toBe('1 baseline received no capture; 2 changed');
+          expect(s.summary).toMatch(/^Fails the check: 1 baseline not covered\.\n\n/);
         });
 
         it('names both reasons when both inputs fail the run', () => {
@@ -216,6 +224,7 @@ describe('determineStatus', () => {
           expect(s.conclusion).toBe('neutral');
           expect(s.state).toBe('success');
           expect(s.description).toBe('1 baseline not covered, 2 changed — review');
+          expect(s.summary).not.toContain('Fails the check');
           expect(s.summary).toContain('gone');
           expect(s.summary).toContain('2 changed');
           expect(s.summary).toContain('/testivai approve');
@@ -239,13 +248,34 @@ describe('determineStatus', () => {
 });
 
 describe('docs: what the Action posts', () => {
-  const doc = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'docs', 'github-action.md'), 'utf8');
-  const rows = doc.split('\n').filter((line) => line.startsWith('| ') && /`(failure|neutral|success)`/.test(line));
+  const ROOT = path.resolve(__dirname, '..', '..', '..');
+  const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8');
+  const tableRows = (doc: string) =>
+    doc
+      .split('\n')
+      .filter((line) => line.startsWith('| '))
+      .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
+  // The check-run table: | Situation | Conclusion | Blocks the merge? |
+  const statusRows = tableRows(read('docs/github-action.md')).filter(
+    (cells) => cells.length === 3 && /`(failure|neutral|success)`/.test(cells[1]),
+  );
 
   it('says a missing baseline does not stop a changed snapshot from failing the check', () => {
-    const both = rows.find((row) => /changed/i.test(row) && /no capture/i.test(row));
-    expect(both).toBeDefined();
-    expect(both).toContain('`fail-on-diff: true`');
-    expect(both).toContain('`failure`');
+    const both = statusRows.filter(([situation]) => /changed/i.test(situation) && /no capture/i.test(situation));
+    expect(both.length).toBeGreaterThan(0);
+    for (const [situation, conclusion, blocks] of both) {
+      if (!situation.includes('`fail-on-diff: true`')) continue;
+      expect(conclusion).toBe('`failure`');
+      expect(blocks).toBe('yes');
+    }
+    expect(both.some(([situation]) => situation.includes('`fail-on-diff: true`'))).toBe(true);
+  });
+
+  it('lists every action.yml input in both Inputs tables', () => {
+    const inputs = Object.keys(parse(read('action.yml')).inputs as Record<string, unknown>);
+    for (const file of ['docs/github-action.md', 'action/README.md']) {
+      const listed = tableRows(read(file)).map(([name]) => name);
+      for (const input of inputs) expect({ file, input, listed: listed.includes(`\`${input}\``) }).toEqual({ file, input, listed: true });
+    }
   });
 });

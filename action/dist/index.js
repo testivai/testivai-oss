@@ -115817,16 +115817,19 @@ ${names.map((n) => `- \`${n}\``).join("\n")}` : "";
 
 Also ${label}: review the diffs in the report artifact, then approve intentional changes with \`/testivai approve\` on this pull request.` : "";
     const title = `${missing} baseline${s} received no capture${label ? `; ${label}` : ""}`;
+    const failsOnDiff = changed > 0 && config.failOnDiff;
     const reasons = [];
-    if (changed > 0 && config.failOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? "" : "s"} changed`);
+    if (failsOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? "" : "s"} changed`);
     if (config.failOnMissing) reasons.push(`${missing} baseline${s} not covered`);
     if (reasons.length > 0) {
       return {
         state: "failure",
         conclusion: "failure",
         description: reasons.join(", "),
-        title,
-        summary: detail + others
+        title: failsOnDiff ? `${title} \u2014 visual regression` : title,
+        summary: `Fails the check: ${reasons.join(", ")}.
+
+${detail}${others}`
       };
     }
     return {

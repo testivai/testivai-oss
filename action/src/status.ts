@@ -92,16 +92,19 @@ export function determineStatus(results: ResultsData, config: StatusConfig): Vis
       : '';
     const title = `${missing} baseline${s} received no capture${label ? `; ${label}` : ''}`;
 
+    const failsOnDiff = changed > 0 && config.failOnDiff;
     const reasons: string[] = [];
-    if (changed > 0 && config.failOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? '' : 's'} changed`);
+    if (failsOnDiff) reasons.push(`${changed} snapshot${changed === 1 ? '' : 's'} changed`);
     if (config.failOnMissing) reasons.push(`${missing} baseline${s} not covered`);
     if (reasons.length > 0) {
+      // The check run shows only the title and summary, so both say what
+      // failed it: the missing baseline that leads them may not be the reason.
       return {
         state: 'failure',
         conclusion: 'failure',
         description: reasons.join(', '),
-        title,
-        summary: detail + others,
+        title: failsOnDiff ? `${title} — visual regression` : title,
+        summary: `Fails the check: ${reasons.join(', ')}.\n\n${detail}${others}`,
       };
     }
     return {
