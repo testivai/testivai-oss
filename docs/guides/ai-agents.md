@@ -98,7 +98,7 @@ claude mcp add testivai -- npx -y @testivai/mcp
 | `get_visual_results` | Per-snapshot verdicts phrased for agent decision-making, opened by groups of snapshots that share an identical signal ([what is grouped](../mcp.md#what-the-server-groups)) |
 | `get_report` | The raw `results.json` payload (structured: status, diff %, DOM signal, region→selector) |
 | `explain_snapshot` | Layered evidence for one snapshot: pixel regions, element attribution (shifted vs changed selectors, whole-page shift detection), DOM/style signal, and interpretation guidance — everything a model needs to explain *why* a diff happened |
-| `get_diff` (alias `get_snapshot_diff`) | Baseline, current, and diff PNGs for one snapshot |
+| `get_diff` (alias `get_snapshot_diff`) | Baseline, current, and diff PNGs for one snapshot: the full page downscaled, then the changed regions cropped at native scale so text stays readable ([details](../mcp.md#reading-a-tall-page-crops)) |
 | `list_baselines` | Committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` | Promote one confirmed snapshot to its committed baseline |
 | `approve_all` | Promote every pending snapshot (only after review) |
@@ -231,4 +231,4 @@ consequences — the design pushes the other way on purpose.
 | `No Chrome/Chromium found` (witness `<url>`) | Install Chrome, or `npx playwright install chromium` and set `TESTIVAI_CHROME_PATH` to the binary |
 | `Chrome exited before opening its debugging endpoint` | Read the Chrome stderr quoted in the error. In a container Chrome usually cannot use its sandbox: running as root this is handled automatically; otherwise set `TESTIVAI_CHROME_NO_SANDBOX=1` |
 | `Chrome did not open its debugging endpoint … within 30s` | Chrome is still starting (slow runner): raise `TESTIVAI_CHROME_STARTUP_TIMEOUT_MS` |
-| MCP images too heavy for context | `get_diff` already downscales anything wider/taller than 1024 px before returning it (the caption reports the original dimensions). If it's still too much, use `explain_snapshot` / `get_visual_results` for text-only evidence and open the report for pixel detail |
+| MCP images too heavy for context | `get_diff` downscales the full-page images to 1024 px on the longest edge (the caption reports the original dimensions) and, when it had to downscale them, adds at most 3 native-scale crops of the changed regions, each at most 1280×1024 px and 2,000,000 px in all. `get_diff` with `region`, or `y` and `height`, returns one crop and no full-page images. If it's still too much, use `explain_snapshot` / `get_visual_results` for text-only evidence and open the report for pixel detail |

@@ -70,6 +70,27 @@ describe('docs describe missing baselines', () => {
   });
 });
 
+// get_diff follows the downscaled full page with native-scale crops of the
+// changed regions; both tool tables say so, with the caps the crops use.
+describe('docs describe the get_diff crops and their caps', () => {
+  const { CROP_LIMITS } = require('../diff-images') as typeof import('../diff-images');
+  const row = (text: string) => text.split('\n').find((l) => l.startsWith('| `get_diff`')) ?? '';
+
+  it.each([
+    ['packages/mcp/README.md', README],
+    ['docs/mcp.md', path.join(REPO_ROOT, 'docs', 'mcp.md')],
+  ])('%s: the get_diff row', (_rel, file) => {
+    const r = row(read(file));
+    expect(r).toMatch(/downscaled/);
+    expect(r).toMatch(/cropped at native scale/);
+    expect(r).toContain(`up to ${CROP_LIMITS.maxCrops} crops`);
+    expect(r).toContain(`${CROP_LIMITS.padding} px`);
+    expect(r).toContain(`${CROP_LIMITS.maxWidth}×${CROP_LIMITS.maxHeight} px`);
+    expect(r).toContain(`${CROP_LIMITS.maxTotalPixels.toLocaleString('en-US')} px`);
+    expect(r).toMatch(/`region`[^|]*`y`[^|]*`height`/);
+  });
+});
+
 // approve_snapshot / approve_all exist so a human can approve in conversation;
 // a guide that says there is no approve tool sends readers to the wrong flow.
 describe('agent guides describe the approve tools that exist', () => {

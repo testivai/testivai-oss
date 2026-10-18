@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import * as fs from 'fs';
 import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, imageContent, baselinesDirFor, type ToolContent } from './lib';
+import { resolvePaths, readResults, verdictFor, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, baselinesDirFor } from './lib';
+import { CROP_LIMITS, snapshotDiffContent, type DiffRequest } from './diff-images';
 import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
 const packageJson = require('../package.json');
@@ -62,30 +62,49 @@ function withBlankAfter(section: string[]): string[] {
   return section.length > 0 ? [...section, ''] : [];
 }
 
-// Shared handler for the diff-image tools (registered under two names).
-const snapshotDiffHandler = async ({ name }: { name: string }) => {
+// Shared handler for the diff-image tools (registered under two names): the
+// full page downscaled, then native-scale crops of the changed regions, or
+// only the region or band asked for (diff-images.ts).
+const snapshotDiffHandler = async ({ name, region, y, height }: { name: string } & DiffRequest) => {
   const paths = resolvePaths(projectRoot);
   const results = readResults(paths);
   const snapshot = results?.snapshots.find((s) => s.name === name);
   if (!results || !snapshot) {
     // A missing baseline has no current capture: its committed screenshot only.
     const missing = results ? missingBaselineDiff(projectRoot, results, name) : null;
-    if (missing) return { content: missing };
+    if (missing) {
+      const asked = region !== undefined || y !== undefined || height !== undefined;
+      const note = 'region, y and height crop a snapshot in the results; a missing baseline has no regions, so its committed screenshot is shown whole.';
+      return { content: asked ? [...missing, { type: 'text', text: note }] : missing };
+    }
     return { content: [{ type: 'text', text: `No snapshot named "${name}" in the latest results.` }] };
   }
-  const content: ToolContent[] = [{ type: 'text', text: `${snapshot.name}: ${verdictFor(snapshot)}` }];
-  for (const [label, rel] of [
-    ['baseline', snapshot.baselinePath],
-    ['current', snapshot.currentPath],
-    ['diff', snapshot.diffPath],
-  ] as const) {
-    const abs = rel ? resolveImage(paths, rel) : null;
-    if (abs) content.push(...imageContent(label, fs.readFileSync(abs)));
-  }
-  return { content };
+  return { content: snapshotDiffContent(paths, snapshot, { region, y, height }) };
 };
 
-const diffInputSchema = { name: z.string().describe('Snapshot name from the results') };
+const diffInputSchema = {
+  name: z.string().describe('Snapshot name from the results'),
+  region: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Index of one of the snapshot's regions, as get_diff lists them (results.json order): returns only that region, cropped at native scale"),
+  y: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Top of a full-width band of the page, in pixels: returns only that band, at native scale'),
+  height: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      `Rows of the band from y (default: what one crop shows, ${CROP_LIMITS.maxHeight} at native scale); a taller band shows its top rows and says where to continue`,
+    ),
+};
 
 // registerTool is called through an untyped alias: zod@3.25 + TS 6 blow the
 // type-depth limit (TS2589) when inferring the schema generics. Runtime
