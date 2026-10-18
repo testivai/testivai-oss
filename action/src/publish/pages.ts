@@ -56,9 +56,14 @@ export function decidePublish(input: {
         'GitHub Pages here builds from a branch, so reports are not published. An admin can set Settings → Pages → Source to "GitHub Actions" for TestivAI to publish them.',
     };
   }
-  const siteUrl = siteAddress(pages.htmlUrl);
+  const siteUrl = pagesAddress(pages.htmlUrl);
   if (!siteUrl) {
-    return { publish: false, reason: 'GitHub did not report an https address for the Pages site, so reports are not published.' };
+    return {
+      publish: false,
+      reason: pages.htmlUrl
+        ? `GitHub reports the Pages site at ${pages.htmlUrl}, which is not served over https, so reports are not published: their links must be https. An admin can turn on Settings → Pages → Enforce HTTPS.`
+        : 'GitHub did not report an address for the Pages site, so reports are not published.',
+    };
   }
   if (pages.public === false) {
     return {
@@ -85,17 +90,27 @@ export function decidePublish(input: {
   };
 }
 
-/** The site's https address ending in '/', or undefined. */
-function siteAddress(htmlUrl?: string): string | undefined {
-  if (!htmlUrl) return undefined;
+/**
+ * A Pages site's https address ending in '/', or undefined. GitHub can report
+ * a github.io site as http:// (the Pages API's html_url and deploy-pages'
+ * page_url both do for testivai/testivai-example), but github.io serves only
+ * https: browsers have it on their HSTS preload list. So an http address on
+ * github.io or a subdomain of it is read as https; any other http address
+ * (a custom domain without Enforce HTTPS) is not used.
+ */
+export function pagesAddress(raw?: string): string | undefined {
+  if (!raw || /[\s"'<>()`\\]/.test(raw)) return undefined;
+  let url: URL;
   try {
-    const url = new URL(htmlUrl);
-    if (url.protocol !== 'https:') return undefined;
-    url.hash = '';
-    url.search = '';
-    if (!url.pathname.endsWith('/')) url.pathname += '/';
-    return url.toString();
+    url = new URL(raw);
   } catch {
     return undefined;
   }
+  const githubIo = url.hostname === 'github.io' || url.hostname.endsWith('.github.io');
+  if (url.protocol === 'http:' && githubIo) url = new URL(`https://${url.href.slice('http://'.length)}`);
+  if (url.protocol !== 'https:') return undefined;
+  url.hash = '';
+  url.search = '';
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return url.toString();
 }

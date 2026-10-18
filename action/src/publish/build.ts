@@ -13,7 +13,7 @@ import * as path from 'path';
 import type { PublishApi } from './api';
 import { ArchiveRefused, readReportArchive, type ReportArchive } from './archive';
 import { commentFor, type PublishedPr } from './comments';
-import { decidePublish } from './pages';
+import { decidePublish, pagesAddress } from './pages';
 import { planSite, type PlannedRun, type PlanPr, type SitePlan } from './plan';
 import { buildIndexPages, buildRunReport, type RunOutcome, type SiteFile, type SiteInfo } from './site';
 
@@ -266,7 +266,7 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
   const { log } = options;
   let { state } = options;
 
-  const deployed = httpsBase(options.pageUrl);
+  const deployed = pagesAddress(options.pageUrl);
   if (deployed && deployed !== state.siteUrl) {
     log.warning(`GitHub deployed the site at ${deployed}, not ${state.siteUrl} as its settings said before; the comments link ${deployed}.`);
     state = { ...state, siteUrl: deployed, prs: state.prs.map((p) => ({ ...p, url: deployed + p.url.slice(state.siteUrl.length) })) };
@@ -314,19 +314,4 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
     }
   }
   return { verified };
-}
-
-/** An https address ending in '/', or undefined. */
-function httpsBase(value?: string): string | undefined {
-  if (!value || /[\s"'<>()`\\]/.test(value)) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:') return undefined;
-    url.hash = '';
-    url.search = '';
-    if (!url.pathname.endsWith('/')) url.pathname += '/';
-    return url.toString();
-  } catch {
-    return undefined;
-  }
 }
