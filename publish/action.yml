@@ -45,7 +45,7 @@ inputs:
 
   public-reports:
     description: >
-      Pass ${{ vars.TESTIVAI_PUBLIC_REPORTS }}. 'true' allows publishing the
+      Pass the variable vars.TESTIVAI_PUBLIC_REPORTS. 'true' allows publishing the
       reports of a private or internal repository to a public Pages site;
       without it, such a site gets nothing. Set the variable on the
       github-pages environment, which only admins can configure. A

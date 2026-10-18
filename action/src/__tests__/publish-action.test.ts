@@ -61,6 +61,16 @@ describe('inputs and outputs', () => {
     expect(ACTION.inputs['include-name'].default).toBe('');
   });
 
+  it('has no ${{ }} expression in any description: the runner parses them and refuses the action', () => {
+    // A description with `${{ vars.X }}` made GitHub's runner fail to load the
+    // action ("Unrecognized named-value: 'vars'"), before any step ran.
+    const descriptions = [
+      ...Object.values(ACTION.inputs).map((i) => i.description),
+      ...Object.values(ACTION.outputs).map((o) => o.description),
+    ];
+    for (const text of descriptions) expect(text).not.toContain('${{');
+  });
+
   it('says where the consent comes from, and that it is not an access control', () => {
     const text = ACTION.inputs['public-reports'].description;
     expect(text).toContain('vars.TESTIVAI_PUBLIC_REPORTS');
