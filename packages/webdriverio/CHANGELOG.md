@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [ebaf705]
+  - @testivai/witness@2.4.0
+
 ## 0.4.4
 
 ### Patch Changes
