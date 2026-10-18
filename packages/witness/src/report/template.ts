@@ -27,8 +27,8 @@ export { snapshotAnchorId };
 /** A line shown at the top of the report. */
 export interface ReportNotice {
   text: string;
-  /** Linked after the text; only an https URL is linked. */
-  link?: { href: string; label: string };
+  /** Linked after the text, in order; a link to anything but an https URL is left out. */
+  links?: Array<{ href: string; label: string }>;
   /** 'warning' for something the reader should weigh (a fork's results). Default 'info'. */
   tone?: 'info' | 'warning';
 }
@@ -37,7 +37,24 @@ export interface RenderOptions {
   notices?: ReportNotice[];
   /** Ask search engines not to index the page (a report published to a site). */
   noindex?: boolean;
+  /**
+   * Add a Content-Security-Policy that lets the page use only its own inline
+   * styles and scripts and its own images: nothing loaded from or sent to
+   * another site, no forms, no base URL. For a published report, whose data
+   * can come from a fork's CI run: defence in depth behind the escaping.
+   */
+  csp?: boolean;
 }
+
+/** All a report needs: its inline styles and scripts, and its images. */
+export const REPORT_CSP = [
+  "default-src 'none'",
+  "img-src 'self'",
+  "style-src 'unsafe-inline'",
+  "script-src 'unsafe-inline'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
 
 /**
  * Render a standalone HTML report from report data.
@@ -57,7 +74,7 @@ export function renderHtml(data: ReportData, options: RenderOptions = {}): strin
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${options.csp ? `<meta http-equiv="Content-Security-Policy" content="${REPORT_CSP}">\n  ` : ''}<meta name="viewport" content="width=device-width, initial-scale=1.0">
   ${options.noindex ? '<meta name="robots" content="noindex, nofollow">\n  ' : ''}<title>TestivAI Visual Report</title>
   <style>
     /* ── Theme tokens ─────────────────────────────────────────────────────
@@ -453,9 +470,11 @@ export function renderHtml(data: ReportData, options: RenderOptions = {}): strin
 function renderNotices(notices: ReportNotice[]): string {
   return notices
     .map((n) => {
-      const href = n.link && isHttpsUrl(n.link.href) ? n.link.href : undefined;
-      const link = href && n.link ? ` · <a href="${escapeHtml(href)}">${escapeHtml(n.link.label)}</a>` : '';
-      return `<div class="report-notice ${n.tone === 'warning' ? 'warning' : 'info'}">${escapeHtml(n.text)}${link}</div>`;
+      const links = (n.links ?? [])
+        .filter((l) => isHttpsUrl(l.href))
+        .map((l) => ` · <a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a>`)
+        .join('');
+      return `<div class="report-notice ${n.tone === 'warning' ? 'warning' : 'info'}">${escapeHtml(n.text)}${links}</div>`;
     })
     .join('\n    ');
 }

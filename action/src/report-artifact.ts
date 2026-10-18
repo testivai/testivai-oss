@@ -100,12 +100,24 @@ export function writeRunStamp(reportDir: string, env: Env): string | null {
 /** The report's stamp, or null when it has none or it cannot be read. */
 export function readRunStamp(reportDir: string): RunStamp | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(reportDir, RUN_STAMP_FILE), 'utf8')) as Partial<RunStamp>;
-    if (typeof raw.runId !== 'string' || !Number.isInteger(raw.runAttempt)) return null;
-    return { runId: raw.runId, runAttempt: raw.runAttempt as number, ...(typeof raw.sha === 'string' ? { sha: raw.sha } : {}) };
+    return parseRunStamp(fs.readFileSync(path.join(reportDir, RUN_STAMP_FILE), 'utf8'));
   } catch {
     return null;
   }
+}
+
+/** A stamp from its JSON text; null for anything that is not one. */
+export function parseRunStamp(text: string): RunStamp | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const { runId, runAttempt, sha } = raw as Record<string, unknown>;
+  if (typeof runId !== 'string' || typeof runAttempt !== 'number' || !Number.isInteger(runAttempt) || runAttempt < 1) return null;
+  return { runId, runAttempt, ...(typeof sha === 'string' ? { sha } : {}) };
 }
 
 /**

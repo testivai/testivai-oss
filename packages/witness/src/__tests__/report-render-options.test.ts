@@ -34,12 +34,28 @@ describe('renderHtml notices', () => {
     expect(top).toContain('report-notice warning');
   });
 
-  it('links a notice to an https page', () => {
+  it('links a notice to https pages, in order', () => {
     const html = renderHtml(DATA, {
-      notices: [{ text: 'Pull request #14', link: { href: 'https://github.com/o/r/pull/14', label: 'open the pull request' } }],
+      notices: [
+        {
+          text: 'Pull request #14',
+          links: [
+            { href: 'https://github.com/o/r/pull/14', label: 'pull request' },
+            { href: 'https://github.com/o/r/actions/runs/1', label: 'CI run' },
+          ],
+        },
+      ],
     });
 
-    expect(noticeBlock(html)).toContain('<a href="https://github.com/o/r/pull/14">open the pull request</a>');
+    expect(noticeBlock(html)).toContain(
+      'Pull request #14 · <a href="https://github.com/o/r/pull/14">pull request</a> · <a href="https://github.com/o/r/actions/runs/1">CI run</a>',
+    );
+  });
+
+  it('shows link labels as text', () => {
+    const html = renderHtml(DATA, { notices: [{ text: 'x', links: [{ href: 'https://example.com/', label: '<b>go</b>' }] }] });
+
+    expect(noticeBlock(html)).toContain('>&lt;b&gt;go&lt;/b&gt;</a>');
   });
 
   it('shows notice text as text, never markup', () => {
@@ -50,8 +66,8 @@ describe('renderHtml notices', () => {
 
   it('does not link a notice to anything but an https page', () => {
     for (const href of ['javascript:alert(1)', 'http://example.com/', '"><img src=x>', '//evil.example/']) {
-      const html = renderHtml(DATA, { notices: [{ text: 'x', link: { href, label: 'go' } }] });
-      expect(noticeBlock(html)).not.toContain('<a href=');
+      const html = renderHtml(DATA, { notices: [{ text: 'x', links: [{ href, label: 'go' }, { href: 'https://example.com/', label: 'ok' }] }] });
+      expect(noticeBlock(html)).toContain('x · <a href="https://example.com/">ok</a></div>');
       expect(html).not.toContain('<img src=x');
     }
   });
@@ -69,5 +85,38 @@ describe('renderHtml noindex', () => {
 
   it('leaves a local report as it was', () => {
     expect(renderHtml(DATA)).not.toContain('name="robots"');
+  });
+});
+
+describe('renderHtml csp', () => {
+  // The report needs nothing but its own inline styles and scripts and its
+  // own images. A published report's data can come from a fork, and project
+  // sites on <owner>.github.io share one origin, so the policy keeps a page
+  // from loading or sending anything elsewhere even if markup ever got
+  // through the escaping.
+  const policy = (html: string) => /<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(html)?.[1];
+
+  it('lets a published report load only its own images, styles and scripts', () => {
+    const csp = policy(renderHtml(DATA, { csp: true }));
+
+    expect(csp?.split('; ')).toEqual([
+      "default-src 'none'",
+      "img-src 'self'",
+      "style-src 'unsafe-inline'",
+      "script-src 'unsafe-inline'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ]);
+  });
+
+  it('puts the policy before anything the page loads', () => {
+    const html = renderHtml(DATA, { csp: true });
+
+    expect(html.indexOf('Content-Security-Policy')).toBeLessThan(html.indexOf('<style>'));
+    expect(html.indexOf('Content-Security-Policy')).toBeLessThan(html.indexOf('<title>'));
+  });
+
+  it('leaves a local report as it was', () => {
+    expect(renderHtml(DATA)).not.toContain('Content-Security-Policy');
   });
 });

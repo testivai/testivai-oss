@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readRunStamp, RUN_STAMP_FILE, staleReport, uploadReport, writeRunStamp } from '../report-artifact';
+import { parseRunStamp, readRunStamp, RUN_STAMP_FILE, staleReport, uploadReport, writeRunStamp } from '../report-artifact';
 
 class NotFound extends Error {
   constructor() {
@@ -112,6 +112,19 @@ describe('run stamp', () => {
     expect(readRunStamp(dir)).toBeNull();
     fs.writeFileSync(path.join(dir, RUN_STAMP_FILE), JSON.stringify({ runId: 7 }));
     expect(readRunStamp(dir)).toBeNull();
+  });
+
+  it('parses a stamp from text, as the publish step reads it out of a report ZIP', () => {
+    expect(parseRunStamp('{"runId":"7","runAttempt":2,"sha":"abc"}')).toEqual({ runId: '7', runAttempt: 2, sha: 'abc' });
+    expect(parseRunStamp('{"runId":"7","runAttempt":2,"extra":"<b>"}')).toEqual({ runId: '7', runAttempt: 2 });
+  });
+
+  it('reads a stamp with an attempt that is not a positive whole number as no stamp', () => {
+    for (const runAttempt of [0, -1, 1.5, '2', null]) {
+      expect(parseRunStamp(JSON.stringify({ runId: '7', runAttempt }))).toBeNull();
+    }
+    expect(parseRunStamp('[]')).toBeNull();
+    expect(parseRunStamp('null')).toBeNull();
   });
 
   it('a report from an earlier attempt of this run is stale; this attempt, another run or no stamp is not', () => {

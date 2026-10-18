@@ -72,6 +72,12 @@ importers:
       '@types/pngjs':
         specifier: ^6.0.5
         version: 6.0.5
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0

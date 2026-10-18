@@ -20,6 +20,8 @@ export interface PlanPr {
   headSha: string;
   author: string;
   fork: boolean;
+  /** Shown (as text) on the site's index pages. */
+  title?: string;
 }
 
 export interface PlanRun {
