@@ -17,6 +17,7 @@ import {
   RENDER_PROBE_EXPRESSION,
 } from '@testivai/witness';
 import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
+import { captureFullPageScreenshot } from './capture/full-page';
 
 /**
  * Generates a safe filename from a URL.
@@ -343,37 +344,16 @@ export async function snapshot(
       // Wait a bit for styles to apply
       await page.waitForTimeout(100);
       
-      // Get layout metrics to determine full page size
-      const layoutMetrics = await client.send('Page.getLayoutMetrics');
-      
-      // Calculate full page dimensions
-      const pageWidth = Math.ceil(layoutMetrics.contentSize.width);
-      const pageHeight = Math.ceil(layoutMetrics.contentSize.height);
-      
-      if (process.env.TESTIVAI_DEBUG === 'true') {
-        console.log('[TestivAI] Browser layout metrics:', {
-          pageWidth,
-          pageHeight,
-          viewportWidth: layoutMetrics.layoutViewport.clientWidth,
-          viewportHeight: layoutMetrics.layoutViewport.clientHeight
-        });
-      }
-      
-      // Capture screenshot with captureBeyondViewport: true
-      const screenshot = await client.send('Page.captureScreenshot', {
-        format: 'png',
-        captureBeyondViewport: true,
-        clip: {
-          x: 0,
-          y: 0,
-          width: pageWidth,
-          height: pageHeight,
-          scale: 1
-        }
-      });
-      
+      // Wait for a fresh frame, measure, and capture beyond the viewport until
+      // two captures in a row match: Chrome can return a frame painted for the
+      // wrong viewport while it sets up the capture (capture/full-page.ts).
+      const captureLog = process.env.TESTIVAI_DEBUG === 'true'
+        ? (message: string) => console.log(`[TestivAI] Full-page capture: ${message}`)
+        : undefined;
+      const png = await captureFullPageScreenshot(page, client, captureLog);
+
       // Save the screenshot
-      await fs.writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+      await fs.writeFile(screenshotPath, png);
       
       // Remove the temporary style tag
       await page.evaluate(`

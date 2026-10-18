@@ -127,7 +127,7 @@ var TRIAGE_PROMPT = {
       "- **bug**: the page changed in a way the change under test was not meant to make: an element it did not touch changed, or the result looks broken (clipped, overlapping or missing content).",
       "- **possible bug**: the page really changed but the evidence cannot settle whether that was meant, or the evidence is incomplete (styles not compared, no DOM data, images that disagree with the signals). Say exactly what a person should check.",
       "",
-      "Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:",
+      "Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The full-page images are downscaled to fit and show where the changes are; judge text, wrapping and clipping from the crops of the changed regions that follow them, at native scale (get_diff with `region` or `y` and `height` crops another area). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:",
       "",
       "| explain_snapshot shows | What it means |",
       "|---|---|",

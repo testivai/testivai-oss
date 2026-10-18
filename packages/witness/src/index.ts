@@ -68,6 +68,16 @@ export type {
   RenderEnvironment,
   WebDriverEnvironmentInput,
 } from './capture/environment';
+// Stable full-page capture (fresh frame + capture until two in a row match) —
+// shared by every adapter that captures through CDP captureBeyondViewport.
+export {
+  FRESH_FRAME_EXPRESSION,
+  FRESH_FRAME_TIMEOUT_MS,
+  MAX_STABLE_CAPTURES,
+  settleFreshFrame,
+  captureUntilStable,
+} from './capture/stable-capture';
+export type { CaptureLog, CaptureUntilStableOptions } from './capture/stable-capture';
 
 export { BaselineStore } from './baselines';
 export type { BaselineMetadata } from './baselines';

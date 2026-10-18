@@ -11,6 +11,7 @@ import {
   diffShape,
   environmentChangeGroups,
   environmentChangeLine,
+  explainHeightChange,
   formatSizes,
   isRenderingDrift,
   NOISE_MAX_DIFF_PERCENT,
@@ -310,9 +311,15 @@ function explainMissingBaseline(root: string, results: ResultsFile, name: string
 /** One item of a tool result: text or a PNG. */
 export type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
-/** An image labelled like get_diff labels it, downscaled for model context. */
-export function imageContent(label: string, raw: Buffer): ToolContent[] {
-  const downscaled = downscalePng(raw);
+/** The longest edge of a full-page image get_diff sends; a larger one is downscaled to fit. */
+export const MAX_IMAGE_EDGE = 1024;
+
+/**
+ * An image labelled like get_diff labels it, downscaled for model context.
+ * Pass `decoded` when the caller has already read the PNG, to read it once.
+ */
+export function imageContent(label: string, raw: Buffer, decoded?: PNG): ToolContent[] {
+  const downscaled = downscalePng(raw, MAX_IMAGE_EDGE, decoded);
   const wasDownscaled = downscaled.originalWidth !== downscaled.width || downscaled.originalHeight !== downscaled.height;
   return [
     { type: 'text', text: wasDownscaled ? `${label} (downscaled from ${downscaled.originalWidth}x${downscaled.originalHeight}):` : `${label}:` },
@@ -388,9 +395,11 @@ function matchedStylesShape(snapshot: SnapshotResult): DiffShape | null {
 
 /**
  * The verdict for a snapshot whose dimensions changed. A height change is
- * content added or removed below the fold (the DOM summary says what); a
- * width change is almost always the viewport or the device scale factor, so
- * it is never described as a page change.
+ * read with the DOM signal and the page shift (explainHeightChange): the band
+ * at the bottom is the new height, not where the change is, and an identical
+ * DOM is the same content laid out differently, never content added. A width
+ * change is almost always the viewport or the device scale factor, so it is
+ * never described as a page change.
  */
 function sizeChangeVerdict(snapshot: SnapshotResult): string {
   const sm = snapshot.sizeMismatch as SizeMismatchInfo;
@@ -401,17 +410,11 @@ function sizeChangeVerdict(snapshot: SnapshotResult): string {
       "re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended"
     );
   }
-  const grew = sm.candidate.height > sm.baseline.height;
   const s = snapshot.dom?.summary;
-  const dom = snapshot.dom?.changed
-    ? ` and the DOM changed${s ? ` (${domSummaryDetail(s)})` : ''}`
-    : snapshot.dom
-      ? ` with an identical DOM, so the ${grew ? 'extra' : 'lost'} height is layout, not ${grew ? 'new' : 'removed'} elements`
-      : '';
-  return (
-    `${change}${dom}: content was ${grew ? "added below the baseline's height" : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed; ` +
-    'confirm it is intended before approving'
-  );
+  const identical = Boolean(snapshot.dom && !snapshot.dom.changed);
+  const dom = snapshot.dom?.changed ? ` and the DOM changed${s ? ` (${domSummaryDetail(s)})` : ''}` : identical ? ' with an identical DOM' : '';
+  const reading = explainHeightChange(sm, { dom: snapshot.dom, pageShift: snapshot.pageShift });
+  return `${change}${dom}: ${reading}; ${identical ? 'compare the images (get_diff) before approving' : 'confirm it is intended before approving'}`;
 }
 
 /** The DOM summary's counts: "4 added, 0 removed, 0 attribute changes, 2 text changes". */
@@ -781,19 +784,18 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   if (snapshot.sizeMismatch) {
     const sm = snapshot.sizeMismatch;
     const sizes = `The current capture is ${sm.candidate.width}×${sm.candidate.height}, the baseline ${sm.baseline.width}×${sm.baseline.height}: ${describeSizeChange(sm)}.`;
-    const padded = 'The two were padded to the larger size and every padded pixel counts as changed, so diffPercent, the regions and the diff image describe';
     if (sizeMismatchKind(sm) === 'width') {
       guidance.push(
-        `${sizes} ${padded} the padding, not the page. ` +
+        `${sizes} The two were padded to the larger size and every padded pixel counts as changed, so diffPercent, the regions and the diff image describe the padding, not the page. ` +
           "This is not a page change: re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.",
       );
     } else {
+      // The band is the new height, not where the change is (explainHeightChange).
       const grew = sm.candidate.height > sm.baseline.height;
+      const reading = explainHeightChange(sm, { dom: snapshot.dom, pageShift: snapshot.pageShift });
       guidance.push(
-        `${sizes} ${padded} the ${grew ? 'added' : 'missing'} band before anything else. ` +
-          (grew
-            ? "Content was added below the baseline's height: read the DOM summary for what, and look at the current image there."
-            : 'Content was removed: read the DOM summary for what, and compare the images (get_diff) for what is gone.'),
+        `${sizes} The two were padded to the larger size, so diffPercent, the regions and the diff image describe the ${grew ? 'added' : 'missing'} band before anything else. ` +
+          `${reading.charAt(0).toUpperCase()}${reading.slice(1)}.`,
       );
     }
   }
@@ -975,14 +977,16 @@ export function listBaselines(root: string): string[] {
 /**
  * Downscale a PNG buffer using integer-stride nearest-neighbour sampling.
  * When the longest edge is <= maxEdge the original buffer is returned unchanged.
+ * `decoded` is the buffer already read with pngjs, when the caller has it.
  *
  * @returns The (possibly) resized PNG buffer, output dimensions, and original dimensions.
  */
 export function downscalePng(
   buffer: Buffer,
-  maxEdge = 1024
+  maxEdge = 1024,
+  decoded?: PNG
 ): { data: Buffer; width: number; height: number; originalWidth: number; originalHeight: number } {
-  const original = PNG.sync.read(buffer);
+  const original = decoded ?? PNG.sync.read(buffer);
   const { width: ow, height: oh } = original;
   const longestEdge = Math.max(ow, oh);
 

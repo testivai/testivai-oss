@@ -22,6 +22,13 @@
  * content that had not *loaded* yet — which is a load question, not a pixel
  * question.
  *
+ * One pixel question remains, and it is Chrome's, not the page's: a
+ * beyond-viewport capture can return a frame painted for the wrong viewport
+ * while the measured page is unchanged. That is guarded at capture time in
+ * capture/stable-capture.ts (fresh frame, then capture until two in a row
+ * match), which costs one extra screenshot on a stable page. This probe still
+ * decides when to start capturing.
+ *
  * WHAT THIS DOES
  * --------------
  * A cheap synchronous probe the adapter polls from the host language, exactly

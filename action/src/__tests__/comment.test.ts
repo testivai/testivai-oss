@@ -211,7 +211,7 @@ describe('buildComment', () => {
         snapshots: [{ name: 'products', status: 'changed', diffPercent: 7.49, currentPath: 'p.png', ...extra }],
       });
 
-      it('shows the two sizes on the snapshot row and says the page grew with the DOM additions', () => {
+      it('shows the two sizes on the snapshot row; with DOM additions and no page shift, the DOM says what changed, not where', () => {
         const comment = buildComment(
           changedWith({
             sizeMismatch: { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 2538 } },
@@ -220,9 +220,44 @@ describe('buildComment', () => {
         );
         expect(comment).toContain('<summary><code>products</code> — 7.49% different · baseline 1280×2348 → current 1280×2538 (+190 px)</summary>');
         expect(comment).toContain(
-          "> **Size changed — page grew 190 px** (baseline 1280×2348 → current 1280×2538): content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.",
+          '> **Size changed — page grew 190 px** (baseline 1280×2348 → current 1280×2538): the DOM summary says what changed; every pixel of the added band at the bottom counts as changed, but the change itself can be anywhere on the page. Compare the images and confirm the change is intended before approving.',
         );
         expect(comment).toContain('> **DOM changed** — 4 added, 2 text changes.');
+      });
+
+      // Found dogfooding testivai-example: an inserted banner grows the page
+      // and moves everything below y=203 down; the added band at the bottom
+      // is the new height, not where the banner is. The size line places it,
+      // so the separate layout-shift line is not repeated.
+      it('with a page shift, the size line says to look above it, once', () => {
+        const comment = buildComment(
+          changedWith({
+            sizeMismatch: { baseline: { width: 1280, height: 876 }, candidate: { width: 1280, height: 949 } },
+            pageShift: { dy: 73, belowY: 203, count: 25 },
+            dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0, textChanges: 1 }, styleCheck: 'match' },
+          }),
+        );
+        expect(comment).toContain(
+          '> **Size changed — page grew 73 px** (baseline 1280×876 → current 1280×949): everything below y=203 moved down 73 px, so look above that line; every pixel of the added band at the bottom counts as changed. Compare the images and confirm the change is intended before approving.',
+        );
+        expect(comment).not.toContain('**Layout shift**');
+        expect(comment).not.toContain("below the baseline's height");
+        expect(comment).toContain('> **DOM changed** — 1 added, 1 text change.');
+      });
+
+      // Also found dogfooding: against baselines from another machine, a page
+      // came out 5 px taller with the DOM and styles identical.
+      it('with an identical DOM, the same content laid out taller, never content added', () => {
+        const comment = buildComment(
+          changedWith({
+            sizeMismatch: { baseline: { width: 1280, height: 871 }, candidate: { width: 1280, height: 876 } },
+            dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+          }),
+        );
+        expect(comment).toContain(
+          '> **Size changed — page grew 5 px** (baseline 1280×871 → current 1280×876): no elements were added or removed, so the same content is laid out taller (often fonts or rendering that differ between machines); every pixel of the added band at the bottom counts as changed. Compare the images before approving.',
+        );
+        expect(comment).not.toMatch(/content was added|DOM unchanged|likely render noise/);
       });
 
       it('a width change points at the viewport or device scale and is never called noise', () => {
@@ -240,12 +275,12 @@ describe('buildComment', () => {
         expect(comment).not.toContain('DOM unchanged');
       });
 
-      it('a shorter page says content was removed', () => {
+      it('a shorter page without DOM data does not guess where the change is', () => {
         const comment = buildComment(
           changedWith({ sizeMismatch: { baseline: { width: 1280, height: 2538 }, candidate: { width: 1280, height: 2348 } } }),
         );
         expect(comment).toContain('baseline 1280×2538 → current 1280×2348 (-190 px)');
-        expect(comment).toContain('> **Size changed — page shrank 190 px** (baseline 1280×2538 → current 1280×2348): content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.');
+        expect(comment).toContain('> **Size changed — page shrank 190 px** (baseline 1280×2538 → current 1280×2348): every pixel of the missing band at the bottom counts as changed, but the change itself can be anywhere on the page. Compare the images and confirm the change is intended before approving.');
       });
 
       it('a row without sizeMismatch is unchanged', () => {

@@ -115754,6 +115754,34 @@ function describeSizeChange(sm) {
   }
   return "dimensions unchanged";
 }
+function explainHeightChange(sm, context6 = {}) {
+  const grew = sm.candidate.height > sm.baseline.height;
+  const taller = grew ? "taller" : "shorter";
+  const band = `every pixel of the ${grew ? "added" : "missing"} band at the bottom counts as changed`;
+  const { dom, pageShift } = context6;
+  const parts = [];
+  if (dom && !dom.changed) {
+    if (dom.styleCheck === "mismatch") {
+      parts.push(`no elements were added or removed, so restyled elements lay the same content out ${taller}`);
+    } else if (dom.styleCheck === "match") {
+      parts.push(`no elements were added or removed, so the same content is laid out ${taller} (often fonts or rendering that differ between machines)`);
+    } else {
+      parts.push(
+        `no elements were added or removed, so the same content is laid out ${taller} (a stylesheet change, or fonts or rendering that differ between machines: styles were not compared)`
+      );
+    }
+  }
+  if (pageShift && pageShift.dy !== 0) {
+    parts.push(`everything below y=${pageShift.belowY} moved ${pageShift.dy > 0 ? "down" : "up"} ${Math.abs(pageShift.dy)} px, so look above that line`, band);
+  } else if (dom?.changed) {
+    parts.push("the DOM summary says what changed", `${band}, but the change itself can be anywhere on the page`);
+  } else if (!dom) {
+    parts.push(`${band}, but the change itself can be anywhere on the page`);
+  } else {
+    parts.push(band);
+  }
+  return parts.join("; ");
+}
 
 // ../packages/witness/src/report/environment.ts
 function flatten(env) {
@@ -115993,14 +116021,15 @@ function renderDomHintMarkdown(snapshot2, include2 = {}) {
   const lines = [];
   const { size: withSize = true, identicalDom: withIdenticalDom = true } = include2;
   const size = withSize ? snapshot2.sizeMismatch : void 0;
+  const heightChange = Boolean(size && sizeMismatchKind(size) === "height");
   if (size) {
     const change = `**Size changed \u2014 ${describeSizeChange(size)}** (${formatSizes(size)})`;
-    if (sizeMismatchKind(size) === "width") {
+    if (!heightChange) {
       lines.push(`> ${change}, so this is not a page change; the diff is on a padded canvas and does not describe the page. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.`);
-    } else if (size.candidate.height > size.baseline.height) {
-      lines.push(`> ${change}: content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.`);
     } else {
-      lines.push(`> ${change}: content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.`);
+      const identical = Boolean(snapshot2.dom && !snapshot2.dom.changed);
+      const closing = identical ? "Compare the images before approving." : "Compare the images and confirm the change is intended before approving.";
+      lines.push(`> ${change}: ${explainHeightChange(size, { dom: snapshot2.dom, pageShift: snapshot2.pageShift })}. ${closing}`);
     }
   }
   const styleChanges = snapshot2.dom?.styleCheck === "mismatch" ? snapshot2.dom.styleChanges : void 0;
@@ -116011,7 +116040,7 @@ function renderDomHintMarkdown(snapshot2, include2 = {}) {
     const el = first ? ` (\`${first.split(" > ").slice(-1)[0]}\`${n > 1 ? ", \u2026" : ""})` : "";
     lines.push(`> **Style-only change \u2014 real, not noise** \u2014 ${n} element${n === 1 ? "" : "s"} restyled with identical DOM${el}.`);
   }
-  if (snapshot2.pageShift) {
+  if (snapshot2.pageShift && !(heightChange && snapshot2.pageShift.dy !== 0)) {
     const p = snapshot2.pageShift;
     lines.push(`> **Layout shift** \u2014 everything below y=${p.belowY} moved ${p.dy > 0 ? "down" : "up"} ${Math.abs(p.dy)}px (${p.count} elements together). Look *above* that line for inserted/removed content.`);
   }

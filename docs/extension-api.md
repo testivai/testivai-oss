@@ -267,9 +267,9 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "baselinePath": "images/products/baseline.png",
       "currentPath":  "images/products/current.png",
       "diffPath":     "images/products/diff.png",
-      "sizeMismatch": {       // the two sizes; a height change is content
-        "baseline":  { "width": 1280, "height": 2348 },   // added or removed, a
-        "candidate": { "width": 1280, "height": 2538 }    // width change the viewport
+      "sizeMismatch": {       // the two sizes; read a height change with dom
+        "baseline":  { "width": 1280, "height": 2348 },   // and pageShift, a width
+        "candidate": { "width": 1280, "height": 2538 }    // change as the viewport
       },
       "dom": {
         "changed": true,
@@ -345,7 +345,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].environment.renderingDelta` | string[] | yes within `environment` | the subset that can change rendering (see "Capture provenance"). Pixels differ, `dom.changed` false, `dom.styleCheck: "match"`, a diff not concentrated in one area and a non-empty `renderingDelta` is **rendering drift**: the environment changed, not the page (`isRenderingDrift` from `@testivai/witness/report`). Never word it as render noise |
 | `snapshots[].environment.baseline` / `.candidate` | object | optional | both recorded blocks; present when `delta` is non-empty |
 | `snapshots[].environment.policy` | `"strict"` | optional | present when `environmentPolicy: "strict"` made the snapshot `changed` because `renderingDelta` is non-empty, whatever its pixels (a byte-identical capture included, with `diffPercent` 0). Under `"warn"` (default) and `"separate"`, the environment never changes a status |
-| `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is content added or removed (read it with `dom.summary`); a width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |
+| `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is read with `pageShift` and `dom`: the padded band at the bottom is the new height, not where the change is (a banner inserted near the top grows the page too), so `pageShift` places the change, `dom.summary` says what changed, and an identical DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that differ between machines), not content added or removed. A width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |
 
 ### Schema versioning
 

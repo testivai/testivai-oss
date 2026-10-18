@@ -42,6 +42,7 @@ import {
 } from '@testivai/witness';
 import * as fs from 'fs';
 import * as path from 'path';
+import { captureFullPageScreenshot, type CdpDriver } from './capture/full-page';
 import type { WitnessDriver, WitnessOptions } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -155,21 +156,23 @@ async function waitForFonts(driver: WitnessDriver): Promise<void> {
 
 /**
  * Full-page screenshot where the driver supports it, viewport otherwise.
- * Returns a PNG Buffer.
+ * Returns the PNG and the capture method it came from.
  */
 async function captureScreenshot(driver: WitnessDriver): Promise<{ png: Buffer; method: string }> {
   // Chromium drivers expose raw CDP; captureBeyondViewport gives a true
   // full-page capture without resizing the window (which breaks 100vh
-  // layouts — the reason we never use the resize trick).
+  // layouts — the reason we never use the resize trick). It waits for a
+  // fresh frame and captures until two in a row match: Chrome can return a
+  // frame painted for the wrong viewport while it sets up the capture
+  // (capture/full-page.ts).
   if (typeof driver.sendAndGetDevToolsCommand === 'function') {
+    const captureLog =
+      process.env.TESTIVAI_DEBUG === 'true'
+        ? (message: string) => console.log(`[TestivAI] Full-page capture: ${message}`)
+        : undefined;
     try {
-      const result = await driver.sendAndGetDevToolsCommand<{ data?: string }>(
-        'Page.captureScreenshot',
-        { captureBeyondViewport: true, format: 'png' },
-      );
-      if (result && typeof result.data === 'string' && result.data.length > 0) {
-        return { png: Buffer.from(result.data, 'base64'), method: CAPTURE_METHODS.CDP_FULL_PAGE };
-      }
+      const png = await captureFullPageScreenshot(driver as CdpDriver, captureLog);
+      return { png, method: CAPTURE_METHODS.CDP_FULL_PAGE };
     } catch {
       // fall through to the viewport screenshot
     }

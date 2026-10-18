@@ -366,3 +366,67 @@ describe('applyPassCriteria: a size change is never passed, a DOM change never d
     expect(r.status).toBe('passed');
   });
 });
+
+/**
+ * The report verdict for a height change uses the shared reading
+ * (explainHeightChange): the band at the bottom is the page's new height,
+ * not where the change is. Found dogfooding testivai-example: an inserted
+ * banner (page shift at y=203) and a page laid out taller on another machine
+ * (identical DOM and styles) were both read as content added below the
+ * baseline's height.
+ */
+describe('report verdict for a height change', () => {
+  const htmlFor = (snapshot: Partial<SnapshotResult>): string =>
+    renderHtml({
+      version: '2.4.0',
+      timestamp: 't',
+      summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
+      snapshots: [
+        {
+          name: 'home',
+          status: 'changed',
+          diffPercent: 15.53,
+          baselinePath: 'images/home/baseline.png',
+          currentPath: 'images/home/current.png',
+          diffPath: 'images/home/diff.png',
+          ...snapshot,
+        } as SnapshotResult,
+      ],
+    });
+  const verdict = (html: string): string => {
+    const m = html.match(/<div class="verdict v-size"><span>([\s\S]*?)<\/span><\/div>/);
+    expect(m).not.toBeNull();
+    return (m as RegExpMatchArray)[1];
+  };
+  const taller = { baseline: { width: 1280, height: 876 }, candidate: { width: 1280, height: 949 } };
+
+  it('an inserted banner: look above the page shift, not below the baseline height', () => {
+    const v = verdict(
+      htmlFor({
+        sizeMismatch: taller,
+        pageShift: { dy: 73, belowY: 203, count: 25 },
+        dom: { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0, textChanges: 1 }, styleCheck: 'match' },
+      }),
+    );
+    expect(v).toBe(
+      'Size changed — page grew 73 px (baseline 1280×876 → current 1280×949); DOM 1 added, 1 text: ' +
+        'everything below y=203 moved down 73 px, so look above that line; every pixel of the added band at the bottom counts as changed. ' +
+        'Compare the images and confirm the change is intended before approving.',
+    );
+  });
+
+  it('an identical DOM: the same content laid out taller, never content added', () => {
+    const v = verdict(
+      htmlFor({
+        sizeMismatch: { baseline: { width: 1280, height: 871 }, candidate: { width: 1280, height: 876 } },
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      }),
+    );
+    expect(v).toBe(
+      'Size changed — page grew 5 px (baseline 1280×871 → current 1280×876); DOM identical: ' +
+        'no elements were added or removed, so the same content is laid out taller (often fonts or rendering that differ between machines); ' +
+        'every pixel of the added band at the bottom counts as changed. Compare the images before approving.',
+    );
+    expect(v).not.toMatch(/content was added|below the baseline's height/);
+  });
+});

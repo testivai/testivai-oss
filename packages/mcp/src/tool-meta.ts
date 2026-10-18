@@ -18,10 +18,16 @@ export interface ToolMeta {
 // permission modes; other clients ignore it.
 const requiresUserInteraction = { 'anthropic/requiresUserInteraction': true };
 
+// The crop numbers are CROP_LIMITS in diff-images.ts, written out because
+// this file imports nothing (the review action bundles it); tests compare them.
 const diffImages: ToolMeta = {
   title: 'View snapshot diff images',
   description:
-    'Return the baseline, current, and diff images for one changed snapshot so you can see what changed visually; ' +
+    'Return the baseline, current, and diff images for one changed snapshot so you can see what changed visually: ' +
+    'the full page downscaled to fit (it shows where the changes are), then, when it had to be downscaled, each changed region cropped at native scale with 32 px around it and as wide as the page (up to 1280 px), ' +
+    'so you can read text, wrapping and clipping there (up to 3 crops, each at most 1280×1024 px and 2,000,000 px in all; ' +
+    'nearby regions share a crop, changes come before shifts, a wider area is sampled at 1/2 scale or smaller, and a taller one shows its top rows). ' +
+    'Pass `region` (an index the response lists) for another region, or `y` and `height` for any band of the page: those return only that crop; ' +
     'for a missing baseline (no capture this run), only the committed baseline image, since there is no current capture. ' +
     'Use get_report / get_visual_results first to find snapshot names.',
 };
@@ -193,7 +199,7 @@ export const TRIAGE_PROMPT = {
       '- **bug**: the page changed in a way the change under test was not meant to make: an element it did not touch changed, or the result looks broken (clipped, overlapping or missing content).',
       '- **possible bug**: the page really changed but the evidence cannot settle whether that was meant, or the evidence is incomplete (styles not compared, no DOM data, images that disagree with the signals). Say exactly what a person should check.',
       '',
-      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
+      'Evidence: start with get_visual_results, then call explain_snapshot for each snapshot you triage and get_diff to look at its baseline, current and diff images (for a missing baseline, get_diff returns only its committed screenshot). The full-page images are downscaled to fit and show where the changes are; judge text, wrapping and clipping from the crops of the changed regions that follow them, at native scale (get_diff with `region` or `y` and `height` crops another area). The signals say whether the page changed; the images say whether it looks right and which capture is off. Weigh them together:',
       '',
       '| explain_snapshot shows | What it means |',
       '|---|---|',

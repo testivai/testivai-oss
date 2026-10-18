@@ -99,8 +99,10 @@ only when you confirm, but with the prompt off nothing in the client enforces
 that.
 
 **Seeing the images.** `get_diff` returns the baseline, current and diff PNGs
-to Claude, which looks at them inline; Claude Code also saves the original
-bytes in the session's `tool-results` directory under `~/.claude/projects/`.
+to Claude, which looks at them inline: the full page downscaled, then the
+changed regions at native scale ([Reading a tall page](#reading-a-tall-page-crops));
+Claude Code also saves the original bytes in the session's `tool-results`
+directory under `~/.claude/projects/`.
 For yourself, `get_visual_results` ends with the absolute paths to open: the
 HTML report (side-by-side baseline, current and diff), each changed snapshot's
 diff image, and each new snapshot's capture.
@@ -112,9 +114,44 @@ diff image, and each new snapshot's capture.
 | `get_visual_results` | Every snapshot with a one-line verdict phrased for decisions, opened by [groups of snapshots that share an identical signal](#what-the-server-groups) when there are any, then the paths to open: the HTML report, each changed snapshot's diff image, each new snapshot's capture. Each missing baseline (committed, but no capture this run) gets its own line too (several share one verdict line, so a partial run stays short), with nothing to approve: an intended removal deletes the baseline directory |
 | `explain_snapshot` | Layered evidence for one snapshot — pixel regions, element attribution, DOM/style signal, interpretation guidance; for a missing baseline, status `missing`, the committed baseline files and what to check instead |
 | `get_report` | The raw `results.json` payload |
-| `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs, downscaled for model context; for a missing baseline, the committed baseline image only, since there is no current capture |
+| `get_diff` (alias `get_snapshot_diff`) | Baseline, current and diff PNGs: the full page downscaled for model context, then, when it had to be downscaled, each changed region cropped at native scale with 32 px around it and as wide as the page (up to 1280 px), up to 3 crops, each at most 1280×1024 px and 2,000,000 px in all ([below](#reading-a-tall-page-crops)). `region`, or `y` and `height`, return only that crop; for a missing baseline, the committed baseline image only, since there is no current capture |
 | `list_baselines` | Committed baselines under `.testivai/baselines/` |
 | `approve_snapshot` / `approve_all` | Promote reviewed snapshots to baselines — **only after a human says so** |
+
+### Reading a tall page: crops
+
+A full-page capture downscaled to fit is too small to read: a 390×11844 mobile
+page becomes about 33×987 px, a 1280×9679 desktop page about 128×968. So after
+the three downscaled images, which show where the changes are, `get_diff`
+lists the snapshot's `regions` (the first 20, in `results.json` order, with
+their index, box, classification and selector) and crops them at native
+scale, one image pixel per page pixel, so the model can check text, wrapping
+and clipping. A page that fits within 1024 px is already sent at native
+scale, so it gets no crops.
+
+- Each crop is a region plus 32 px on every side, inside the page, then
+  made as wide as the page (up to 1280 px, centred on the region on a wider
+  page), so whole lines show and a changed heading is not cut mid-word.
+  Regions whose padded areas meet share a crop while it still fits
+  1280×1024 px, and a region inside a box another crop already shows joins
+  that crop.
+- Changes come before shifts (content that only moved), then the regions'
+  order in `results.json`, top to bottom.
+- Up to 3 crops per call, each at most 1280×1024 px, and 2,000,000 px in all
+  (per image: each crop is sent as baseline, current and diff). A crop that
+  would pass the total is skipped and listed as not cropped.
+- An area wider than 1280 px (a high-DPI capture) is sampled at 1/2 scale or
+  smaller, and says so; an area taller than 1024 rows shows its top rows and
+  gives the `y` to continue from.
+- After a size change the diff canvas is padded to the larger capture, so each
+  capture is cut to its own bounds, and a crop of the padded band says the
+  shorter capture has no pixels there.
+
+For another area, call `get_diff` again with `region` (an index from the
+list) or with `y` and `height` (a full-width band; by default as many rows as
+one crop shows, 1024 at native scale). Those calls return only that crop,
+without the full-page images, on any page. A band works on a new snapshot
+too, which has only its current capture.
 
 There are also two prompts. **`review-visual-changes`** walks a client through a
 full review: summary → `explain_snapshot` per change → diff images when

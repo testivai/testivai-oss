@@ -146,7 +146,8 @@ teams that want stricter or looser rasterization tolerance.
   community can own it (same for Puppeteer)
 - **Storybook mode** — decision pending demand (component-story capture loop)
 - **MCP server** — shipped (`@testivai/mcp`), including image downscaling for
-  model-context friendliness; next: an opt-in `run_visual_tests` tool
+  model-context friendliness and native-scale crops of the changed regions;
+  next: an opt-in `run_visual_tests` tool
 - **Ruby adapter** — SHIPPED (`testivai` on RubyGems): native Capybara /
   RSpec / Cucumber capture, no sidecar and no Chrome debug port
 - **`testivai run` sidecar** — remains experimental, now only needed for

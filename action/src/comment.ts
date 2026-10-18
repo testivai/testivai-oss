@@ -3,7 +3,7 @@
  */
 
 import { describeRegions, diffShape, STYLE_CHECK_DOES_NOT_COVER } from '../../packages/witness/src/report/diff-shape';
-import { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from '../../packages/witness/src/report/size-mismatch';
+import { describeSizeChange, explainHeightChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from '../../packages/witness/src/report/size-mismatch';
 import {
   describeCaptureMethod,
   environmentChangeGroups,
@@ -66,17 +66,20 @@ function renderDomHintMarkdown(
 
   // A size change first: the diff is on a padded canvas (every padded pixel
   // counts as changed), so the identical-DOM readings below describe the
-  // padding and are withheld. A height change is content added or removed;
-  // a width change is the viewport or device scale, never the page.
+  // padding and are withheld. A height change is read with the DOM signal
+  // and the page shift (explainHeightChange: the band at the bottom is the
+  // new height, not where the change is); a width change is the viewport or
+  // device scale, never the page.
   const size = withSize ? snapshot.sizeMismatch : undefined;
+  const heightChange = Boolean(size && sizeMismatchKind(size) === 'height');
   if (size) {
     const change = `**Size changed — ${describeSizeChange(size)}** (${formatSizes(size)})`;
-    if (sizeMismatchKind(size) === 'width') {
+    if (!heightChange) {
       lines.push(`> ${change}, so this is not a page change; the diff is on a padded canvas and does not describe the page. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.`);
-    } else if (size.candidate.height > size.baseline.height) {
-      lines.push(`> ${change}: content was added below the baseline's height, and every pixel of the added band counts as changed. Look at the current image there and confirm the change is intended before approving.`);
     } else {
-      lines.push(`> ${change}: content was removed, and every pixel of the missing band counts as changed. Compare the images and confirm the change is intended before approving.`);
+      const identical = Boolean(snapshot.dom && !snapshot.dom.changed);
+      const closing = identical ? 'Compare the images before approving.' : 'Compare the images and confirm the change is intended before approving.';
+      lines.push(`> ${change}: ${explainHeightChange(size, { dom: snapshot.dom, pageShift: snapshot.pageShift })}. ${closing}`);
     }
   }
 
@@ -94,7 +97,8 @@ function renderDomHintMarkdown(
     lines.push(`> **Style-only change — real, not noise** — ${n} element${n === 1 ? '' : 's'} restyled with identical DOM${el}.`);
   }
 
-  if (snapshot.pageShift) {
+  // A height change's line above already places a page shift.
+  if (snapshot.pageShift && !(heightChange && snapshot.pageShift.dy !== 0)) {
     const p = snapshot.pageShift;
     lines.push(`> **Layout shift** — everything below y=${p.belowY} moved ${p.dy > 0 ? 'down' : 'up'} ${Math.abs(p.dy)}px (${p.count} elements together). Look *above* that line for inserted/removed content.`);
   }

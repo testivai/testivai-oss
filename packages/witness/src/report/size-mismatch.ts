@@ -76,3 +76,54 @@ export function describeSizeChange(sm: SizeMismatchInfo): string {
   }
   return 'dimensions unchanged';
 }
+
+/** What a height change is read with: the DOM signal and the page shift, as results.json records them. */
+export interface HeightChangeContext {
+  dom?: { changed: boolean; styleCheck?: 'match' | 'mismatch' | 'unavailable' } | null;
+  pageShift?: { dy: number; belowY: number } | null;
+}
+
+/**
+ * What a HEIGHT change means and where to look, as one clause (for a width
+ * change, use describeSizeChange alone: it is not about the page).
+ *
+ * The band at the bottom of the padded canvas is the page's new (or lost)
+ * height, which is where the change is only when content was appended at the
+ * end: a banner inserted near the top makes the page taller too. So the
+ * clause never says content went "there":
+ * - a page shift places the change: above the line everything moved from;
+ * - a DOM change says what changed (the summary), not where;
+ * - an identical DOM means no elements were added or removed: the same
+ *   content laid out taller or shorter, by restyled elements when the
+ *   computed styles differ, otherwise often fonts or rendering that differ
+ *   between machines (and a stylesheet change when styles were not compared).
+ */
+export function explainHeightChange(sm: SizeMismatchInfo, context: HeightChangeContext = {}): string {
+  const grew = sm.candidate.height > sm.baseline.height;
+  const taller = grew ? 'taller' : 'shorter';
+  const band = `every pixel of the ${grew ? 'added' : 'missing'} band at the bottom counts as changed`;
+  const { dom, pageShift } = context;
+  const parts: string[] = [];
+  if (dom && !dom.changed) {
+    if (dom.styleCheck === 'mismatch') {
+      parts.push(`no elements were added or removed, so restyled elements lay the same content out ${taller}`);
+    } else if (dom.styleCheck === 'match') {
+      parts.push(`no elements were added or removed, so the same content is laid out ${taller} (often fonts or rendering that differ between machines)`);
+    } else {
+      parts.push(
+        `no elements were added or removed, so the same content is laid out ${taller} ` +
+          '(a stylesheet change, or fonts or rendering that differ between machines: styles were not compared)',
+      );
+    }
+  }
+  if (pageShift && pageShift.dy !== 0) {
+    parts.push(`everything below y=${pageShift.belowY} moved ${pageShift.dy > 0 ? 'down' : 'up'} ${Math.abs(pageShift.dy)} px, so look above that line`, band);
+  } else if (dom?.changed) {
+    parts.push('the DOM summary says what changed', `${band}, but the change itself can be anywhere on the page`);
+  } else if (!dom) {
+    parts.push(`${band}, but the change itself can be anywhere on the page`);
+  } else {
+    parts.push(band);
+  }
+  return parts.join('; ');
+}

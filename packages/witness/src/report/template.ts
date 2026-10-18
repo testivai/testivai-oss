@@ -11,7 +11,7 @@
 
 import { describeRegions, diffShape, NOISE_MAX_DIFF_PERCENT, STYLE_CHECK_DOES_NOT_COVER } from './diff-shape';
 import type { ReportData, SnapshotDomSignal, SnapshotResult } from './results';
-import { describeSizeChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
+import { describeSizeChange, explainHeightChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from './size-mismatch';
 import {
   describeCaptureMethod,
   describeEnvironmentChange,
@@ -583,13 +583,17 @@ function baseVerdict(snapshot: SnapshotResult): string {
     if (sizeMismatchKind(snapshot.sizeMismatch) === 'width') {
       return `<div class="verdict v-size"><span>Size changed — ${change} between the two captures, so this is not a page change. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.</span></div>`;
     }
-    const grew = snapshot.sizeMismatch.candidate.height > snapshot.sizeMismatch.baseline.height;
+    // The band at the bottom is the new height, not where the change is: the
+    // shared reading places it with the page shift and the DOM signal.
+    const identical = Boolean(snapshot.dom && !snapshot.dom.changed);
     const dom = snapshot.dom?.changed && snapshot.dom.summary
       ? `; DOM ${escapeHtml(summarizeDom(snapshot.dom.summary))}`
-      : snapshot.dom && !snapshot.dom.changed
-        ? '; DOM identical, so the extra height is layout, not new elements'
+      : identical
+        ? '; DOM identical'
         : '';
-    return `<div class="verdict v-size"><span>Size changed — ${change}${dom}: content was ${grew ? 'added' : 'removed'}, and every pixel of the ${grew ? 'added' : 'missing'} band counts as changed. Look at the current image ${grew ? "below the baseline's height" : 'for what is gone'} and confirm the change is intended before approving.</span></div>`;
+    const reading = escapeHtml(explainHeightChange(snapshot.sizeMismatch, { dom: snapshot.dom, pageShift: snapshot.pageShift }));
+    const closing = identical ? 'Compare the images before approving.' : 'Compare the images and confirm the change is intended before approving.';
+    return `<div class="verdict v-size"><span>Size changed — ${change}${dom}: ${reading}. ${closing}</span></div>`;
   }
 
   // Auto-passed within a tolerance although the DOM changed: say so, and

@@ -79,16 +79,23 @@ CI (GitHub Actions):
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html
 - `src/report/template.ts`   — HTML template for the report
+- `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)
 - `src/snapshot.ts`          — `witness()` entry point (stabilizes page, applies ignoreSelectors, captures); `testivai.witness` and `snapshot` are kept as aliases
 - `src/config/stabilize.ts`  — capture stabilization CSS + resolution (per-call > project > config.json > default true)
+- `src/capture/full-page.ts` — full-page CDP capture: fresh frame, measure, capture until two in a row match (uses `@testivai/witness` stable-capture)
 - `src/reporter.ts`          — Playwright reporter (reads config, calls compare, generates report)
+
+### @testivai/witness-selenium (`packages/selenium/`)
+- `src/witness.ts`           — `witness()` entry point (stabilizes page, applies ignoreSelectors, captures; viewport screenshot when the driver has no CDP)
+- `src/capture/full-page.ts` — full-page CDP capture on Chrome/Edge: fresh frame, measure, capture until two in a row match (uses `@testivai/witness` stable-capture)
 
 ### @testivai/mcp (`packages/mcp/`)
 - `src/server.ts`            — registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import
 - `src/tool-meta.ts`         — every tool's title and description (what the model reads before calling a tool), and the prompt texts; `TRIAGE_PROMPT.rubric()` is shared with the review action
 - `src/lib.ts`               — `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore)
+- `src/diff-images.ts`       — what `get_diff` returns: the full page downscaled, then native-scale crops of the changed regions (`planCrops`, caps in `CROP_LIMITS`), or one region or band on request
 
 ### GitHub Action reporter (`action/`)
 - `src/index.ts`             — main entry: reads results.json, bundles pending-baselines, uploads artifact, posts PR comment + commit status
@@ -243,9 +250,13 @@ that canvas and the snapshot is never `passed`: no pass criterion applies to a s
 with `sizeMismatch`. A DOM change on its own never decides the status: the pixels do
 (a zero-count diff passes, a diff within `maxDiffPercent` / `maxDiffPixels` auto-passes),
 and the report, the MCP verdicts and the action say when a passed snapshot's DOM differs. A
-height change is content added or removed (read it with `dom.summary`); a width change
-is almost always the viewport or device scale factor, not the page: word it that way
-(`describeSizeChange` / `formatSizeMismatch` in `packages/witness/src/report/size-mismatch.ts`,
+height change is read with the DOM signal and the page shift: the padded band at the
+bottom is the new height, not where the change is (a banner inserted near the top grows
+the page too), so `pageShift` places it, `dom.summary` says what changed, and an identical
+DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that
+differ between machines), never content added or removed. A width change is almost always
+the viewport or device scale factor, not the page. Word it that way (`describeSizeChange` /
+`explainHeightChange` / `formatSizeMismatch` in `packages/witness/src/report/size-mismatch.ts`,
 shared by the report, MCP and the action).
 
 When pixels differ and `dom.changed` is false, `dom.styleCheck` decides the reading:

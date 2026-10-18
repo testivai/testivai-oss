@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.0
+
+### Minor Changes
+
+- ebaf705: New exports for adapters that capture through CDP `Page.captureScreenshot` with `captureBeyondViewport`: `FRESH_FRAME_EXPRESSION` and `FRESH_FRAME_TIMEOUT_MS` (an in-page wait for two rendered animation frames), `settleFreshFrame()` (waits for a fresh frame, retries once, never throws), `captureUntilStable()` (captures until two in a row match, at most `MAX_STABLE_CAPTURES`, 4), and the `CaptureLog` and `CaptureUntilStableOptions` types. They guard against Chrome returning a frame painted for the wrong viewport while it sets up a beyond-viewport capture. `@testivai/witness-playwright` uses them, and `testivai witness <url>` now runs on the same code, with no change in behavior.
+
+## 2.3.1
+
+### Patch Changes
+
+- 0ec2cf8: A taller or shorter capture no longer reads as "content was added below the baseline's height". The padded band at the bottom of the diff is the page's new height, not where the change is: a banner inserted near the top makes the page taller too. The report verdict and the MCP verdict and guidance now read a height change with the page shift and the DOM signal, through the new shared `explainHeightChange` in `@testivai/witness/report`: a page shift places the change ("everything below y=203 moved down 73 px, so look above that line"), a DOM change says what changed but not where, and an identical DOM is the same content laid out taller or shorter (restyled when the computed styles differ, otherwise often fonts or rendering that differ between machines), never content added or removed. Before, an identical DOM read "the extra height is layout, not new elements: content was added". Found by running testivai-example's demo (an inserted banner) and its suite against baselines captured on another machine (pages 5 and 10 px taller, DOM and styles identical).
+
 ## 2.3.0
 
 ### Minor Changes

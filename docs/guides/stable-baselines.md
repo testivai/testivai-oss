@@ -289,6 +289,27 @@ await witness(page, testInfo, 'dashboard');
 That is a real limitation, not a rough edge — the settle wait removes the flake
 you get from *in-flight* loading, which is the common case.
 
+### A capture that matches itself
+
+Full-page captures go through Chrome's beyond-viewport screenshot, and Chrome
+can return a frame painted for the wrong viewport while it sets that capture
+up: narrow-viewport media rules, a collapsed `100vh` hero, or em-sized text
+drawn at its `max-width: 480px` size. The page itself is unchanged (the DOM,
+element map and computed styles all match the baseline), only the pixels
+differ, so the same commit can read as changed on one run and pass on the next.
+
+So the Playwright adapter, the JavaScript Selenium adapter
+(`@testivai/witness-selenium`, on Chrome and Edge) and `testivai witness <url>`
+all:
+
+1. wait for a freshly rendered frame before measuring and capturing, and
+2. capture until two captures in a row are identical, at most four.
+
+A stable page costs one extra screenshot. A page that never stops changing
+costs four captures and keeps the last, rather than looping. This runs on
+every capture and does not depend on `stabilize`. `TESTIVAI_DEBUG=true` logs
+when captures differed.
+
 ## Repository size — what baselines actually cost
 
 Baselines are PNGs committed to your repository, so it's fair to ask what that

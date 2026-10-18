@@ -57,7 +57,7 @@ All of these stay `changed` unless you configure a pass criterion; `noiseAutoPas
 
 ## Full-page screenshots
 
-- **Chrome / Edge** — true full-page capture via CDP (`captureBeyondViewport`), the same mechanism Playwright uses. Automatic; nothing to configure.
+- **Chrome / Edge** — true full-page capture via CDP (`captureBeyondViewport`), the same mechanism Playwright uses. Automatic; nothing to configure. Chrome can return a frame painted for the wrong viewport while it sets up that capture, so the adapter waits for a freshly rendered frame, then captures until two captures in a row are identical (at most four). A stable page costs one extra screenshot; `TESTIVAI_DEBUG=true` logs when captures differed.
 - **Firefox / Safari** — the Selenium JS bindings expose no full-page API, so captures are viewport-sized. Set the window to the size you want compared; runs are consistent either way. (The Python and Java TestivAI adapters do full-page on Firefox via its native API.)
 
 ## Stabilized captures

@@ -12,6 +12,33 @@ import type { WitnessDriver } from '../types';
 const ONE_PX_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=';
 
+/** A capture that differs from ONE_PX_PNG_B64, standing in for a wrong-viewport frame. */
+const STALE_B64 = Buffer.from('frame painted for the wrong viewport').toString('base64');
+
+/**
+ * A Chromium driver's `sendAndGetDevToolsCommand`, answering the commands a
+ * full-page capture sends: the fresh-frame wait, the layout metrics, and
+ * `Page.captureScreenshot` returning `shots` in turn (repeating the last).
+ */
+function makeCdp(shots: string[] = [ONE_PX_PNG_B64], onCapture?: () => void) {
+  let captured = 0;
+  // Promise<any>: assignable to WitnessDriver's generic `Promise<T>` return.
+  return jest.fn(async (cmd: string, params?: Record<string, unknown>): Promise<any> => {
+    if (cmd === 'Runtime.evaluate') {
+      return { result: { type: 'boolean', value: params?.awaitPromise === true } };
+    }
+    if (cmd === 'Page.getLayoutMetrics') {
+      const size = { x: 0, y: 0, width: 1280, height: 2000 };
+      return { cssContentSize: size, contentSize: size };
+    }
+    if (cmd === 'Page.captureScreenshot') {
+      onCapture?.();
+      return { data: shots[Math.min(captured++, shots.length - 1)] };
+    }
+    throw new Error(`unexpected CDP call: ${cmd}`);
+  });
+}
+
 /** A fake driver whose executeScript understands the adapter's scripts. */
 function makeDriver(overrides: Partial<WitnessDriver> & { dom?: string } = {}) {
   const injectedCss: string[] = [];
@@ -128,20 +155,96 @@ describe('witness()', () => {
   });
 
   it('uses CDP full-page capture when the driver exposes it', async () => {
-    const cdp = jest
-      .fn()
-      .mockResolvedValue({ data: ONE_PX_PNG_B64 });
+    const cdp = makeCdp();
     const { driver } = makeDriver({ sendAndGetDevToolsCommand: cdp });
 
     await witness(driver, 'full');
 
-    expect(cdp).toHaveBeenCalledWith('Page.captureScreenshot', {
-      captureBeyondViewport: true,
-      format: 'png',
-    });
+    const shots = cdp.mock.calls.filter(([cmd]) => cmd === 'Page.captureScreenshot');
+    expect(shots.length).toBeGreaterThan(0);
+    for (const [, params] of shots) {
+      expect(params).toEqual({
+        format: 'png',
+        captureBeyondViewport: true,
+        clip: { x: 0, y: 0, width: 1280, height: 2000, scale: 1 },
+      });
+    }
     expect(driver.takeScreenshot).not.toHaveBeenCalled();
     const png = fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', 'full', 'screenshot.png'));
     expect(png[0]).toBe(0x89);
+  });
+
+  it('guards the full-page capture: fresh frame first, then capture until two in a row match', async () => {
+    const cdp = makeCdp([STALE_B64, ONE_PX_PNG_B64]);
+    const { driver } = makeDriver({ sendAndGetDevToolsCommand: cdp });
+
+    await witness(driver, 'guarded');
+
+    const order = cdp.mock.calls.map(([cmd]) => cmd);
+    expect(order[0]).toBe('Runtime.evaluate');
+    expect(order.filter((cmd) => cmd === 'Page.captureScreenshot')).toHaveLength(3);
+    // The kept capture is the one that matched, not the stale first one.
+    const png = fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', 'guarded', 'screenshot.png'));
+    expect(png.equals(Buffer.from(ONE_PX_PNG_B64, 'base64'))).toBe(true);
+  });
+
+  it('keeps the capture CSS in place for every capture, removing it after the last', async () => {
+    const removedAtCapture: boolean[] = [];
+    const { driver, state } = makeDriver();
+    driver.sendAndGetDevToolsCommand = makeCdp([STALE_B64, ONE_PX_PNG_B64], () =>
+      removedAtCapture.push(state.styleRemoved),
+    ) as WitnessDriver['sendAndGetDevToolsCommand'];
+
+    await witness(driver, 'css-held');
+
+    expect(removedAtCapture).toEqual([false, false, false]);
+    expect(state.styleRemoved).toBe(true);
+  });
+
+  it('falls back to the viewport screenshot when the full-page capture returns no data', async () => {
+    const { driver } = makeDriver({ sendAndGetDevToolsCommand: makeCdp(['']) });
+
+    await witness(driver, 'no-data');
+
+    expect(driver.takeScreenshot).toHaveBeenCalled();
+    expect(
+      fs.existsSync(path.join(projectRoot, '.testivai', 'temp', 'no-data', 'screenshot.png')),
+    ).toBe(true);
+  });
+
+  describe('TESTIVAI_DEBUG', () => {
+    const original = process.env.TESTIVAI_DEBUG;
+    let logSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      logSpy.mockRestore();
+      if (original === undefined) delete process.env.TESTIVAI_DEBUG;
+      else process.env.TESTIVAI_DEBUG = original;
+    });
+
+    it('logs when full-page captures differed', async () => {
+      process.env.TESTIVAI_DEBUG = 'true';
+      const { driver } = makeDriver({ sendAndGetDevToolsCommand: makeCdp([STALE_B64, ONE_PX_PNG_B64]) });
+
+      await witness(driver, 'debug-on');
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/\[TestivAI\] Full-page capture: two captures in a row differed/),
+      );
+    });
+
+    it('stays quiet when it is not set', async () => {
+      delete process.env.TESTIVAI_DEBUG;
+      const { driver } = makeDriver({ sendAndGetDevToolsCommand: makeCdp([STALE_B64, ONE_PX_PNG_B64]) });
+
+      await witness(driver, 'debug-off');
+
+      expect(logSpy).not.toHaveBeenCalledWith(expect.stringMatching(/Full-page capture/));
+    });
   });
 
   it('falls back to viewport screenshot when CDP fails', async () => {
@@ -316,7 +419,7 @@ describe('witness() capture provenance', () => {
 
   it('Chrome over CDP: full page, with the browser and chromedriver from getCapabilities()', async () => {
     const { driver } = makeDriver({
-      sendAndGetDevToolsCommand: jest.fn().mockResolvedValue({ data: ONE_PX_PNG_B64 }),
+      sendAndGetDevToolsCommand: makeCdp(),
       getCapabilities: jest.fn().mockResolvedValue(
         capabilities({ browserName: 'chrome', browserVersion: '141.0.7390.37', chrome: { chromedriverVersion: '141.0.7390.37 (abc)' } }),
       ),
