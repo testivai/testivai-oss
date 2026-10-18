@@ -45,6 +45,7 @@ Pin to `@v1` for rolling major-version updates, or `@v1.0.0` for a fixed point r
 | `github-token` | GitHub token for posting comments + commit status | Yes | `${{ github.token }}` |
 | `report-dir` | Directory containing `results.json` and the rendered HTML report | Yes | `visual-report` |
 | `fail-on-diff` | Fail the workflow when visual changes are detected | No | `false` |
+| `fail-on-missing` | Fail the workflow when a committed baseline received no capture this run (silent coverage loss) | No | `false` |
 | `upload-artifact` | Upload the report directory as a workflow artifact | No | `true` |
 | `artifact-retention-days` | Days to retain the artifact | No | `30` |
 | `artifact-name` | Name of the uploaded artifact | No | `testivai-visual-report` |
@@ -78,6 +79,7 @@ A check run whose conclusion reflects what actually needs to happen:
 | Baselines received no capture, `fail-on-missing: false` (default) | **`neutral`** | **no** |
 | Snapshots changed and `fail-on-diff: true` | `failure` | yes |
 | Baselines uncovered and `fail-on-missing: true` | `failure` | yes |
+| Snapshots changed and `fail-on-diff: true`, even when baselines received no capture in the same run | `failure` | yes |
 
 `neutral` is the important one. GitHub's branch protection documentation states
 that *"required status checks must have a successful, skipped, or neutral status
