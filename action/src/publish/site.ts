@@ -276,10 +276,12 @@ export interface IndexInput {
   /** By run id. */
   outcomes: Map<number, RunOutcome>;
   runsPerPr: number;
+  /** The folder of the repository's own pages (the include input), linked from the front page. */
+  include?: string;
 }
 
 /** The front page, a page per pull request, and the 404 page. */
-export function buildIndexPages({ site, plan, outcomes, runsPerPr }: IndexInput): SiteFile[] {
+export function buildIndexPages({ site, plan, outcomes, runsPerPr, include }: IndexInput): SiteFile[] {
   const files: SiteFile[] = [];
   const about = `Published by TestivAI: the last ${runsPerPr} runs of each open pull request, and the latest run on ${esc(site.defaultBranch)}. A closed pull request's reports go with the next publish.`;
 
@@ -300,6 +302,9 @@ export function buildIndexPages({ site, plan, outcomes, runsPerPr }: IndexInput)
   }
   if (sections.length === 0) {
     sections.push('  <p>Nothing is published yet: no open pull request or run on the default branch has a report.</p>');
+  }
+  if (include) {
+    sections.push(`  <h2>Also on this site</h2>\n  <ul><li><a href="${href(`${include}/`)}">${esc(include)}/</a></li></ul>`);
   }
   files.push({
     path: 'index.html',

@@ -33,6 +33,7 @@ __export(publish_exports, {
   build: () => build,
   finish: () => finish,
   parseComment: () => parseComment,
+  parseInclude: () => parseInclude,
   parseRunsPerPr: () => parseRunsPerPr
 });
 module.exports = __toCommonJS(publish_exports);
@@ -2777,7 +2778,7 @@ function fallbackPage(input, reason) {
   <p>The run's own report is in its ZIP. ${links.join(" \xB7 ")}</p>`
   );
 }
-function buildIndexPages({ site, plan, outcomes, runsPerPr }) {
+function buildIndexPages({ site, plan, outcomes, runsPerPr, include }) {
   const files = [];
   const about = `Published by TestivAI: the last ${runsPerPr} runs of each open pull request, and the latest run on ${esc(site.defaultBranch)}. A closed pull request's reports go with the next publish.`;
   const sections = [];
@@ -2798,6 +2799,10 @@ function buildIndexPages({ site, plan, outcomes, runsPerPr }) {
   }
   if (sections.length === 0) {
     sections.push("  <p>Nothing is published yet: no open pull request or run on the default branch has a report.</p>");
+  }
+  if (include) {
+    sections.push(`  <h2>Also on this site</h2>
+  <ul><li><a href="${href(`${include}/`)}">${esc(include)}/</a></li></ul>`);
   }
   files.push({
     path: "index.html",
@@ -2856,9 +2861,33 @@ function safeSitePath(root, rel) {
 }
 var mb2 = (bytes) => `${Math.round(bytes / MB3)} MB`;
 var sizeOf = (f) => typeof f.data === "string" ? Buffer.byteLength(f.data) : f.data.byteLength;
+var RESERVED = /* @__PURE__ */ new Set(["pr", "main"]);
+function readInclude(include, maxBytes, log) {
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
+    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
+  }
+  if (!fs.existsSync(include.dir) || !fs.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
+  const files = [];
+  let bytes = 0;
+  const walk = (rel) => {
+    for (const entry of fs.readdirSync(path.join(include.dir, rel), { withFileTypes: true })) {
+      const child = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) log.warning(`include-dir: ${child} is a symbolic link: skipped.`);
+      else if (entry.isDirectory()) walk(child);
+      else if (entry.isFile()) {
+        files.push(child);
+        bytes += fs.statSync(path.join(include.dir, child)).size;
+      }
+    }
+  };
+  walk("");
+  if (bytes > maxBytes) throw new Error(`include-dir ${include.dir} is ${mb2(bytes)}, over the site's ${mb2(maxBytes)} budget`);
+  return { files, bytes };
+}
 async function buildSite(api, options) {
   const { log } = options;
   const limits = { ...PUBLISH_LIMITS, ...options.limits };
+  const include = options.include ? readInclude(options.include, limits.maxSiteBytes, log) : void 0;
   const repo = await api.repo();
   const decision = decidePublish({ pages: await api.pages(), repoVisibility: repo.visibility, publicReportsConsent: options.consent });
   if (!decision.publish || !decision.siteUrl || !decision.visibility) return { published: false, reason: decision.reason };
@@ -2902,6 +2931,16 @@ async function buildSite(api, options) {
   const left = /* @__PURE__ */ new Set();
   let bytes = 0;
   let files = 0;
+  if (include && options.include) {
+    for (const rel of include.files) {
+      const to = path.join(options.siteDir, options.include.name, rel);
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(path.join(options.include.dir, rel), to);
+    }
+    bytes += include.bytes;
+    files += include.files.length;
+    log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
+  }
   for (const { run, pr } of order) {
     const archive = await fetchArchive(api, run);
     const built = buildRunReport({ site, run, ...pr ? { pr } : {}, artifactUrl: artifactUrl(run), archive });
@@ -2923,7 +2962,7 @@ async function buildSite(api, options) {
     ...plan.main && left.has(plan.main) ? { main: void 0 } : {},
     prs: plan.prs.map((p) => ({ pr: p.pr, runs: p.runs.filter((r) => !left.has(r)) })).filter((p) => p.runs.length > 0)
   };
-  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr });
+  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...options.include ? { include: options.include.name } : {} });
   writeFiles(options.siteDir, index);
   bytes += index.reduce((n, f) => n + sizeOf(f), 0);
   files += index.length;
@@ -3052,18 +3091,27 @@ function parseComment(value) {
   if (v === "false") return false;
   throw new Error(`comment must be true or false, not ${JSON.stringify(value)}`);
 }
+function parseInclude(env) {
+  const dir = (env.INCLUDE_DIR ?? "").trim();
+  if (!dir) return void 0;
+  const name = (env.INCLUDE_NAME ?? "").trim();
+  if (!name) throw new Error("include-name is required with include-dir: the folder the pages go in on the site, such as demo");
+  return { dir: path2.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), name };
+}
 async function build({ github, context, core, env }) {
   const runsPerPr = parseRunsPerPr(env.RUNS_PER_PR ?? "3");
   if (!env.RUNNER_TEMP) throw new Error("RUNNER_TEMP is not set: this runs as a GitHub Actions step");
   const root = path2.join(env.RUNNER_TEMP, "testivai-pages");
   const siteDir = path2.join(root, "site");
   const stateFile = path2.join(root, "state.json");
+  const include = parseInclude(env);
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || "testivai-visual-report",
     runsPerPr,
     consent: env.PUBLIC_REPORTS,
     siteDir,
     serverUrl: context.serverUrl,
+    ...include ? { include } : {},
     log: core
   });
   if (!result.published) {
@@ -3095,5 +3143,6 @@ async function finish({ github, context, core, env }) {
   build,
   finish,
   parseComment,
+  parseInclude,
   parseRunsPerPr
 });

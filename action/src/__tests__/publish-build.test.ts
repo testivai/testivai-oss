@@ -308,6 +308,78 @@ describe('buildSite', () => {
   });
 });
 
+describe('buildSite with pages of your own (include)', () => {
+  /** A folder like the demo testivai-example builds from its default branch. */
+  function ownPages(): string {
+    const own = path.join(dir, 'demo-report');
+    fs.mkdirSync(path.join(own, 'images', 'hero'), { recursive: true });
+    fs.writeFileSync(path.join(own, 'index.html'), '<h1>Demo</h1>');
+    fs.writeFileSync(path.join(own, 'results.json'), '{}');
+    fs.writeFileSync(path.join(own, 'images', 'hero', 'diff.png'), PNG);
+    return own;
+  }
+
+  it('publishes the folder under its name, as it is, and links it from the front page', async () => {
+    const { api } = fakeApi(world());
+
+    await buildSite(api, options({ include: { dir: ownPages(), name: 'demo' } }));
+
+    expect(tree(path.join(siteDir(), 'demo'))).toEqual(['images/hero/diff.png', 'index.html', 'results.json']);
+    expect(fs.readFileSync(path.join(siteDir(), 'demo/index.html'), 'utf8')).toBe('<h1>Demo</h1>');
+    expect(fs.readFileSync(path.join(siteDir(), 'index.html'), 'utf8')).toContain('href="demo/"');
+  });
+
+  it('skips a symbolic link, so nothing outside the folder is published', async () => {
+    const own = ownPages();
+    const secret = path.join(dir, 'secret.txt');
+    fs.writeFileSync(secret, 'token');
+    fs.symlinkSync(secret, path.join(own, 'leak.txt'));
+    fs.symlinkSync(dir, path.join(own, 'up'));
+    const { api } = fakeApi(world());
+
+    await buildSite(api, options({ include: { dir: own, name: 'demo' } }));
+
+    expect(fs.existsSync(path.join(siteDir(), 'demo/leak.txt'))).toBe(false);
+    expect(fs.existsSync(path.join(siteDir(), 'demo/up'))).toBe(false);
+    expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/leak\.txt.*symbolic link/));
+  });
+
+  it.each(['pr', 'main', '404.html', 'index.html', '../demo', 'my demo', 'Demo', '', '-x'])('refuses the name %j', async (name) => {
+    const { api } = fakeApi(world());
+
+    await expect(buildSite(api, options({ include: { dir: ownPages(), name } }))).rejects.toThrow(/include-name/);
+  });
+
+  it('refuses a folder that does not exist, before building anything', async () => {
+    const { api, calls } = fakeApi(world());
+
+    await expect(buildSite(api, options({ include: { dir: path.join(dir, 'nope'), name: 'demo' } }))).rejects.toThrow(/include-dir .*nope.* is not a folder/);
+    fs.writeFileSync(path.join(dir, 'file.html'), 'x');
+    await expect(buildSite(api, options({ include: { dir: path.join(dir, 'file.html'), name: 'demo' } }))).rejects.toThrow(/include-dir .*file\.html is not a folder/);
+    expect(calls.download).toEqual([]);
+  });
+
+  it('counts its size first, so reports that would not fit are left out', async () => {
+    const own = ownPages();
+    fs.writeFileSync(path.join(own, 'big.bin'), new Uint8Array(3 * MB));
+    const { api } = fakeApi(world());
+
+    await buildSite(api, options({ include: { dir: own, name: 'demo' }, limits: { maxSiteBytes: 3 * MB + 1024 } }));
+
+    expect(fs.existsSync(path.join(siteDir(), 'demo/big.bin'))).toBe(true);
+    expect(fs.existsSync(path.join(siteDir(), 'main/index.html'))).toBe(false);
+    expect(fs.readFileSync(path.join(siteDir(), 'index.html'), 'utf8')).not.toContain('href="main/"');
+  });
+
+  it('refuses a folder bigger than the whole site', async () => {
+    const own = ownPages();
+    fs.writeFileSync(path.join(own, 'big.bin'), new Uint8Array(2 * MB));
+    const { api } = fakeApi(world());
+
+    await expect(buildSite(api, options({ include: { dir: own, name: 'demo' }, limits: { maxSiteBytes: 1 * MB } }))).rejects.toThrow(/include-dir .* over the site's/);
+  });
+});
+
 describe('safeSitePath', () => {
   it('keeps a plain relative path inside the site', () => {
     expect(safeSitePath('/site', 'pr/14/3-1/images/0/current.png')).toBe(path.join('/site', 'pr/14/3-1/images/0/current.png'));

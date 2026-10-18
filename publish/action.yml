@@ -62,6 +62,23 @@ inputs:
     required: false
     default: ''
 
+  include-dir:
+    description: >
+      A folder of your own pages to publish with the reports, built by an
+      earlier step from the default branch (never from a pull request),
+      relative to the workspace. Published as it is under include-name/ and
+      linked from the front page; symbolic links in it are skipped, and its
+      size counts toward the site's.
+    required: false
+    default: ''
+
+  include-name:
+    description: >
+      The folder include-dir goes in on the site, such as demo: lowercase
+      letters, digits, '-' and '_', not pr or main. Required with include-dir.
+    required: false
+    default: ''
+
   comment:
     description: >
       true (the default) adds the report links to the TestivAI comment on
@@ -91,6 +108,8 @@ runs:
         ARTIFACT_NAME: ${{ inputs.artifact-name }}
         RUNS_PER_PR: ${{ inputs.runs-per-pr }}
         PUBLIC_REPORTS: ${{ inputs.public-reports }}
+        INCLUDE_DIR: ${{ inputs.include-dir }}
+        INCLUDE_NAME: ${{ inputs.include-name }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |

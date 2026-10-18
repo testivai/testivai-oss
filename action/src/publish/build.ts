@@ -43,6 +43,11 @@ export interface BuildOptions {
   /** https://github.com, or the GitHub Enterprise Server address. */
   serverUrl: string;
   limits?: Partial<typeof PUBLISH_LIMITS>;
+  /**
+   * Pages of your own, built earlier in the job from the default branch:
+   * published as they are under <name>/, and linked from the front page.
+   */
+  include?: { dir: string; name: string };
   log: Log;
 }
 
@@ -66,9 +71,37 @@ export function safeSitePath(root: string, rel: string): string {
 const mb = (bytes: number) => `${Math.round(bytes / MB)} MB`;
 const sizeOf = (f: SiteFile) => (typeof f.data === 'string' ? Buffer.byteLength(f.data) : f.data.byteLength);
 
+/** Folder names the reports use. */
+const RESERVED = new Set(['pr', 'main']);
+
+/** The include folder's regular files (relative paths) and their total size; symbolic links are skipped. */
+function readInclude(include: { dir: string; name: string }, maxBytes: number, log: Log): { files: string[]; bytes: number } {
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
+    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
+  }
+  if (!fs.existsSync(include.dir) || !fs.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
+  const files: string[] = [];
+  let bytes = 0;
+  const walk = (rel: string) => {
+    for (const entry of fs.readdirSync(path.join(include.dir, rel), { withFileTypes: true })) {
+      const child = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) log.warning(`include-dir: ${child} is a symbolic link: skipped.`);
+      else if (entry.isDirectory()) walk(child);
+      else if (entry.isFile()) {
+        files.push(child);
+        bytes += fs.statSync(path.join(include.dir, child)).size;
+      }
+    }
+  };
+  walk('');
+  if (bytes > maxBytes) throw new Error(`include-dir ${include.dir} is ${mb(bytes)}, over the site's ${mb(maxBytes)} budget`);
+  return { files, bytes };
+}
+
 export async function buildSite(api: PublishApi, options: BuildOptions): Promise<BuildResult> {
   const { log } = options;
   const limits = { ...PUBLISH_LIMITS, ...options.limits };
+  const include = options.include ? readInclude(options.include, limits.maxSiteBytes, log) : undefined;
 
   const repo = await api.repo();
   const decision = decidePublish({ pages: await api.pages(), repoVisibility: repo.visibility, publicReportsConsent: options.consent });
@@ -122,6 +155,16 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
   const left = new Set<PlannedRun>();
   let bytes = 0;
   let files = 0;
+  if (include && options.include) {
+    for (const rel of include.files) {
+      const to = path.join(options.siteDir, options.include.name, rel);
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(path.join(options.include.dir, rel), to);
+    }
+    bytes += include.bytes;
+    files += include.files.length;
+    log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
+  }
   for (const { run, pr } of order) {
     const archive = await fetchArchive(api, run);
     const built = buildRunReport({ site, run, ...(pr ? { pr } : {}), artifactUrl: artifactUrl(run), archive });
@@ -144,7 +187,7 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     prs: plan.prs.map((p) => ({ pr: p.pr, runs: p.runs.filter((r) => !left.has(r)) })).filter((p) => p.runs.length > 0),
   };
 
-  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr });
+  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...(options.include ? { include: options.include.name } : {}) });
   writeFiles(options.siteDir, index);
   bytes += index.reduce((n, f) => n + sizeOf(f), 0);
   files += index.length;

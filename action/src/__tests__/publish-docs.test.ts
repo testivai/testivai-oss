@@ -39,53 +39,67 @@ interface Workflow {
 const DOC = read('docs/github-action.md');
 const MB = 1024 * 1024;
 
-/** The doc's workflows that use the publish action. */
+/** The doc's workflows that use the publish action: the basic one, then one with pages of your own. */
 const workflows = (markdown: string): Workflow[] =>
   [...markdown.matchAll(/```ya?ml\n([\s\S]*?)```/g)]
     .map((m) => m[1])
     .filter((b) => b.includes('testivai/testivai-oss/publish@'))
     .map((b) => parse(b) as Workflow);
+const ALL = workflows(DOC);
+const last = <T>(items: T[]): T => items[items.length - 1];
 
 const publishJobs = (w: Workflow) => Object.values(w.jobs).filter((j) => j.steps?.some((s) => s.uses?.startsWith('testivai/testivai-oss/publish@')));
 
 describe('GitHub Pages setup docs', () => {
-  it('shows a publish workflow', () => {
-    expect(workflows(DOC)).toHaveLength(1);
+  it('shows the basic workflow and one with pages of your own', () => {
+    expect(ALL).toHaveLength(2);
+    expect(last(publishJobs(ALL[1])[0].steps!).with).toMatchObject({ 'include-dir': expect.any(String), 'include-name': expect.any(String) });
   });
 
-  it('runs after the visual workflow, when a pull request closes, and by hand; never on pull request code', () => {
-    const [w] = workflows(DOC);
+  it.each([0, 1])('workflow %i runs after the visual workflow, when a pull request closes, and by hand', (i) => {
+    const w = ALL[i];
     expect(Object.keys(w.on).sort()).toEqual(['pull_request_target', 'workflow_dispatch', 'workflow_run']);
     expect(w.on.workflow_run?.types).toEqual(['completed']);
     expect(w.on.workflow_run?.workflows?.length).toBeGreaterThan(0);
     expect(w.on.pull_request_target?.types).toEqual(['closed']);
   });
 
-  it('runs one publish at a time, a newer one replacing a running one', () => {
-    const [w] = workflows(DOC);
-    expect(w.concurrency?.group).toBeTruthy();
-    expect(w.concurrency?.['cancel-in-progress']).toBe(true);
+  it.each([0, 1])('workflow %i runs one publish at a time, a newer one replacing a running one', (i) => {
+    expect(ALL[i].concurrency?.group).toBeTruthy();
+    expect(ALL[i].concurrency?.['cancel-in-progress']).toBe(true);
   });
 
-  it('gives the job exactly what it needs, and deploys through the github-pages environment', () => {
-    for (const job of publishJobs(workflows(DOC)[0])) {
+  it.each([0, 1])('workflow %i gives the job exactly what it needs, and deploys through the github-pages environment', (i) => {
+    for (const job of publishJobs(ALL[i])) {
       expect(job.permissions).toEqual({ contents: 'read', actions: 'read', pages: 'write', 'id-token': 'write', 'pull-requests': 'write' });
       expect(typeof job.environment === 'object' && job.environment.name).toBe('github-pages');
       expect(typeof job.environment === 'object' && job.environment.url).toBe('${{ steps.publish.outputs.page-url }}');
     }
   });
 
-  it('never checks out or runs code: the publish step is the only step', () => {
-    for (const job of publishJobs(workflows(DOC)[0])) {
+  it('the basic workflow never checks out or runs code: the publish step is the only step', () => {
+    for (const job of publishJobs(ALL[0])) {
       expect(job.steps).toHaveLength(1);
       expect(job.steps?.[0].run).toBeUndefined();
       expect(job.steps?.[0].id).toBe('publish');
     }
   });
 
-  it('passes only inputs the action has, and the consent from the variable', () => {
-    for (const job of publishJobs(workflows(DOC)[0])) {
-      const step = job.steps![0];
+  it('the workflow with pages of your own checks out only the default branch, never the pull request', () => {
+    const blocks = [...DOC.matchAll(/```ya?ml\n([\s\S]*?)```/g)].map((m) => m[1]).filter((b) => b.includes('testivai/testivai-oss/publish@'));
+    expect(blocks[1]).not.toMatch(/github\.event\.(pull_request|workflow_run)\.head|head_sha|head_ref|github\.head_ref/);
+    for (const job of publishJobs(ALL[1])) {
+      const checkouts = job.steps!.filter((s) => s.uses?.startsWith('actions/checkout@'));
+      expect(checkouts).toHaveLength(1);
+      expect(checkouts[0].with?.ref).toBeUndefined();
+      expect(checkouts[0].with?.repository).toBeUndefined();
+      expect(last(job.steps!).id).toBe('publish');
+    }
+  });
+
+  it.each([0, 1])('workflow %i passes only inputs the action has, and the consent from the variable', (i) => {
+    for (const job of publishJobs(ALL[i])) {
+      const step = last(job.steps!);
       for (const key of Object.keys(step.with ?? {})) expect(INPUTS).toContain(key);
       expect(step.with?.['public-reports']).toBe(`\${{ vars.${CONSENT_VARIABLE} }}`);
     }

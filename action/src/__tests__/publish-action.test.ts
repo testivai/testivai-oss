@@ -57,6 +57,8 @@ describe('inputs and outputs', () => {
     expect(ACTION.inputs.comment.default).toBe('true');
     expect(ACTION.inputs['public-reports'].default).toBe('');
     expect(ACTION.inputs['status-context'].default).toBe('');
+    expect(ACTION.inputs['include-dir'].default).toBe('');
+    expect(ACTION.inputs['include-name'].default).toBe('');
   });
 
   it('says where the consent comes from, and that it is not an access control', () => {
@@ -226,6 +228,8 @@ describe('the scripts load dist/publish.cjs and run', () => {
     'inputs.comment': 'true',
     'inputs.status-context': '',
     'inputs.github-token': 'unused',
+    'inputs.include-dir': '',
+    'inputs.include-name': '',
     ...over,
   });
 
@@ -267,6 +271,31 @@ describe('the scripts load dist/publish.cjs and run', () => {
     expect(posted[0].params.issue_number).toBe(15);
     expect(posted[0].params.body).toContain('(https://testivai.github.io/testivai-example/pr/15/4-1/)');
     expect(posted[0].params.body).toContain(FORK_MARKER);
+  });
+
+  it('build: publishes a folder of your own pages, relative to the workspace, under its name', async () => {
+    const workspace = path.join(temp, 'workspace');
+    fs.mkdirSync(path.join(workspace, 'demo-report'), { recursive: true });
+    fs.writeFileSync(path.join(workspace, 'demo-report', 'index.html'), '<h1>Demo</h1>');
+    const saved = process.env.GITHUB_WORKSPACE;
+    process.env.GITHUB_WORKSPACE = workspace;
+    try {
+      const { github } = fakeGithub('on');
+      const { core, outputs } = fakeCore();
+
+      await runScript(byId('build'), values({ 'inputs.include-dir': 'demo-report', 'inputs.include-name': 'demo' }), { github, context, core });
+
+      expect(fs.readFileSync(path.join(outputs['site-dir'], 'demo', 'index.html'), 'utf8')).toBe('<h1>Demo</h1>');
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_WORKSPACE;
+      else process.env.GITHUB_WORKSPACE = saved;
+    }
+  });
+
+  it('build: needs include-name with include-dir', async () => {
+    const { github } = fakeGithub('on');
+
+    await expect(runScript(byId('build'), values({ 'inputs.include-dir': 'demo-report' }), { github, context, core: fakeCore().core })).rejects.toThrow(/include-name/);
   });
 
   it('build: refuses a runs-per-pr that is not a whole number from 1 to 10', async () => {

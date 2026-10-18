@@ -517,7 +517,66 @@ comment of its own with the link, the run and the counts.
 | `artifact-name` | `testivai-visual-report` | The reporter's `artifact-name`. |
 | `status-context` | `''` | The reporter's `status-context`, if you set one, so the links go into that lane's comment. |
 | `comment` | `true` | `false` leaves comments alone. |
+| `include-dir` | `''` | A folder of your own pages to publish with the reports ([below](#pages-of-your-own-on-the-same-site)). |
+| `include-name` | `''` | The folder `include-dir` goes in on the site, such as `demo`. Required with `include-dir`. |
 | `github-token` | `github.token` | Reads runs, artifacts and Pages settings, and writes the comments. The deploy always uses the job's own token. |
+
+### Pages of your own on the same site
+
+Since each publish replaces the whole site, pages you want on it too (a demo,
+a landing page) go through the action: build them in an earlier step, from
+the default branch, and pass the folder as `include-dir`. They are published
+as they are under `include-name/` and linked from the front page; symbolic
+links in the folder are skipped, and its size counts toward the site's.
+
+Build them from the repository's own code only. `actions/checkout` without
+`ref:` checks out the default branch on `workflow_run`, and the pull
+request's base branch on `pull_request_target`, never the pull request
+itself: never point it at the pull request's head, or a fork's code would run
+with this job's token.
+
+```yaml
+# .github/workflows/testivai-pages.yml
+name: TestivAI reports
+
+on:
+  workflow_run:
+    workflows: [Visual Regression]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+
+concurrency:
+  group: testivai-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page-url }}
+    steps:
+      # The default branch, never the pull request.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: '24', cache: 'npm' }
+      - run: npm ci
+      - run: npm run build:demo   # writes demo/ from the default branch
+      - id: publish
+        uses: testivai/testivai-oss/publish@v1
+        with:
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+          include-dir: demo
+          include-name: demo
+```
 
 ### What gets published, and what does not
 

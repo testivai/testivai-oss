@@ -39,6 +39,15 @@ export function parseComment(value: string): boolean {
   throw new Error(`comment must be true or false, not ${JSON.stringify(value)}`);
 }
 
+/** include-dir (relative to the workspace) and include-name, or undefined without include-dir. */
+export function parseInclude(env: Env): { dir: string; name: string } | undefined {
+  const dir = (env.INCLUDE_DIR ?? '').trim();
+  if (!dir) return undefined;
+  const name = (env.INCLUDE_NAME ?? '').trim();
+  if (!name) throw new Error('include-name is required with include-dir: the folder the pages go in on the site, such as demo');
+  return { dir: path.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), name };
+}
+
 export async function build({ github, context, core, env }: { github: OctokitLike; context: Context; core: Core; env: Env }): Promise<void> {
   const runsPerPr = parseRunsPerPr(env.RUNS_PER_PR ?? '3');
   if (!env.RUNNER_TEMP) throw new Error('RUNNER_TEMP is not set: this runs as a GitHub Actions step');
@@ -46,12 +55,15 @@ export async function build({ github, context, core, env }: { github: OctokitLik
   const siteDir = path.join(root, 'site');
   const stateFile = path.join(root, 'state.json');
 
+  const include = parseInclude(env);
+
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || 'testivai-visual-report',
     runsPerPr,
     consent: env.PUBLIC_REPORTS,
     siteDir,
     serverUrl: context.serverUrl,
+    ...(include ? { include } : {}),
     log: core,
   });
   if (!result.published) {
