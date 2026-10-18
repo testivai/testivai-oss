@@ -121,12 +121,14 @@ CI — GitHub Actions
 | `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
 | `src/report/template.ts` | Self-contained HTML template for the report |
+| `src/capture/stable-capture.ts` | Fresh-frame wait + capture until two in a row match (Chrome can return a wrong-viewport frame in a beyond-viewport capture); shared by the standalone CLI and the Playwright adapter |
 
 ### @testivai/witness-playwright (`packages/playwright/`)
 
 | File | Responsibility |
 |---|---|
 | `src/snapshot.ts` | `witness()` entry point (`testivai.witness` and `snapshot` are kept as aliases) |
+| `src/capture/full-page.ts` | Full-page CDP capture: fresh frame, measure, capture until two in a row match |
 | `src/reporter.ts` | Playwright reporter — reads config, calls compare, generates report |
 
 ### @testivai/mcp (`packages/mcp/`)

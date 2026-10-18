@@ -21,6 +21,7 @@ import { BaselineStore } from '../baselines/store';
 import { loadLocalConfig } from '../config/local-config';
 import { generateReport } from '../report/generator';
 import { logger } from '../utils/logger';
+import { FRESH_FRAME_EXPRESSION, captureUntilStable, settleFreshFrame } from '../capture/stable-capture';
 import { filterCrawledLinks, pageNameFromUrl, resolvePages } from './crawl';
 import { findChrome, launchChrome, type LaunchedChrome } from './launcher';
 
@@ -207,34 +208,18 @@ async function revealPage(client: any): Promise<void> {
   }
 }
 
-/**
- * Resolves once the page has rendered two animation frames, i.e. a frame
- * produced after every style and layout change made so far has been painted.
- * The timeout bounds the wait for a page that renders no frames at all.
- */
-const FRESH_FRAME_SCRIPT = `new Promise((resolve) => {
-  const timer = setTimeout(() => resolve(false), 1000);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    clearTimeout(timer);
-    resolve(true);
-  }));
-})`;
+/** Debug sink for the shared capture helpers, prefixed for this mode. */
+const captureLog = (message: string) => logger.debug(`standalone capture: ${message}`);
 
 /**
- * Wait for a freshly rendered frame before capturing. Without it,
- * Page.captureScreenshot could return a stale frame: the page measured
- * correctly, but the pixels showed styles resolved against an earlier
- * viewport (a collapsed 100vh hero, narrow-viewport media rules), so
- * identical pages flipped between two renders from run to run. A forced
- * layout alone does not prevent this; a rendered frame does.
- *
- * Returns whether two frames were rendered: false when the in-page wait
- * timed out, or failed because the page navigated.
+ * Evaluate the shared fresh-frame wait (FRESH_FRAME_EXPRESSION) in the page.
+ * Resolves whether two frames were rendered: false when the in-page wait timed
+ * out, or failed because the page navigated.
  */
 async function waitForFreshFrame(client: any): Promise<boolean> {
   try {
     const result = await client.Runtime.evaluate({
-      expression: FRESH_FRAME_SCRIPT,
+      expression: FRESH_FRAME_EXPRESSION,
       awaitPromise: true,
       returnByValue: true,
     });
@@ -245,24 +230,13 @@ async function waitForFreshFrame(client: any): Promise<boolean> {
 }
 
 /**
- * Wait for a fresh frame, retrying once when none arrived in time (a loaded
- * machine can stall a frame past the in-page timeout). If neither attempt
- * sees one, the capture still proceeds: best-effort, never blocking.
+ * Wait for a freshly rendered frame before capturing (retried once; see
+ * capture/stable-capture.ts for why a stale frame happens). Best-effort,
+ * never blocking.
  */
-async function settleFrame(client: any): Promise<void> {
-  if (await waitForFreshFrame(client)) return;
-  logger.debug('standalone capture: no fresh frame within the wait; waiting once more');
-  if (await waitForFreshFrame(client)) return;
-  logger.debug('standalone capture: no fresh frame after a retry; capturing anyway, the screenshot may be stale');
+function settleFrame(client: any): Promise<void> {
+  return settleFreshFrame(() => waitForFreshFrame(client), captureLog);
 }
-
-/**
- * The most captures of one page while waiting for two in a row to match.
- * Every stale-capture pattern measured settles within four (stale, good,
- * good / good, stale, good, good); a page that never stops animating costs
- * four captures, not an endless loop.
- */
-const MAX_CAPTURES = 4;
 
 async function screenshot(client: any, width: number, height: number): Promise<string> {
   const shot = await client.Page.captureScreenshot({
@@ -303,18 +277,12 @@ export async function captureFullPage(client: any): Promise<Buffer> {
   // collapsed 100vh hero), most likely from the 1x1 view Chrome emulates for
   // a moment while it sets up a beyond-viewport capture. The capture after
   // it is almost always right, so capture until two captures in a row match.
-  // That wrong frame is the same pixels every time, so two of them in a row
-  // still match and are kept: rare, since it takes two misses, but possible.
-  let previous = await screenshot(client, width, height);
-  for (let captures = 1; captures < MAX_CAPTURES; captures++) {
-    await settleFrame(client);
-    const current = await screenshot(client, width, height);
-    if (current === previous) return Buffer.from(current, 'base64');
-    logger.debug('standalone capture: two captures in a row differed; capturing again');
-    previous = current;
-  }
-  logger.debug(`standalone capture: no two captures in a row matched in ${MAX_CAPTURES}; keeping the last`);
-  return Buffer.from(previous, 'base64');
+  const data = await captureUntilStable({
+    capture: () => screenshot(client, width, height),
+    settle: () => settleFrame(client),
+    log: captureLog,
+  });
+  return Buffer.from(data, 'base64');
 }
 
 export async function runStandaloneWitness(
