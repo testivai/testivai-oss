@@ -288,9 +288,15 @@ function explainMissingBaseline(root: string, results: ResultsFile, name: string
 /** One item of a tool result: text or a PNG. */
 export type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
 
-/** An image labelled like get_diff labels it, downscaled for model context. */
-export function imageContent(label: string, raw: Buffer): ToolContent[] {
-  const downscaled = downscalePng(raw);
+/** The longest edge of a full-page image get_diff sends; a larger one is downscaled to fit. */
+export const MAX_IMAGE_EDGE = 1024;
+
+/**
+ * An image labelled like get_diff labels it, downscaled for model context.
+ * Pass `decoded` when the caller has already read the PNG, to read it once.
+ */
+export function imageContent(label: string, raw: Buffer, decoded?: PNG): ToolContent[] {
+  const downscaled = downscalePng(raw, MAX_IMAGE_EDGE, decoded);
   const wasDownscaled = downscaled.originalWidth !== downscaled.width || downscaled.originalHeight !== downscaled.height;
   return [
     { type: 'text', text: wasDownscaled ? `${label} (downscaled from ${downscaled.originalWidth}x${downscaled.originalHeight}):` : `${label}:` },
@@ -836,14 +842,16 @@ export function listBaselines(root: string): string[] {
 /**
  * Downscale a PNG buffer using integer-stride nearest-neighbour sampling.
  * When the longest edge is <= maxEdge the original buffer is returned unchanged.
+ * `decoded` is the buffer already read with pngjs, when the caller has it.
  *
  * @returns The (possibly) resized PNG buffer, output dimensions, and original dimensions.
  */
 export function downscalePng(
   buffer: Buffer,
-  maxEdge = 1024
+  maxEdge = 1024,
+  decoded?: PNG
 ): { data: Buffer; width: number; height: number; originalWidth: number; originalHeight: number } {
-  const original = PNG.sync.read(buffer);
+  const original = decoded ?? PNG.sync.read(buffer);
   const { width: ow, height: oh } = original;
   const longestEdge = Math.max(ow, oh);
 

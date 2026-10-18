@@ -5,6 +5,7 @@ import { PNG } from 'pngjs';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { REVIEW_PROMPT, TOOL_META, TRIAGE_PROMPT } from '../tool-meta';
 import { connectBuiltServer } from './stdio-harness';
+import { encode, page, pixels } from './png-helpers';
 
 /**
  * The tool descriptions are unit-tested in tool-meta.test.ts; this guards the
@@ -435,6 +436,15 @@ describe('missing baselines (built server over stdio)', () => {
     expect(PNG.sync.read(Buffer.from(images[0].data!, 'base64')).width).toBe(3);
   });
 
+  it('get_diff with region, y or height on a missing baseline still shows its screenshot whole, and says so', async () => {
+    const content = await call('get_diff', { name: 'products', y: 10 });
+    expect(content.filter((x) => x.type === 'image')).toHaveLength(1);
+    const t = texts(content);
+    expect(t[t.length - 1]).toBe(
+      'region, y and height crop a snapshot in the results; a missing baseline has no regions, so its committed screenshot is shown whole.',
+    );
+  });
+
   it('get_diff on a listed traversal name reads nothing outside the baselines directory', async () => {
     const content = await call('get_diff', { name: '../../outside' });
     expect(content.some((x) => x.type === 'image')).toBe(false);
@@ -486,6 +496,99 @@ describe('missing baselines (built server over stdio)', () => {
   it('a name that is neither a snapshot nor a missing baseline is still unknown', async () => {
     expect(texts(await call('get_diff', { name: 'nope' }))).toEqual(['No snapshot named "nope" in the latest results.']);
     expect(texts(await call('explain_snapshot', { name: 'nope' }))[0]).toMatch(/^No snapshot named "nope"/);
+  });
+});
+
+// A tall full-page capture downscaled to fit is unreadable (390×12000 becomes
+// about 33×1000), so get_diff, and its alias, follow the full-page images with
+// the changed region at native scale, and crop any region or band on demand.
+describe('get_diff crops of a tall capture (built server over stdio)', () => {
+  let root: string;
+  let client: Client;
+  const ink = { x: 40, y: 6000, width: 300, height: 60 };
+  const current = page(390, 12000, ink);
+  const box = { x: 0, y: 5968, width: 390, height: 124 }; // the region plus 32 px, full width
+
+  beforeAll(async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-crops-stdio-'));
+    const dir = path.join(root, 'visual-report', 'images', 'home-mobile');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'baseline.png'), encode(page(390, 12000)));
+    fs.writeFileSync(path.join(dir, 'current.png'), encode(current));
+    fs.writeFileSync(path.join(dir, 'diff.png'), encode(page(390, 12000, ink)));
+    fs.writeFileSync(
+      path.join(root, 'visual-report', 'results.json'),
+      JSON.stringify({
+        version: '2.4.0',
+        timestamp: 't',
+        summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0, missing: 0 },
+        snapshots: [
+          {
+            name: 'home-mobile',
+            status: 'changed',
+            diffPercent: 0.4,
+            baselinePath: 'images/home-mobile/baseline.png',
+            currentPath: 'images/home-mobile/current.png',
+            diffPath: 'images/home-mobile/diff.png',
+            dom: { changed: true, noiseHint: false, summary: { added: 0, removed: 0, attributeChanges: 0, textChanges: 1 } },
+            regions: [{ ...ink, classification: 'change', elements: [{ selector: '.hero > h1', role: 'changed' }] }],
+          },
+        ],
+        missingBaselines: [],
+      }),
+    );
+    client = await connectBuiltServer(root);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client?.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  type Content = Array<{ type: string; text?: string; data?: string }>;
+  const call = async (name: string, args: Record<string, unknown>) => (await client.callTool({ name, arguments: args })).content as Content;
+  const imageAfter = (content: Content, label: string): PNG => {
+    const at = content.findIndex((x) => x.type === 'text' && x.text === label);
+    expect(at).toBeGreaterThan(-1);
+    expect(content[at + 1].type).toBe('image');
+    return PNG.sync.read(Buffer.from(content[at + 1].data!, 'base64'));
+  };
+
+  it.each(['get_diff', 'get_snapshot_diff'])('%s takes region, y and height next to the required name', async (tool) => {
+    const advertised = (await client.listTools()).tools.find((t) => t.name === tool);
+    expect(Object.keys(advertised?.inputSchema.properties ?? {}).sort()).toEqual(['height', 'name', 'region', 'y']);
+    expect(advertised?.inputSchema.required).toEqual(['name']);
+  });
+
+  it.each(['get_diff', 'get_snapshot_diff'])('%s follows the downscaled full page with the region at native scale, pixel for pixel', async (tool) => {
+    const content = await call(tool, { name: 'home-mobile' });
+    expect(imageAfter(content, 'current (downscaled from 390x12000):').height).toBeLessThanOrEqual(1024);
+    const crop = imageAfter(content, 'current, crop 1:');
+    expect([crop.width, crop.height]).toEqual([box.width, box.height]);
+    expect(pixels(crop, { ...box, x: 0, y: 0 }).equals(pixels(current, box))).toBe(true);
+    expect(content.find((x) => x.text?.startsWith('Crop 1 of 1:'))?.text).toBe(
+      'Crop 1 of 1: region #0 `.hero > h1` — x=0 y=5968 390×124 (the region plus 32 px, full width) at native scale:',
+    );
+  });
+
+  it.each(['get_diff', 'get_snapshot_diff'])('%s with region: 0, or y and height, returns only that crop', async (tool) => {
+    const one = await call(tool, { name: 'home-mobile', region: 0 });
+    expect(one.filter((x) => x.type === 'image')).toHaveLength(3);
+    expect(pixels(imageAfter(one, 'current:'), { ...box, x: 0, y: 0 }).equals(pixels(current, box))).toBe(true);
+    const band = await call(tool, { name: 'home-mobile', y: 5990, height: 80 });
+    expect(band.filter((x) => x.type === 'image')).toHaveLength(3);
+    const shown = imageAfter(band, 'current, band:');
+    expect(pixels(shown, { x: 0, y: 0, width: 390, height: 80 }).equals(pixels(current, { x: 0, y: 5990, width: 390, height: 80 }))).toBe(true);
+  });
+
+  it('refuses a region that is not a whole number from 0', async () => {
+    for (const region of [-1, 0.5]) {
+      const outcome = await client.callTool({ name: 'get_diff', arguments: { name: 'home-mobile', region } }).then(
+        (r) => (r.isError ? 'error' : 'ok'),
+        () => 'error',
+      );
+      expect(outcome).toBe('error');
+    }
   });
 });
 

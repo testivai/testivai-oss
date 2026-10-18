@@ -105,6 +105,29 @@ describe('tool descriptions: missing baselines', () => {
   });
 });
 
+// A full-page capture downscaled to fit is unreadable on a tall page, so the
+// model must learn, before it calls get_diff, that the regions come cropped at
+// native scale, how many, how large, and how to ask for another area. The
+// numbers are written out (tool-meta.ts imports nothing: the review action
+// bundles it), so they are checked against the limits the crops use.
+describe('get_diff description: crops of the changed regions', () => {
+  const { CROP_LIMITS } = require('../diff-images') as typeof import('../diff-images');
+
+  it.each(['get_diff', 'get_snapshot_diff'] as const)('%s: the full page downscaled, then the regions at native scale, within the caps', (name) => {
+    const d = TOOL_META[name].description;
+    expect(d).toMatch(/the full page downscaled to fit/);
+    expect(d).toMatch(/each changed region cropped at native scale[^.]*read text, wrapping and clipping/);
+    expect(d).toContain(`up to ${CROP_LIMITS.maxCrops} crops`);
+    expect(d).toContain(`${CROP_LIMITS.padding} px`);
+    expect(d).toContain(`each at most ${CROP_LIMITS.maxWidth}×${CROP_LIMITS.maxHeight} px`);
+    expect(d).toContain(`${CROP_LIMITS.maxTotalPixels.toLocaleString('en-US')} px in all`);
+  });
+
+  it.each(['get_diff', 'get_snapshot_diff'] as const)('%s: region, or y and height, return only that crop', (name) => {
+    expect(TOOL_META[name].description).toMatch(/Pass `region` \(an index the response lists\) for another region, or `y` and `height` for any band of the page: those return only that crop/);
+  });
+});
+
 /**
  * The review-visual-changes prompt decides how the model sorts each diff, so
  * it carries the same four cases as the verdicts: likely render noise (DOM
@@ -384,6 +407,14 @@ describe('triage-visual-diff prompt', () => {
       expect(TRIAGE_PROMPT.nextStepsFor("it's")).toContain("`git rm -r 'it'\\''s'/<name>`");
       expect(TRIAGE_PROMPT.nextStepsFor('')).toContain('`git rm -r ./<name>`');
       expect(TRIAGE_PROMPT.textFor({ baselinesDir: 'shots/linux' })).toContain(`- Next step: ${TRIAGE_PROMPT.nextStepsFor('shots/linux')}`);
+    });
+
+    // The CI review triages from these images: the downscaled full page shows
+    // where a change is, the crops show whether it reads right.
+    it('the evidence line sends the model to the native-scale crops for text, wrapping and clipping', () => {
+      const evidence = rubric.split('\n').find((l) => l.startsWith('Evidence:'));
+      expect(evidence).toMatch(/full-page images are downscaled[^.]*judge text, wrapping and clipping from the crops of the changed regions[^.]*native scale/);
+      expect(evidence).toMatch(/get_diff with `region` or `y` and `height` crops another area/);
     });
 
     it('the evidence line says get_diff has only the committed screenshot for a missing baseline', () => {

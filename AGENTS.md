@@ -145,6 +145,7 @@ CI — GitHub Actions
 | `src/server.ts` | Registers the tools and the `review-visual-changes` and `triage-visual-diff` prompts; starts the stdio server on import |
 | `src/tool-meta.ts` | Every tool's title and description (what the model reads before calling a tool), and the prompt texts; `TRIAGE_PROMPT.rubric()` is shared with the review action |
 | `src/lib.ts` | `verdictFor()` one-line verdicts, `explainSnapshot()` evidence bundle, approve helpers (reuse witness BaselineStore) |
+| `src/diff-images.ts` | What `get_diff` returns: the full page downscaled, then native-scale crops of the changed regions (`planCrops`, caps in `CROP_LIMITS`), or one region or band on request |
 
 ### GitHub Action reporter (`action/`)
 
