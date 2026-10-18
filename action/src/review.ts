@@ -25,6 +25,7 @@ import * as path from 'path';
 import { TRIAGE_PROMPT } from '../../packages/mcp/src/tool-meta';
 import { resolveBaselinesDir } from '../../packages/witness/src/baselines/store';
 import type { ResultsData, TriageItem } from './types';
+import { readRunStamp, staleReport } from './report-artifact';
 
 export type { TriageItem } from './types';
 
@@ -586,6 +587,21 @@ export async function prepare({ github, context, core, env }: { github: Github; 
   if (!results) {
     return skip({
       reason: `No results.json in ${path.relative(root, reportDir) || '.'} (the reportDir in .testivai/config.json, else visual-report): did the visual tests run? The AI triage was skipped.`,
+      clearStale: true,
+      level: 'warning',
+    });
+  }
+
+  // A re-run's job can download an earlier attempt's report by name
+  // (report-artifact.ts): triaging it would describe results this run no
+  // longer has, so say so instead.
+  const stale = staleReport(readRunStamp(reportDir), env);
+  if (stale) {
+    return skip({
+      reason:
+        `The visual report this job downloaded is from attempt ${stale.reportAttempt} of this run, not this attempt (${stale.thisAttempt}): ` +
+        'actions/download-artifact picks among same-named artifacts by ID, which is not upload order. The AI triage was skipped rather than triage a stale report. ' +
+        "Re-run all jobs, or download the report by ID (download-artifact's artifact-ids input, from the reporter's artifact-id output).",
       clearStale: true,
       level: 'warning',
     });

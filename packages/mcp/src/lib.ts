@@ -4,14 +4,21 @@ import { PNG } from 'pngjs';
 import { BaselineStore, resolveBaselinesDir } from '@testivai/witness/baselines';
 import { shellArg } from './tool-meta';
 import {
+  describeCaptureMethod,
+  describeEnvironmentChange,
   describeRegions,
   describeSizeChange,
   diffShape,
+  environmentChangeGroups,
+  environmentChangeLine,
   explainHeightChange,
   formatSizes,
+  isRenderingDrift,
   NOISE_MAX_DIFF_PERCENT,
   sizeMismatchKind,
+  snapshotEnvironmentChange,
   STYLE_CHECK_DOES_NOT_COVER,
+  type CaptureEnvironment,
   type DiffShape,
   type SizeMismatchInfo,
 } from '@testivai/witness/report';
@@ -61,6 +68,22 @@ export interface SnapshotResult {
    * padding and such a snapshot is never passed.
    */
   sizeMismatch?: SizeMismatchInfo;
+  /**
+   * results.json 2.5.0+: capture provenance, when the baseline and the
+   * current capture both recorded their environment. `renderingDelta` lists
+   * the changes that can affect rendering; with an identical DOM and matching
+   * styles they make the diff rendering drift (the machine changed, not the
+   * page). `policy: 'strict'` means environmentPolicy made it changed.
+   */
+  environment?: EnvironmentInfo;
+}
+
+export interface EnvironmentInfo {
+  delta: string[];
+  renderingDelta: string[];
+  baseline?: CaptureEnvironment;
+  candidate?: CaptureEnvironment;
+  policy?: 'strict';
 }
 
 export interface ResultsFile {
@@ -399,8 +422,68 @@ function domSummaryDetail(s: NonNullable<DomInfo['summary']>): string {
   return `${s.added} added, ${s.removed} removed, ${s.attributeChanges} attribute changes${s.textChanges ? `, ${s.textChanges} text changes` : ''}`;
 }
 
-/** One-line, agent-oriented verdict for a snapshot. */
+/**
+ * One-line, agent-oriented verdict for a snapshot. The environment comes
+ * first: environmentPolicy "strict", a size change from another capture
+ * method and rendering drift (the DOM and computed styles match and the
+ * rendering environment changed) each get their own verdict; any other
+ * verdict gets the environment change as context.
+ */
 export function verdictFor(snapshot: SnapshotResult): string {
+  const base = pageVerdict(snapshot);
+  if (snapshot.status === 'new') return base;
+  const change = snapshotEnvironmentChange(snapshot);
+  if (!change) return base;
+  const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
+  const env = snapshot.environment as EnvironmentInfo;
+  if (snapshot.status === 'passed') {
+    if (!snapshot.autoPassed) return `${base}, although the environment changed since the baseline (${change})`;
+    if (isRenderingDrift(snapshot)) {
+      return (
+        `${base}; but this is rendering drift (${change} since the baseline): ` +
+        're-baseline in this environment so the tolerance keeps measuring the page, not the machine'
+      );
+    }
+    return `${base}; the environment also changed since the baseline (${change})`;
+  }
+  if (env.policy === 'strict') {
+    return (
+      `changed (${pct}) — environment changed (strict policy): ${change} since the baseline; ` +
+      'environmentPolicy "strict" makes it changed whatever its pixels say, and approving re-baselines it in this environment'
+    );
+  }
+  if (snapshot.sizeMismatch && env.baseline && env.candidate && env.renderingDelta.includes('adapter.captureMethod')) {
+    return (
+      `changed (${pct}) — capture method changed: ${describeCaptureMethod(env.baseline.adapter.captureMethod)} → ` +
+      `${describeCaptureMethod(env.candidate.adapter.captureMethod)} since the baseline (${formatSizes(snapshot.sizeMismatch)}): ` +
+      'the size change comes from how the screenshot was taken, not from the page; re-baseline with this capture method, or capture the way the baseline was'
+    );
+  }
+  if (isRenderingDrift(snapshot)) {
+    return (
+      `changed (${pct}) — rendering drift: ${change} since the baseline, and the DOM and computed styles both match, ` +
+      'so the environment changed, not the page; re-baseline once the images are confirmed to match apart from rendering (get_diff)'
+    );
+  }
+  return `${base}; the environment also changed since the baseline (${change}), which can add rendering differences of its own`;
+}
+
+/**
+ * get_visual_results' opening lines: one per environment change that two
+ * or more changed snapshots share, with an honest count of the drift among
+ * them (environmentChangeLine in @testivai/witness), then their names.
+ */
+export function environmentLines(snapshots: SnapshotResult[]): string[] {
+  return environmentChangeGroups(snapshots)
+    .filter((g) => g.snapshots.length >= 2)
+    .map((g) => {
+      const shown = g.snapshots.slice(0, 10).join(', ') + (g.snapshots.length > 10 ? ', …' : '');
+      return `${environmentChangeLine(g)} Snapshots: ${shown}.`;
+    });
+}
+
+/** The verdict from the page-side signals alone (pixels, DOM, styles, size). */
+function pageVerdict(snapshot: SnapshotResult): string {
   const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
   const notCompared = stylesNotCompared(snapshot.dom);
   const shape = matchedStylesShape(snapshot);
@@ -599,6 +682,22 @@ export interface SnapshotExplanation {
     };
     /** Structural evidence from the DOM pair. */
     dom: DomInfo | null;
+    /**
+     * Capture provenance (results.json 2.5.0+): what changed in the capture
+     * environment since the baseline. `change` words the rendering changes,
+     * `context` the rest; `drift` is true when the diff is rendering drift.
+     * Null when either side recorded no environment.
+     */
+    environment: {
+      delta: string[];
+      renderingDelta: string[];
+      change: string | null;
+      context: string | null;
+      drift: boolean;
+      policy: 'strict' | null;
+      baseline: CaptureEnvironment | null;
+      candidate: CaptureEnvironment | null;
+    } | null;
   };
   /** Interpretation rules the evidence supports, phrased for the model. */
   guidance: string[];
@@ -660,9 +759,28 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   // a diff pending review; a passed snapshot has nothing pending approval
   // (an auto-pass gets its own line below), so the verdict and guidance agree.
   const pending = snapshot.status === 'changed';
-  // A size change first: the pixel layers describe the padding, so the
-  // shape, noise and styles-not-compared readings below do not apply.
-  const sized = snapshot.sizeMismatch !== undefined;
+  // Capture provenance first: drift replaces the noise reading below.
+  const envChange = snapshotEnvironmentChange(snapshot);
+  const drift = isRenderingDrift(snapshot);
+  if (snapshot.environment?.policy === 'strict' && envChange) {
+    guidance.push(
+      `environmentPolicy is "strict" and the environment changed since the baseline (${envChange}), so this snapshot is changed whatever its pixels say. ` +
+        "Approving re-baselines it in this environment; otherwise capture it in the baseline's environment.",
+    );
+  }
+  if (drift && envChange) {
+    guidance.push(
+      `Rendering drift: the environment changed since the baseline (${envChange}) and the DOM and computed styles match, so the machine changed, not the page. ` +
+        'Compare the images (get_diff): if they match apart from rendering (glyph edges, font weight, subpixel layout), the baseline needs re-approving in this environment ' +
+        'once the human agrees; if something else differs, it is not drift alone. Do not call it render noise.',
+    );
+  } else if (envChange && (pending || snapshot.autoPassed)) {
+    guidance.push(`The environment also changed since the baseline (${envChange}), which can add rendering differences of its own: weigh it, but it does not explain a DOM or style change.`);
+  }
+  // A size change (the pixel layers describe the padding) or rendering drift
+  // (the reading is the environment's) replaces the shape, noise and
+  // styles-not-compared readings below.
+  const pixelReadingReplaced = snapshot.sizeMismatch !== undefined || drift;
   if (snapshot.sizeMismatch) {
     const sm = snapshot.sizeMismatch;
     const sizes = `The current capture is ${sm.candidate.width}×${sm.candidate.height}, the baseline ${sm.baseline.width}×${sm.baseline.height}: ${describeSizeChange(sm)}.`;
@@ -681,14 +799,14 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
       );
     }
   }
-  if (pending && !sized && notCompared) {
+  if (pending && !pixelReadingReplaced && notCompared) {
     const why = notCompared === 'absent' ? 'these results have no style check' : 'no comparable style digests on both sides';
     guidance.push(
       'Styles not compared — could be render noise or a stylesheet-only change: pixels differ and the DOM is ' +
         `structurally identical, but computed styles were not compared (${why}), so a stylesheet-only change is ` +
         'not ruled out. Do not treat it as noise: compare the images (get_diff) before approving.',
     );
-  } else if (pending && !sized && shape?.kind === 'concentrated' && shape.box) {
+  } else if (pending && !pixelReadingReplaced && shape?.kind === 'concentrated' && shape.box) {
     const regionList = snapshot.regions ?? [];
     const element = sharedElement(regionList);
     const mapsTo = element ? `, and ${regionList.length === 1 ? 'the region' : 'every region'} maps to \`${element}\`` : '';
@@ -699,7 +817,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'so this is a bad capture (a torn or partly blank render, a shifted band, a bad baseline) or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && !sized && shape?.kind === 'large') {
+  } else if (pending && !pixelReadingReplaced && shape?.kind === 'large') {
     // diffShape treats an unknown size as not small; say so rather than claim a share.
     const size =
       snapshot.diffPercent === undefined
@@ -711,7 +829,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         'machines that captured the baseline and the current image; it can also be a bad capture or a change the style ' +
         `check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). Do not treat it as noise: compare the images (get_diff) before approving.`,
     );
-  } else if (pending && !sized && snapshot.dom?.noiseHint) {
+  } else if (pending && !pixelReadingReplaced && snapshot.dom?.noiseHint) {
     guidance.push('Pixels differ but the DOM is structurally identical, style digests match, and the diff is small and scattered — likely render noise (anti-aliasing, font hinting). Mention it; do not block on it.');
   }
   if (snapshot.dom?.styleCheck === 'mismatch' && snapshot.dom.changed) {
@@ -779,6 +897,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         shape: snapshot.status === 'changed' || snapshot.autoPassed ? diffShape(snapshot) : null,
         sizeMismatch: snapshot.sizeMismatch ?? null,
       },
+      environment: snapshot.environment ? explainEnvironment(snapshot, envChange, drift) : null,
       element: {
         pageShift: snapshot.pageShift ?? null,
         shiftedSelectors: [...shifted].slice(0, 10),
@@ -787,6 +906,22 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
       dom: snapshot.dom ?? null,
     },
     guidance,
+  };
+}
+
+/** The environment layer of explain_snapshot. */
+function explainEnvironment(snapshot: SnapshotResult, change: string | null, drift: boolean): NonNullable<SnapshotExplanation['layers']['environment']> {
+  const env = snapshot.environment as EnvironmentInfo;
+  const contextFields = env.delta.filter((f) => !env.renderingDelta.includes(f));
+  return {
+    delta: env.delta,
+    renderingDelta: env.renderingDelta,
+    change,
+    context: env.baseline && env.candidate && contextFields.length > 0 ? describeEnvironmentChange(env.baseline, env.candidate, contextFields) : null,
+    drift,
+    policy: env.policy ?? null,
+    baseline: env.baseline ?? null,
+    candidate: env.candidate ?? null,
   };
 }
 
@@ -901,7 +1036,7 @@ export interface ChangeGroup {
    * spread out but over 1% of pixels: more than render noise usually
    * changes, never 'noise'. A diff concentrated in one area is never grouped.
    */
-  basis: 'style-only' | 'page-shift' | 'styles-not-compared' | 'large-diff' | 'noise';
+  basis: 'style-only' | 'page-shift' | 'styles-not-compared' | 'drift' | 'large-diff' | 'noise';
   /** What every member has in common, phrased for the reader. */
   label: string;
   /** Snapshot names, sorted. Always two or more. */
@@ -911,7 +1046,7 @@ export interface ChangeGroup {
 type Signature = { basis: ChangeGroup['basis']; key: string; label: string };
 
 // Real changes, then unknowns, before likely noise when groups are the same size.
-const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles-not-compared', 'large-diff', 'noise'];
+const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles-not-compared', 'drift', 'large-diff', 'noise'];
 
 /**
  * The one grouping signal a changed snapshot carries, or null when it must
@@ -968,6 +1103,17 @@ function signatureOf(s: SnapshotResult): Signature | null {
       label:
         `identical DOM, styles not compared (${NOT_COMPARED_REASON[notCompared]}): ` +
         'render noise or a stylesheet-only change, not ruled out',
+    };
+  }
+  // Rendering drift: the environment changed, not the page. Keyed by the
+  // change, so two different browser bumps are never one group, and never
+  // grouped as noise.
+  if (isRenderingDrift(s)) {
+    const change = snapshotEnvironmentChange(s) as string;
+    return {
+      basis: 'drift',
+      key: `drift:${change}`,
+      label: `rendering drift: ${change} since the baseline, with the DOM and computed styles matching`,
     };
   }
   // Matching styles: likely noise only when the diff is small and scattered.

@@ -43,6 +43,22 @@ describe('@testivai/mcp README', () => {
   });
 });
 
+// Rendering drift (results.json 2.5.0): documented as its own verdict, not
+// grouped with noise, and the environment layer of explain_snapshot.
+describe('@testivai/mcp README: capture provenance', () => {
+  const readme = read(README);
+  const row = (tool: string) => readme.split('\n').find((l) => l.startsWith(`| \`${tool}\``)) ?? '';
+
+  it('get_visual_results documents rendering drift as never noise, and the opening line', () => {
+    expect(row('get_visual_results')).toMatch(/rendering drift \([^)]*environment[^|]*never called noise/i);
+    expect(row('get_visual_results')).toMatch(/opens with one line/);
+  });
+
+  it('explain_snapshot documents the environment layer', () => {
+    expect(row('explain_snapshot')).toMatch(/`layers\.environment`/);
+  });
+});
+
 // Missing baselines (committed, but no capture this run) are served by
 // get_visual_results, explain_snapshot and get_diff, and triaged by the
 // triage-visual-diff prompt: both docs that describe the tools say so.

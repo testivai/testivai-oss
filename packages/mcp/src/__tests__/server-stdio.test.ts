@@ -175,6 +175,40 @@ describe('built server over stdio', () => {
     expect(text).not.toMatch(/likely render noise|don't block/i);
   });
 
+  it('get_visual_results opens with the environment change several snapshots share, and never calls drift noise', async () => {
+    const report = path.join(root, 'visual-report');
+    fs.mkdirSync(report, { recursive: true });
+    const env = (version: string) => ({
+      os: { platform: 'linux', release: '6.8.0', arch: 'x64' },
+      browser: { name: 'chromium', version },
+      adapter: { name: '@testivai/witness-playwright', version: '2.0.7', captureMethod: 'full-page:cdp' },
+    });
+    const drifted = (name: string) => ({
+      name,
+      status: 'changed',
+      diffPercent: 0.4,
+      dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+      environment: { delta: ['browser.version'], renderingDelta: ['browser.version'], baseline: env('130.0.6723.58'), candidate: env('141.0.7390.37') },
+    });
+    fs.writeFileSync(
+      path.join(report, 'results.json'),
+      JSON.stringify({
+        version: '2.5.0',
+        timestamp: 't',
+        summary: { total: 2, passed: 0, changed: 2, newSnapshots: 0 },
+        snapshots: [drifted('home'), drifted('about')],
+      }),
+    );
+
+    const lines = textOf(await client.callTool({ name: 'get_visual_results', arguments: {} })).split('\n');
+    expect(lines[0]).toMatch(/^Run: t — 2 snapshots/);
+    expect(lines[1]).toBe(
+      'Environment changed since the baselines (chromium 130.0.6723.58 → 141.0.7390.37): 2 diffs are rendering drift (DOM and computed styles identical), ' +
+        'not page changes; re-baseline them once the images are confirmed. Snapshots: home, about.',
+    );
+    expect(lines.join('\n')).not.toMatch(/likely render noise|don't block/i);
+  });
+
   // Real runs with an identical DOM and matching styles (packages/witness,
   // fixtures/README.md there): the eval's clipped card, a bad capture and a
   // bad baseline used to come back "likely render noise; don't block".

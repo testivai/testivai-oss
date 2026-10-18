@@ -84,6 +84,31 @@ describe('report escaping', () => {
     expect(html).not.toContain(INJECTED);
   });
 
+  it('escapes the auto-pass criterion in a rendering-drift verdict', () => {
+    const env = (version: string) => ({
+      os: { platform: 'linux', release: '6.8.0', arch: 'x64' },
+      browser: { name: 'chromium', version },
+      adapter: { name: '@testivai/witness-playwright', version: '2.0.9', captureMethod: 'full-page:cdp' },
+    });
+    const html = renderHtml(
+      report({
+        status: 'passed',
+        autoPassed: PAYLOAD as SnapshotResult['autoPassed'],
+        diffPercent: 0.2,
+        dom: { changed: false, noiseHint: true, summary: null, styleCheck: 'match' },
+        environment: {
+          delta: ['browser.version'],
+          renderingDelta: ['browser.version'],
+          baseline: env('130.0.6723.58'),
+          candidate: env('141.0.7390.37'),
+        },
+      }),
+    );
+
+    expect(html).toContain('Rendering drift');
+    expect(html).not.toContain(INJECTED);
+  });
+
   it("escapes where each applied mask came from", () => {
     const html = renderHtml(
       report({

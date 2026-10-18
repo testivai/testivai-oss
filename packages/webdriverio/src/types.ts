@@ -20,6 +20,13 @@ export interface WitnessBrowser {
    * Type kept loose to accept WDIO 8/9 signature variants.
    */
   execute<T = unknown>(script: string | ((...args: any[]) => T), ...args: any[]): Promise<T>;
+
+  /**
+   * The session's W3C capabilities (WebdriverIO's `browser.capabilities`).
+   * Optional: when present, the browser, its version and the driver are
+   * recorded as capture provenance in the capture's metadata.json.
+   */
+  capabilities?: Record<string, unknown>;
 }
 
 /**

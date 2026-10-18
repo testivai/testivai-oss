@@ -18,6 +18,8 @@ import {
   resolveMasks,
 } from '../diff/mask';
 import type { RegionOptions } from '../diff/types';
+import { type EnvironmentPolicy, readEnvironment } from '../capture/environment';
+import { diffEnvironments } from './environment';
 import {
   attributeRegions,
   compareStyleHashes,
@@ -49,6 +51,12 @@ export interface CompareOptions {
    * that would otherwise poison the noise hint.
    */
   volatileAttributes?: string[];
+  /**
+   * config `environmentPolicy`. 'strict' makes a snapshot whose rendering
+   * environment changed since the baseline changed, whatever its pixels
+   * say; 'warn' (default) and 'separate' never change a status here.
+   */
+  environmentPolicy?: EnvironmentPolicy;
 }
 
 /** The mask-related slice of a capture's metadata.json (all optional). */
@@ -184,6 +192,23 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
       result.baselineApprovedAt = baselineMeta.updatedAt ?? baselineMeta.createdAt;
     }
 
+    // Capture provenance: the environment each side was captured in. Only
+    // when both recorded one: an unrecorded side is unknown, not a change.
+    const baselineEnv = readEnvironment(baselineMeta?.environment);
+    const candidateEnv = readEnvironment(store.readTempMetadata(name)?.environment);
+    if (baselineEnv && candidateEnv) {
+      const { delta, renderingDelta } = diffEnvironments(baselineEnv, candidateEnv);
+      result.environment = delta.length > 0
+        ? { delta, renderingDelta, baseline: baselineEnv, candidate: candidateEnv }
+        : { delta, renderingDelta };
+      // strict: the environment changed, so the baseline no longer gates
+      // this capture, even when the pixels happen to match.
+      if (options.environmentPolicy === 'strict' && renderingDelta.length > 0) {
+        result.status = 'changed';
+        result.environment.policy = 'strict';
+      }
+    }
+
     // DOM-level signal. Only meaningful when both sides captured DOM.
     // Computed whenever the two files differ at all (pixels, dimensions, or
     // a re-encode with identical pixels), so a passed snapshot whose DOM
@@ -257,8 +282,10 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
   // zero-count path below used to pass a grown page whose candidate had been
   // truncated to the baseline's height. A DOM change on its own never
   // decides the status: visible output is the contract, so the pixels do,
-  // and the report says when a passed snapshot's DOM differs.
-  if (result.sizeMismatch) return;
+  // and the report says when a passed snapshot's DOM differs. Under
+  // environmentPolicy "strict", a changed rendering environment is never
+  // passed either.
+  if (result.sizeMismatch || result.environment?.policy === 'strict') return;
 
   // Nothing above the per-pixel threshold: visually identical. Guard on
   // totalPixels — the PNG-decode-failure path reports diffCount 0 with

@@ -18,6 +18,17 @@
 import CDP from 'chrome-remote-interface';
 import chalk from 'chalk';
 import { BaselineStore } from '../baselines/store';
+import {
+  applyEnvironmentPolicyToName,
+  browserFromUserAgent,
+  buildCaptureEnvironment,
+  CAPTURE_METHODS,
+  collectHostEnvironment,
+  parseRenderProbe,
+  RENDER_PROBE_EXPRESSION,
+  type CaptureEnvironment,
+  type HostEnvironment,
+} from '../capture/environment';
 import { loadLocalConfig } from '../config/local-config';
 import { generateReport } from '../report/generator';
 import { logger } from '../utils/logger';
@@ -285,6 +296,28 @@ export async function captureFullPage(client: any): Promise<Buffer> {
   return Buffer.from(data, 'base64');
 }
 
+/**
+ * Capture provenance for `testivai witness <url>`: its own headless Chrome,
+ * full-page CDP screenshots, no test framework. The version comes from CDP
+ * Browser.getVersion's product ("HeadlessChrome/141.0.7390.54"), else the
+ * probe's user agent; never guessed.
+ */
+export function standaloneEnvironment(input: { probe: unknown; product: string | undefined; host?: HostEnvironment }): CaptureEnvironment {
+  const probed = parseRenderProbe(input.probe);
+  const fromProduct = input.product ? browserFromUserAgent(input.product) : null;
+  const fromUa = probed?.userAgent ? browserFromUserAgent(probed.userAgent) : null;
+  const known = fromProduct ?? fromUa;
+  const browser: CaptureEnvironment['browser'] = { name: 'chromium', version: known?.version ?? null };
+  if (known?.headless) browser.headless = true;
+  return buildCaptureEnvironment({
+    host: input.host ?? collectHostEnvironment(),
+    browser,
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    adapter: { name: '@testivai/witness', version: require('../../package.json').version, captureMethod: CAPTURE_METHODS.CDP_FULL_PAGE },
+    render: probed?.render,
+  });
+}
+
 export async function runStandaloneWitness(
   startUrl: string,
   options: StandaloneOptions,
@@ -333,16 +366,31 @@ export async function runStandaloneWitness(
 
     // 3. Capture every page
     for (const url of pages) {
-      const name = pageNameFromUrl(url);
+      // This crawler only drives Chrome, so "separate" keys by chromium.
+      const name = applyEnvironmentPolicyToName(
+        pageNameFromUrl(url),
+        { browser: { name: 'chromium' }, os: { platform: process.platform } },
+        config.environmentPolicy,
+      );
       let page: PageClient | undefined;
       try {
         page = await openPage(port, url, viewport);
+        // Capture provenance: measured before anything is injected.
+        const probe = await evaluate<unknown>(page.client, RENDER_PROBE_EXPRESSION).catch(() => undefined);
+        const product = await Promise.resolve(page.client.Browser?.getVersion?.())
+          .then((v: { product?: string } | undefined) => v?.product)
+          .catch(() => undefined);
         await prepPage(page.client, config.stabilize, config.ignoreSelectors ?? []);
         await revealPage(page.client);
 
         const screenshot = await captureFullPage(page.client);
         const dom = await evaluate<string>(page.client, domSnapshotExpression(config.ignoreSelectors ?? []));
         store.writeTemp(name, screenshot, typeof dom === 'string' ? dom : undefined);
+        try {
+          store.writeTempMetadata(name, { name, environment: standaloneEnvironment({ probe, product }) });
+        } catch {
+          // without it the compare cannot tell rendering drift from noise for this page
+        }
 
         captured.push(name);
         console.log(chalk.gray(`  ✓ ${name}  (${url})`));

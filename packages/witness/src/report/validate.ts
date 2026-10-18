@@ -17,9 +17,10 @@
  * it without the rest of the report code.
  */
 
+import type { CaptureEnvironment } from '../capture/environment';
 import type { AttributedRegion, PageShift, RegionElement } from '../diff/attribution';
 import type { MaskRect, MaskSource, MaskSpec } from '../diff/mask';
-import type { ReportData, ReportSummary, SnapshotDomSignal, SnapshotResult, SnapshotStatus } from './results';
+import type { ReportData, ReportSummary, SnapshotDomSignal, SnapshotEnvironment, SnapshotResult, SnapshotStatus } from './results';
 
 /** The results.json major version this reads: the major of RESULTS_SCHEMA_VERSION (generator.ts). */
 export const SUPPORTED_SCHEMA_MAJOR = 2;
@@ -36,6 +37,9 @@ export const REPORT_DATA_LIMITS = {
   maskWarnings: 200,
   maskSpecKeys: 50,
   missingBaselines: 5000,
+  environmentKeys: 20,
+  environmentValueLength: 200,
+  environmentFields: 100,
 } as const;
 
 export type ParsedReportData = { ok: true; data: ReportData } | { ok: false; reason: string };
@@ -142,6 +146,7 @@ function readReport(json: unknown): ReportData {
   optional(data, 'missingBaselines', root, '', (v, p) =>
     list(v, p, REPORT_DATA_LIMITS.missingBaselines, (n, q) => text(n, q, REPORT_DATA_LIMITS.nameLength, 1)),
   );
+  optional(data, 'environment', root, '', (v, p) => readEnvironmentBlock(v, p) as Partial<CaptureEnvironment>);
   return data;
 }
 
@@ -176,7 +181,85 @@ function readSnapshot(value: unknown, path: string): SnapshotResult {
   optional(snapshot, 'autoPassed', s, path, (v, p) => oneOf(v, p, ['threshold', 'noise', 'shift'] as const));
   optional(snapshot, 'baselineApprovedAt', s, path, (v, p) => text(v, p, 64));
   optional(snapshot, 'sizeMismatch', s, path, readSizeMismatch);
+  optional(snapshot, 'environment', s, path, readSnapshotEnvironment);
   return snapshot;
+}
+
+/** A snapshot's capture provenance (schema 2.5.0). */
+function readSnapshotEnvironment(value: unknown, path: string): SnapshotEnvironment {
+  const e = record(value, path);
+  const fields = (v: unknown, p: string) => list(v, p, REPORT_DATA_LIMITS.environmentFields, (f, q) => text(f, q, 100, 1));
+  const env: SnapshotEnvironment = {
+    delta: fields(e.delta, at(path, 'delta')),
+    renderingDelta: fields(e.renderingDelta, at(path, 'renderingDelta')),
+  };
+  optional(env, 'baseline', e, path, readCaptureEnvironment);
+  optional(env, 'candidate', e, path, readCaptureEnvironment);
+  optional(env, 'policy', e, path, (v, p) => oneOf(v, p, ['strict'] as const));
+  return env;
+}
+
+/**
+ * One capture's recorded environment: the fields the report reads directly
+ * must be there (as readEnvironment in capture/environment.ts requires), and
+ * the rest has the plain shape readEnvironmentBlock allows.
+ */
+function readCaptureEnvironment(value: unknown, path: string): CaptureEnvironment {
+  const block = readEnvironmentBlock(value, path);
+  const section = (name: string) => record(block[name], at(path, name));
+  text(section('os').platform, at(path, 'os.platform'), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text(section('browser').name, at(path, 'browser.name'), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text(section('adapter').captureMethod, at(path, 'adapter.captureMethod'), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  return block as unknown as CaptureEnvironment;
+}
+
+const ENVIRONMENT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,49}$/;
+
+/**
+ * An environment block as the report reads it (report/environment.ts
+ * flattens it two levels deep): sections that are a plain value, or an
+ * object of plain values; `render.viewport` is the one nested object
+ * ({ width, height }). Plain values are short text, finite numbers, true or
+ * false, or null. Fields it does not know are kept when they have this
+ * shape, so a newer adapter's extra fields still show; anything deeper, a
+ * list, or over the size limits is rejected.
+ */
+function readEnvironmentBlock(value: unknown, path: string): Record<string, unknown> {
+  const plain = (v: unknown, p: string): string | number | boolean | null => {
+    if (v === null || typeof v === 'boolean') return v;
+    if (typeof v === 'number') return num(v, p);
+    if (typeof v === 'string') return text(v, p, REPORT_DATA_LIMITS.environmentValueLength);
+    fail(p, 'expected text, a number, true/false or null');
+  };
+  const keys = (o: Record<string, unknown>, p: string) => {
+    const k = Object.keys(o);
+    if (k.length > REPORT_DATA_LIMITS.environmentKeys) fail(p, `more than ${REPORT_DATA_LIMITS.environmentKeys} fields`);
+    for (const key of k) if (!ENVIRONMENT_KEY.test(key)) fail(p, `field name ${JSON.stringify(key.slice(0, 50))} is not a plain name`);
+    return k;
+  };
+  const block = record(value, path);
+  const out: Record<string, unknown> = {};
+  for (const sectionName of keys(block, path)) {
+    const sectionPath = at(path, sectionName);
+    const section = block[sectionName];
+    if (!isRecord(section)) {
+      out[sectionName] = plain(section, sectionPath);
+      continue;
+    }
+    const inner: Record<string, unknown> = {};
+    for (const field of keys(section, sectionPath)) {
+      const fieldPath = at(sectionPath, field);
+      const v = section[field];
+      if (sectionName === 'render' && field === 'viewport') {
+        const vp = record(v, fieldPath);
+        inner[field] = { width: num(vp.width, at(fieldPath, 'width'), { min: 0 }), height: num(vp.height, at(fieldPath, 'height'), { min: 0 }) };
+      } else {
+        inner[field] = plain(v, fieldPath);
+      }
+    }
+    out[sectionName] = inner;
+  }
+  return out;
 }
 
 function readDom(value: unknown, path: string): SnapshotDomSignal {

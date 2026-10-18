@@ -108,6 +108,25 @@ async function main(): Promise<void> {
       `expected ${RUNS * PAGES.length} identical captures of the same page, got ${distinct} distinct renders:\n${detail}`,
     );
     console.log(`[e2e] ✓ Standalone captures are deterministic (${RUNS * PAGES.length} identical).`);
+
+    // Capture provenance from a real Chrome: every capture records where it
+    // came from, and the same machine records the same rendering environment.
+    for (const page of PAGES) {
+      const name = page.slice(1).replace('.', '_');
+      const meta = JSON.parse(fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', name, 'metadata.json'), 'utf-8'));
+      const env = meta.environment;
+      assert.ok(env, `${page}: no environment in metadata.json`);
+      assert.strictEqual(env.os.platform, process.platform, `${page}: os.platform`);
+      assert.strictEqual(env.browser.name, 'chromium', `${page}: browser.name`);
+      assert.match(String(env.browser.version), /^\d+\.\d+\.\d+\.\d+$/, `${page}: browser.version from CDP`);
+      assert.strictEqual(env.adapter.name, '@testivai/witness', `${page}: adapter.name`);
+      assert.strictEqual(env.adapter.captureMethod, 'full-page:cdp', `${page}: adapter.captureMethod`);
+      assert.deepStrictEqual(env.render.viewport, { width: 1280, height: 800 }, `${page}: render.viewport is the crawler's`);
+      assert.strictEqual(env.render.deviceScaleFactor, 1, `${page}: render.deviceScaleFactor`);
+    }
+    const results = JSON.parse(fs.readFileSync(path.join(projectRoot, 'visual-report', 'results.json'), 'utf-8'));
+    assert.strictEqual(results.environment.browser.name, 'chromium', 'results.json run-level environment');
+    console.log('[e2e] ✓ Standalone captures record their capture environment.');
   } finally {
     server.close();
     fs.rmSync(projectRoot, { recursive: true, force: true });

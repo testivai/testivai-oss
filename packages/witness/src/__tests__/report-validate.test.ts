@@ -18,9 +18,22 @@ import type { ReportData } from '../report/results';
 import { renderHtml } from '../report/template';
 import { parseReportData, SUPPORTED_SCHEMA_MAJOR } from '../report/validate';
 
+const ENV_BASE = {
+  os: { platform: 'linux', release: '6.8.0', arch: 'x64', distro: 'ubuntu 24.04' },
+  browser: { name: 'chromium', version: '130.0.6723.58', headless: true },
+  framework: { name: 'playwright', version: '1.63.0', language: null },
+  adapter: { name: '@testivai/witness-playwright', version: '2.0.9', captureMethod: 'full-page:cdp' },
+  render: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, colorScheme: 'light' },
+  ci: { provider: 'github-actions', runnerImage: 'ubuntu24/20261012' },
+  container: false,
+  label: 'ci',
+};
+const ENV_CURRENT = { ...ENV_BASE, browser: { name: 'chromium', version: '141.0.7390.37', headless: true } };
+
 function valid(): Record<string, any> {
   return {
-    version: '2.4.0',
+    version: '2.5.0',
+    environment: { os: { platform: 'linux', arch: 'x64' }, browser: { name: 'chromium' }, container: false },
     timestamp: '2026-10-18T00:00:00.000Z',
     summary: { total: 2, passed: 1, changed: 1, newSnapshots: 0, missing: 1 },
     missingBaselines: ['old-page'],
@@ -53,6 +66,13 @@ function valid(): Record<string, any> {
         maskWarnings: ['no geometry for .gone'],
         pageShift: { dy: 4, belowY: 120, count: 3 },
         sizeMismatch: { baseline: { width: 1280, height: 2000 }, candidate: { width: 1280, height: 2004 } },
+        environment: {
+          delta: ['browser.version', 'ci.runnerImage'],
+          renderingDelta: ['browser.version'],
+          baseline: ENV_BASE,
+          candidate: ENV_CURRENT,
+          policy: 'strict',
+        },
       },
       {
         name: 'footer',
@@ -111,6 +131,24 @@ describe('parseReportData', () => {
 
   it('accepts every field it knows, with the right types', () => {
     expect(parseReportData(valid()).ok).toBe(true);
+  });
+
+  it('keeps the capture environments (schema 2.5.0) exactly', () => {
+    const data = valid();
+    const parsed = parseReportData(data);
+    if (!parsed.ok) throw new Error(parsed.reason);
+
+    expect(parsed.data.environment).toEqual(data.environment);
+    expect(parsed.data.snapshots[0].environment).toEqual(data.snapshots[0].environment);
+  });
+
+  it('keeps environment fields it does not know yet, when they are plain values', () => {
+    const data = valid();
+    data.snapshots[0].environment.candidate = { ...ENV_CURRENT, gpu: 'swiftshader', browser: { ...ENV_CURRENT.browser, flags: '--disable-gpu' } };
+    const parsed = parseReportData(data);
+    if (!parsed.ok) throw new Error(parsed.reason);
+
+    expect(parsed.data.snapshots[0].environment?.candidate).toMatchObject({ gpu: 'swiftshader', browser: { flags: '--disable-gpu' } });
   });
 
   it('never takes image paths from the file', () => {
@@ -180,6 +218,16 @@ describe('parseReportData', () => {
     ['a size that is not positive', withValue('snapshots.0.sizeMismatch', { baseline: { width: 0, height: 1 }, candidate: { width: 1, height: 1 } }), /sizeMismatch/],
     ['an approval date that is not text', withValue('snapshots.0.baselineApprovedAt', 5), /baselineApprovedAt/],
     ['a missing baseline that is not text', withValue('missingBaselines', [null]), /missingBaselines/],
+    ['an environment delta that is not a list', withValue('snapshots.0.environment.delta', 'browser.version'), /environment\.delta/],
+    ['an environment field name that is not text', withValue('snapshots.0.environment.renderingDelta', [1]), /renderingDelta/],
+    ['an unknown environment policy', withValue('snapshots.0.environment.policy', 'loose'), /policy/],
+    ['a baseline environment without its capture method', withValue('snapshots.0.environment.baseline', { ...ENV_BASE, adapter: { name: 'x', version: '1' } }), /baseline\.adapter\.captureMethod/],
+    ['a candidate environment without a browser name', withValue('snapshots.0.environment.candidate', { ...ENV_CURRENT, browser: { version: '1' } }), /candidate\.browser\.name/],
+    ['an environment value nested too deep', withValue('snapshots.0.environment.candidate', { ...ENV_CURRENT, browser: { name: 'chromium', build: { a: 1 } } }), /candidate\.browser\.build/],
+    ['an environment value that is a list', withValue('environment', { os: { platform: 'linux' }, tags: ['a'] }), /environment\.tags/],
+    ['a viewport size as text', withValue('snapshots.0.environment.baseline', { ...ENV_BASE, render: { viewport: { width: '1280', height: 720 } } }), /viewport\.width/],
+    ['a very long environment value', withValue('environment', { label: 'x'.repeat(201) }), /environment\.label/],
+    ['too many environment sections', withValue('environment', Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`k${i}`, 'v']))), /environment/],
     ['too many snapshots', withValue('snapshots', Array.from({ length: 5001 }, (_, i) => ({ name: `s${i}`, status: 'passed', diffPercent: 0, diffCount: 0, totalPixels: 1 }))), /snapshots/],
     ['too many regions', withValue('snapshots.0.regions', Array.from({ length: 1001 }, () => ({ x: 0, y: 0, width: 1, height: 1, diffPixels: 1, diffPercent: 1 }))), /regions/],
   ])('rejects %s, naming the field', (_label, data, field) => {
@@ -212,6 +260,11 @@ describe('parseReportData', () => {
     s.regions[0].elements[0].selector = PAYLOAD;
     s.masks[0].source.spec = PAYLOAD;
     s.maskWarnings = [PAYLOAD];
+    s.environment.candidate = { ...ENV_CURRENT, label: PAYLOAD, browser: { name: PAYLOAD, version: PAYLOAD } };
+    s.environment.baseline = { ...ENV_BASE, adapter: { name: 'a', version: '1', captureMethod: PAYLOAD } };
+    s.environment.renderingDelta = ['browser.version', 'label', 'adapter.captureMethod'];
+    s.environment.delta = s.environment.renderingDelta;
+    s.sizeMismatch = { baseline: { width: 1280, height: 2000 }, candidate: { width: 1280, height: 2400 } };
 
     const parsed = parseReportData(data);
     if (!parsed.ok) throw new Error(parsed.reason);
