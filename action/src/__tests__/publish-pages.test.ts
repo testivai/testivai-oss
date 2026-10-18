@@ -92,13 +92,42 @@ describe('decidePublish', () => {
     expect(d.reason).toMatch(/TESTIVAI_PUBLIC_REPORTS/);
   });
 
-  it.each([undefined, 'http://testivai.github.io/x/', 'not a url'])('does not publish when the site address is %p', (htmlUrl) => {
+  it.each([undefined, 'not a url', 'ftp://testivai.github.io/x/'])('does not publish when the site address is %p', (htmlUrl) => {
     const d = decidePublish({
       pages: { found: true, buildType: 'workflow', public: true, htmlUrl },
       repoVisibility: 'public',
     });
 
     expect(d.publish).toBe(false);
+  });
+
+  it.each([
+    ['http://testivai.github.io/testivai-example/', 'https://testivai.github.io/testivai-example/'],
+    ['http://testivai.github.io/', 'https://testivai.github.io/'],
+    ['http://abc123.pages.github.io/', 'https://abc123.pages.github.io/'],
+    ['HTTP://Testivai.GitHub.io/testivai-example', 'https://testivai.github.io/testivai-example/'],
+    ['http://testivai.github.io/My-Repo/', 'https://testivai.github.io/My-Repo/'],
+  ])("takes GitHub's http address %s for a github.io site as https: github.io serves only https", (htmlUrl, siteUrl) => {
+    // GitHub reports http://<owner>.github.io/<repo>/ for testivai-example
+    // (deploy-pages' page_url says the same), though the site answers on https.
+    const d = decidePublish({ pages: { found: true, buildType: 'workflow', public: true, htmlUrl }, repoVisibility: 'public' });
+
+    expect(d).toMatchObject({ publish: true, siteUrl });
+  });
+
+  it.each(['http://github.io.evil.example/', 'http://evilgithub.io/', 'http://testivai.github.io.example.com/'])(
+    'does not take a look-alike host %s for github.io',
+    (htmlUrl) => {
+      expect(decidePublish({ pages: { found: true, buildType: 'workflow', public: true, htmlUrl }, repoVisibility: 'public' }).publish).toBe(false);
+    },
+  );
+
+  it('says why a custom domain on http is not used, with the address and the setting to change', () => {
+    const d = decidePublish({ pages: { found: true, buildType: 'workflow', public: true, htmlUrl: 'http://reports.example.com/' }, repoVisibility: 'public' });
+
+    expect(d.publish).toBe(false);
+    expect(d.reason).toContain('http://reports.example.com/');
+    expect(d.reason).toContain('Enforce HTTPS');
   });
 
   it('ends the site address with a slash, so run folders join onto it', () => {

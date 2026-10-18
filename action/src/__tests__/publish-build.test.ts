@@ -501,6 +501,29 @@ describe('finishPublish', () => {
     expect(log.warning).toHaveBeenCalledWith(expect.stringContaining('deployed the site at https://reports.example.com/'));
   });
 
+  it("takes deploy-pages' http address for a github.io site as the https one, with no warning", async () => {
+    const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+    const fetched: string[] = [];
+
+    const result = await finishPublish(api, {
+      state: STATE,
+      pageUrl: 'http://testivai.github.io/testivai-example/',
+      comment: true,
+      marker: UPSERT_MARKER,
+      fetch: async (url) => {
+        fetched.push(url);
+        return ok();
+      },
+      delayMs: 0,
+      log,
+    });
+
+    expect(fetched).toEqual(['https://testivai.github.io/testivai-example/']);
+    expect(result.verified).toBe(true);
+    expect(log.warning).not.toHaveBeenCalled();
+    expect(calls.update[0][1]).toContain('(https://testivai.github.io/testivai-example/pr/14/3-1/)');
+  });
+
   it('ignores a deploy address that is not https', async () => {
     const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
 

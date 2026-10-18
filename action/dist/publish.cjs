@@ -1450,9 +1450,12 @@ function decidePublish(input) {
       reason: 'GitHub Pages here builds from a branch, so reports are not published. An admin can set Settings \u2192 Pages \u2192 Source to "GitHub Actions" for TestivAI to publish them.'
     };
   }
-  const siteUrl = siteAddress(pages.htmlUrl);
+  const siteUrl = pagesAddress(pages.htmlUrl);
   if (!siteUrl) {
-    return { publish: false, reason: "GitHub did not report an https address for the Pages site, so reports are not published." };
+    return {
+      publish: false,
+      reason: pages.htmlUrl ? `GitHub reports the Pages site at ${pages.htmlUrl}, which is not served over https, so reports are not published: their links must be https. An admin can turn on Settings \u2192 Pages \u2192 Enforce HTTPS.` : "GitHub did not report an address for the Pages site, so reports are not published."
+    };
   }
   if (pages.public === false) {
     return {
@@ -1475,18 +1478,21 @@ function decidePublish(input) {
     reason: repoVisibility === "public" ? "The Pages site is public, like this repository." : `The Pages site is public; an admin allowed publishing this ${repoVisibility} repository's reports there (${CONSENT_VARIABLE}=true).`
   };
 }
-function siteAddress(htmlUrl) {
-  if (!htmlUrl) return void 0;
+function pagesAddress(raw) {
+  if (!raw || /[\s"'<>()`\\]/.test(raw)) return void 0;
+  let url;
   try {
-    const url = new URL(htmlUrl);
-    if (url.protocol !== "https:") return void 0;
-    url.hash = "";
-    url.search = "";
-    if (!url.pathname.endsWith("/")) url.pathname += "/";
-    return url.toString();
+    url = new URL(raw);
   } catch {
     return void 0;
   }
+  const githubIo = url.hostname === "github.io" || url.hostname.endsWith(".github.io");
+  if (url.protocol === "http:" && githubIo) url = new URL(`https://${url.href.slice("http://".length)}`);
+  if (url.protocol !== "https:") return void 0;
+  url.hash = "";
+  url.search = "";
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.toString();
 }
 
 // src/publish/plan.ts
@@ -3021,7 +3027,7 @@ async function mapLimit(items, limit, fn) {
 async function finishPublish(api, options) {
   const { log } = options;
   let { state } = options;
-  const deployed = httpsBase(options.pageUrl);
+  const deployed = pagesAddress(options.pageUrl);
   if (deployed && deployed !== state.siteUrl) {
     log.warning(`GitHub deployed the site at ${deployed}, not ${state.siteUrl} as its settings said before; the comments link ${deployed}.`);
     state = { ...state, siteUrl: deployed, prs: state.prs.map((p) => ({ ...p, url: deployed + p.url.slice(state.siteUrl.length) })) };
@@ -3066,19 +3072,6 @@ async function finishPublish(api, options) {
     }
   }
   return { verified };
-}
-function httpsBase(value) {
-  if (!value || /[\s"'<>()`\\]/.test(value)) return void 0;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:") return void 0;
-    url.hash = "";
-    url.search = "";
-    if (!url.pathname.endsWith("/")) url.pathname += "/";
-    return url.toString();
-  } catch {
-    return void 0;
-  }
 }
 
 // src/publish.ts
