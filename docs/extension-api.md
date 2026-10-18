@@ -35,16 +35,18 @@ This page is the contract. Changes here follow semver — the schema bumps a maj
         └── <name>/
             ├── screenshot.png  # required
             ├── dom.html        # optional
-            └── elements.json   # optional
+            ├── elements.json   # optional
+            └── metadata.json   # optional — capture provenance (`environment`), mask geometry
 ```
 
 ### Adapter responsibilities
 
-A new adapter — JS, Python, or otherwise — needs to do **one required thing, and up to two optional ones**:
+A new adapter — JS, Python, or otherwise — needs to do **one required thing, and up to three optional ones**:
 
 1. Capture a full-page screenshot and write it to `.testivai/temp/<name>/screenshot.png`.
 2. Optionally capture `document.documentElement.outerHTML` and write it to `.testivai/temp/<name>/dom.html`. This enables the DOM diff and the noise hint.
 3. Optionally capture an element map and write it to `.testivai/temp/<name>/elements.json`: a JSON array of `{ path, x, y, width, height, styleHash }`, one entry per collected element, in the screenshot's coordinates (`styleHash` is a digest of the element's computed styles). Generate it with the shared collector (`collectElementMap` in `packages/witness/src/capture/element-map.ts`, which the Python, Java and Ruby packages ship as a generated script) so the paths and digests match what other adapters write against the same baselines.
+4. Optionally record where the capture came from as `environment` in `.testivai/temp/<name>/metadata.json` (see "Capture provenance" below). Approving the capture freezes it into the baseline's `metadata.json`, and the compare then says when a diff is rendering drift (the browser, OS or capture method changed, the page did not) instead of calling it render noise.
 
 That's the entire contract for capture. After the test run, the user invokes `npx testivai report` (or the framework adapter triggers it via a lifecycle hook), which:
 
@@ -54,7 +56,7 @@ That's the entire contract for capture. After the test run, the user invokes `np
 
 Without `elements.json` on both sides, computed styles are not compared (`styleCheck: "unavailable"`), and there is no selector attribution or page-shift detection. A pixel diff with an identical DOM then reads *styles not compared* — could be render noise or a stylesheet-only change — rather than likely render noise, and `noiseAutoPass` never passes it.
 
-### `metadata.json` (baseline only)
+### `metadata.json`
 
 ```jsonc
 {
@@ -63,11 +65,52 @@ Without `elements.json` on both sides, computed styles are not compared (`styleC
   "updatedAt": "2026-05-08T12:34:56.789Z",
   "approvedBy": "local",     // optional — set by `testivai approve`
   "width": 1280,             // optional — viewport width at capture
-  "height": 800              // optional — viewport height at capture
+  "height": 800,             // optional — viewport height at capture
+  "environment": { … }       // optional — capture provenance, see below
 }
 ```
 
-`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer.
+`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer. A capture's `metadata.json` in `temp/<name>/` is optional; the JS adapters always write one, with `environment` and, when masks are used, the mask geometry. `testivai approve` (and the MCP approve tools) copy the capture's `environment` into the baseline's `metadata.json`; a capture without one leaves the baseline without one. The approve GitHub Action copies the capture directory as it is.
+
+### Capture provenance: `environment` in metadata.json
+
+Every JS adapter (Playwright, WebdriverIO, Selenium) and `testivai witness <url>` record this block, measured at capture time. A part an adapter cannot observe is left out, never guessed. Community adapters should write the same shape; only `os.platform`, `browser.name` and `adapter.captureMethod` are required for the compare to read it.
+
+```jsonc
+"environment": {
+  "os":        { "platform": "linux", "release": "6.8.0-1017-azure", "arch": "x64", "distro": "ubuntu 24.04" },
+  "browser":   { "name": "chromium", "version": "141.0.7390.37", "channel": "chrome", "headless": true },
+  "framework": { "name": "playwright", "version": "1.64.1", "language": "typescript", "runner": "@playwright/test" },
+  "adapter":   { "name": "@testivai/witness-playwright", "version": "2.0.7", "captureMethod": "full-page:cdp" },
+  "driver":    { "name": "chromedriver", "version": "141.0.7390.37" },
+  "render":    { "viewport": { "width": 1280, "height": 720 }, "deviceScaleFactor": 1, "colorScheme": "light",
+                 "reducedMotion": "no-preference", "locale": "en-US", "timezone": "UTC" },
+  "ci":        { "provider": "github-actions", "runnerImage": "ubuntu24/20251012.1.0" },
+  "container": true,
+  "label":     "mcr.microsoft.com/playwright:v1.64.1-noble",
+  "project":   "chromium"
+}
+```
+
+| Field | Source | Notes |
+|---|---|---|
+| `os.platform`, `os.arch` | `process.platform`, `process.arch` (or the language's equivalent) | required (`platform`) |
+| `os.release` | `os.release()` | the kernel on Linux, the OS version on macOS and Windows |
+| `os.distro` | `<ID> <VERSION_ID>` from `/etc/os-release` | Linux only; the distro decides the fonts and FreeType build |
+| `browser.name` | the driver, else the user agent | required; the engine family: `chromium`, `firefox`, `webkit` |
+| `browser.version` | the driver (Playwright `browser.version()`, WebDriver `browserVersion`, CDP `Browser.getVersion`), else the user agent | `null` when unknown |
+| `browser.channel`, `browser.headless` | the runner's configuration | a branded build (`chrome`, `msedge`); headless or not |
+| `framework` | the test framework | `name`, `version`, `language`, `runner`; absent for `testivai witness <url>` |
+| `adapter.name`, `adapter.version` | the adapter package | |
+| `adapter.captureMethod` | what took the screenshot | required. `<extent>:<mechanism>`: `full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `full-page:firefox`, `viewport:webdriver` |
+| `driver` | the WebDriver binary | `name`, `version`; when the adapter talks to one |
+| `render.viewport`, `render.deviceScaleFactor`, `render.colorScheme`, `render.reducedMotion`, `render.locale`, `render.timezone` | measured in the page (`RENDER_PROBE_EXPRESSION` in `packages/witness/src/capture/environment.ts`) | `innerWidth`/`innerHeight`, `devicePixelRatio`, the two media queries, `navigator.language`, the `Intl` time zone |
+| `ci.provider`, `ci.runnerImage` | CI environment variables | `github-actions` (with `ImageOS/ImageVersion`), `gitlab`, `circleci`, `buildkite`, `jenkins`, `azure-pipelines`, or `ci`; absent outside CI |
+| `container` | `/.dockerenv` or `/run/.containerenv` | present (`true`) only inside a container |
+| `label` | `TESTIVAI_ENV_LABEL` | a name the team gives the environment, e.g. its image tag |
+| `project` | the runner's project or variant | e.g. the Playwright project |
+
+The compare reads the baseline's and the capture's blocks side by side (`snapshots[].environment` in results.json). A field recorded on one side only is unknown, not a change; `container`, `label` and `ci.provider` are always decided by the collector, so their absence means "no". Only some fields can change rendering (`renderingDelta`): the browser, `os.platform`, `os.arch`, `os.distro` (and `os.release` on macOS and Windows), every `render` field, `adapter.captureMethod`, `container` and `label`. Framework, adapter and driver versions, the CI runner image and the project are context. `testivai env` prints this machine's part of the block.
 
 ### `config.json`
 
@@ -84,6 +127,7 @@ Without `elements.json` on both sides, computed styles are not compared (`styleC
   "noiseAutoPass": false,     // auto-pass diffs with identical DOM AND styleCheck "match", not concentrated in one area (autoPassed: "noise")
   "noiseMaxDiffPercent": 1,   // upper bound (diff %) for noiseAutoPass
   "shiftTolerance": 0,        // auto-pass pure element shifts ≤ N px/axis, needs element maps (autoPassed: "shift")
+  "environmentPolicy": "warn", // what an environment change since the baseline does: "warn" (report only), "separate" (key snapshots <name>__<browser>__<platform>), "strict" (changed, whatever the pixels)
   "stabilize": true,          // freeze animations, hide caret, await fonts pre-capture
   "ignoreSelectors": [],      // elements hidden (visibility:hidden) during capture
   "mask": [],                 // areas excluded from the pixel diff; selectors or regions
@@ -103,16 +147,21 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.4.0",         // results.json SCHEMA version
+  "version": "2.5.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
-    "total": 6,
+    "total": 7,
     "passed": 2,
-    "changed": 3,
+    "changed": 4,
     "newSnapshots": 1,
     "missing": 1             // baselines that received no capture this run
   },
   "missingBaselines": ["pricing"],   // names behind summary.missing
+  "environment": {           // this run's captures: the fields they all agree on
+    "os": { "platform": "linux", "release": "6.8.0-1017-azure", "arch": "x64", "distro": "ubuntu 24.04" },
+    "browser": { "name": "chromium", "version": "141.0.7390.37", "headless": true },
+    "adapter": { "name": "@testivai/witness-playwright", "version": "2.0.7", "captureMethod": "full-page:cdp" }
+  },
   "snapshots": [
     {
       "name": "homepage",
@@ -230,6 +279,23 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "regions": [ { "x": 0, "y": 2348, "width": 1280, "height": 190, "diffPixels": 243200, "diffPercent": 100 } ]
     },
     {
+      "name": "pricing-table",
+      "status": "changed",    // rendering drift: the browser changed, the page did not
+      "diffPercent": 0.62,
+      "diffCount": 6348,
+      "totalPixels": 1024000,
+      "baselinePath": "images/pricing-table/baseline.png",
+      "currentPath":  "images/pricing-table/current.png",
+      "diffPath":     "images/pricing-table/diff.png",
+      "dom": { "changed": false, "summary": null, "noiseHint": true, "styleCheck": "match" },
+      "environment": {
+        "delta": ["browser.version", "framework.version"],  // every field that differs
+        "renderingDelta": ["browser.version"],               // the ones that can change rendering
+        "baseline":  { "browser": { "name": "chromium", "version": "130.0.6723.58" }, "…": "…" },
+        "candidate": { "browser": { "name": "chromium", "version": "141.0.7390.37" }, "…": "…" }
+      }
+    },
+    {
       "name": "fresh-baseline",
       "status": "new",
       "diffPercent": 0,
@@ -250,7 +316,8 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `summary.total` | number | yes | == `snapshots.length` |
 | `summary.passed` / `.changed` / `.newSnapshots` | number | yes | partition of `total` |
 | `summary.missing` | number | optional | baselines that received no capture this run; emitted from schema 2.3.0 |
-| `missingBaselines` | string[] | optional | names behind `summary.missing`; emitted from schema 2.3.0 |
+| `missingBaselines` | string[] | optional | names behind `summary.missing`; emitted from schema 2.3.0. Under `environmentPolicy: "separate"`, only baselines of an environment (`__<browser>__<platform>`) this run captured are listed |
+| `environment` | object | optional | emitted from schema 2.5.0: the capture environment of this run, as the fields every capture that recorded one agrees on (a multi-browser run shares no `browser`). Same shape as the metadata.json block above; absent when no capture recorded one |
 | `snapshots[].name` | string | yes | unique within a report |
 | `snapshots[].status` | enum | yes | `passed` &#124; `changed` &#124; `new` |
 | `snapshots[].diffPercent` | number | yes | 0–100. 0 for `new` and for a `passed` snapshot with no pixel above `threshold`; an auto-passed snapshot keeps its diff percentage |
@@ -273,6 +340,11 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
 | `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
+| `snapshots[].environment` | object | optional | emitted from schema 2.5.0 when the baseline and the current capture both recorded an `environment` in their metadata.json (one side unrecorded is unknown, not a change) |
+| `snapshots[].environment.delta` | string[] | yes within `environment` | every field that differs, as sorted dotted paths (`browser.version`); empty when the environments match |
+| `snapshots[].environment.renderingDelta` | string[] | yes within `environment` | the subset that can change rendering (see "Capture provenance"). Pixels differ, `dom.changed` false, `dom.styleCheck: "match"`, a diff not concentrated in one area and a non-empty `renderingDelta` is **rendering drift**: the environment changed, not the page (`isRenderingDrift` from `@testivai/witness/report`). Never word it as render noise |
+| `snapshots[].environment.baseline` / `.candidate` | object | optional | both recorded blocks; present when `delta` is non-empty |
+| `snapshots[].environment.policy` | `"strict"` | optional | present when `environmentPolicy: "strict"` made the snapshot `changed` because `renderingDelta` is non-empty, whatever its pixels (a byte-identical capture included, with `diffPercent` 0). Under `"warn"` (default) and `"separate"`, the environment never changes a status |
 | `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is read with `pageShift` and `dom`: the padded band at the bottom is the new height, not where the change is (a banner inserted near the top grows the page too), so `pageShift` places the change, `dom.summary` says what changed, and an identical DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that differ between machines), not content added or removed. A width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |
 
 ### Schema versioning

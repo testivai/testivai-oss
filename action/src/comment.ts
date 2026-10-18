@@ -4,6 +4,13 @@
 
 import { describeRegions, diffShape, STYLE_CHECK_DOES_NOT_COVER } from '../../packages/witness/src/report/diff-shape';
 import { describeSizeChange, explainHeightChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from '../../packages/witness/src/report/size-mismatch';
+import {
+  describeCaptureMethod,
+  environmentChangeGroups,
+  environmentChangeLine,
+  isRenderingDrift,
+  snapshotEnvironmentChange,
+} from '../../packages/witness/src/report/environment';
 import type { ResultsData, SnapshotResult } from './types';
 import { STATUS_CONTEXT } from './status';
 
@@ -50,8 +57,12 @@ function formatDiffPercent(snapshot: SnapshotResult): string {
  * Returns empty string when the snapshot has no DOM data — better than
  * a confusing "no signal available" line.
  */
-function renderDomHintMarkdown(snapshot: SnapshotResult): string {
+function renderDomHintMarkdown(
+  snapshot: SnapshotResult,
+  include: { size?: boolean; identicalDom?: boolean } = {},
+): string {
   const lines: string[] = [];
+  const { size: withSize = true, identicalDom: withIdenticalDom = true } = include;
 
   // A size change first: the diff is on a padded canvas (every padded pixel
   // counts as changed), so the identical-DOM readings below describe the
@@ -59,7 +70,7 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
   // and the page shift (explainHeightChange: the band at the bottom is the
   // new height, not where the change is); a width change is the viewport or
   // device scale, never the page.
-  const size = snapshot.sizeMismatch;
+  const size = withSize ? snapshot.sizeMismatch : undefined;
   const heightChange = Boolean(size && sizeMismatchKind(size) === 'height');
   if (size) {
     const change = `**Size changed — ${describeSizeChange(size)}** (${formatSizes(size)})`;
@@ -93,7 +104,7 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.dom && !styleOnly) {
-    if (snapshot.dom.noiseHint && size) {
+    if (snapshot.dom.noiseHint && (size || !withIdenticalDom)) {
       // Identical DOM on a padded canvas: the size line above says it all.
     } else if (snapshot.dom.noiseHint) {
       // An identical DOM rules out a stylesheet-only change only when the
@@ -134,6 +145,44 @@ function renderDomHintMarkdown(snapshot: SnapshotResult): string {
 }
 
 /**
+ * The hints for one changed snapshot, environment first: environmentPolicy
+ * "strict", a size change from another capture method, and rendering drift
+ * (identical DOM, matching styles, a changed rendering environment) each
+ * replace the reading they explain; any other reading gets the environment
+ * change as context. Without a recorded environment, the page-side hints only.
+ */
+function renderSnapshotHints(snapshot: SnapshotResult): string {
+  const change = snapshotEnvironmentChange(snapshot);
+  if (!change) return renderDomHintMarkdown(snapshot);
+  const env = snapshot.environment!;
+  if (env.policy === 'strict') {
+    return (
+      `> **Environment changed (strict policy)** — ${change} since the baseline; environmentPolicy "strict" makes it changed whatever its pixels say. Approving re-baselines it in this environment.\n\n` +
+      renderDomHintMarkdown(snapshot)
+    );
+  }
+  if (snapshot.sizeMismatch && env.baseline && env.candidate && env.renderingDelta.includes('adapter.captureMethod')) {
+    const from = describeCaptureMethod(env.baseline.adapter.captureMethod);
+    const to = describeCaptureMethod(env.candidate.adapter.captureMethod);
+    return (
+      `> **Capture method changed** — ${from} → ${to} since the baseline (${formatSizes(snapshot.sizeMismatch)}): the size change comes from how the screenshot was taken, not from the page. Re-baseline with this capture method, or capture the way the baseline was.\n\n` +
+      renderDomHintMarkdown(snapshot, { size: false, identicalDom: false })
+    );
+  }
+  if (isRenderingDrift(snapshot)) {
+    const size = snapshot.sizeMismatch ? ` That also explains the size change (${formatSizeMismatch(snapshot.sizeMismatch)}).` : '';
+    return (
+      `> **Rendering drift** — ${change} since the baseline, and the DOM and computed styles are identical: the machine changed, not the page. Re-baseline once the images are confirmed to match apart from rendering.${size}\n\n` +
+      renderDomHintMarkdown(snapshot, { size: false, identicalDom: false })
+    );
+  }
+  return (
+    renderDomHintMarkdown(snapshot) +
+    `> The environment also changed since the baseline (${change}), which can add rendering differences of its own.\n\n`
+  );
+}
+
+/**
  * Build markdown PR comment from results.
  *
  * @param results      Parsed results.json
@@ -169,6 +218,14 @@ ${summaryLine} — **${summary.total} total**
     comment += `> [Download visual report ZIP](${artifactUrl}) — contains baseline, current, and diff images\n\n`;
   }
 
+  // An environment change shared by two or more snapshots, said once here;
+  // a single snapshot's own lines already say it.
+  for (const group of environmentChangeGroups(snapshots).filter((g) => g.snapshots.length >= 2)) {
+    const line = environmentChangeLine(group).replace(/^Environment changed since the baselines/, '**Environment changed since the baselines**');
+    const names = group.snapshots.slice(0, 10).map((n) => `\`${n}\``).join(', ') + (group.snapshots.length > 10 ? ', …' : '');
+    comment += `> ${line} Snapshots: ${names}.\n\n`;
+  }
+
   // Coverage-loss warning: baselines that received no capture this run.
   // A deleted/renamed test silently stops guarding its page — surface it
   // where the reviewer is looking.
@@ -183,7 +240,7 @@ ${summaryLine} — **${summary.total} total**
     comment += '#### Changed Snapshots\n\n';
     for (const snapshot of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot);
-      const domHint = renderDomHintMarkdown(snapshot);
+      const domHint = renderSnapshotHints(snapshot);
       const size = snapshot.sizeMismatch ? ` · ${formatSizeMismatch(snapshot.sizeMismatch)}` : '';
 
       comment += `<details>

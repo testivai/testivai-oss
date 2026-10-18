@@ -11,6 +11,8 @@
  * test run should degrade, not die, on a config nit.
  */
 
+import { ENVIRONMENT_POLICIES } from '../capture/environment';
+
 /** Expected JSON type for every known LocalConfig field. */
 const KNOWN_FIELDS: Record<string, 'number' | 'boolean' | 'string' | 'array' | 'object'> = {
   threshold: 'number',
@@ -34,6 +36,12 @@ const KNOWN_FIELDS: Record<string, 'number' | 'boolean' | 'string' | 'array' | '
   maxPages: 'number',
   viewport: 'object',
   mcpApprovalPrompt: 'boolean',
+  environmentPolicy: 'string',
+};
+
+/** String fields that only take one of a fixed set of values; the first is the default. */
+const ENUM_FIELDS: Record<string, readonly string[]> = {
+  environmentPolicy: ENVIRONMENT_POLICIES,
 };
 
 /**
@@ -128,6 +136,15 @@ export function validateLocalConfig(parsed: unknown): ConfigValidation {
           ? `unknown config key "${key}" — did you mean "${suggestion}"? It is being ignored.`
           : `unknown config key "${key}" — it is being ignored. Known keys: ${Object.keys(KNOWN_FIELDS).join(', ')}.`,
       );
+      continue;
+    }
+
+    const allowed = ENUM_FIELDS[key];
+    if (allowed && !allowed.includes(value as string)) {
+      warnings.push(
+        `config key "${key}" should be one of ${allowed.map((v) => `"${v}"`).join(', ')}, got ${JSON.stringify(value)} — using the default ("${allowed[0]}") instead.`,
+      );
+      invalidKeys.push(key);
       continue;
     }
 

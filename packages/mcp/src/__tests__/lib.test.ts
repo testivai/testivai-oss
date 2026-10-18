@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PNG } from 'pngjs';
-import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, describeMissingResults, type ResultsFile } from '../lib';
+import { resolvePaths, readResults, verdictFor, resolveImage, listBaselines, downscalePng, describeMissingResults, groupChanges, environmentLines, type ResultsFile } from '../lib';
 
 /** Real runs with an identical DOM and matching styles; see the README next to it. */
 const NOISE_SHAPES_FIXTURE = path.join(
@@ -1479,5 +1479,160 @@ describe('@testivai/mcp explainSnapshot on a passed snapshot whose DOM changed',
       'The DOM also changed (1 added, 0 removed, 0 attribute changes) within that tolerance. Nothing to approve, but check the tolerance is meant to cover a markup change.',
     );
     expect(e.guidance.join(' ')).not.toMatch(/before approving/);
+  });
+});
+
+/**
+ * results.json 2.5.0: capture provenance. When the DOM and computed styles
+ * match and the rendering environment changed since the baseline, the diff
+ * is rendering drift: the machine changed, not the page. Agents must never
+ * be told that is render noise, nor to wave it through.
+ */
+describe('@testivai/mcp with capture provenance', () => {
+  const ENV_130 = {
+    os: { platform: 'linux', release: '6.8.0', arch: 'x64', distro: 'ubuntu 24.04' },
+    browser: { name: 'chromium', version: '130.0.6723.58', headless: true },
+    framework: { name: 'playwright', version: '1.48.2', language: 'typescript' },
+    adapter: { name: '@testivai/witness-playwright', version: '2.0.5', captureMethod: 'full-page:cdp' },
+  };
+  const ENV_141 = { ...ENV_130, browser: { ...ENV_130.browser, version: '141.0.7390.37' }, framework: { ...ENV_130.framework, version: '1.64.1' } };
+  const bump = { delta: ['browser.version', 'framework.version'], renderingDelta: ['browser.version'], baseline: ENV_130, candidate: ENV_141 };
+  const sameDom = { changed: false, noiseHint: true, summary: null, styleCheck: 'match' as const };
+  const NOISE_ADVICE = /likely render noise|don't block|do not block|mention it/i;
+
+  describe('verdictFor', () => {
+    it('drift: names the change and says the environment changed, not the page', () => {
+      const verdict = verdictFor({ name: 'home', status: 'changed', diffPercent: 0.4, dom: sameDom, environment: bump });
+      expect(verdict).toBe(
+        'changed (0.40% pixels differ) — rendering drift: chromium 130.0.6723.58 → 141.0.7390.37 since the baseline, and the DOM and computed styles both match, ' +
+          'so the environment changed, not the page; re-baseline once the images are confirmed to match apart from rendering (get_diff)',
+      );
+      expect(verdict).not.toMatch(NOISE_ADVICE);
+    });
+
+    it('auto-passed drift: says what the tolerance is now measuring', () => {
+      expect(verdictFor({ name: 'home', status: 'passed', diffPercent: 0.4, autoPassed: 'noise', dom: sameDom, environment: bump })).toBe(
+        "passed — auto-passed by the configured 'noise' criterion: 0.40% pixels differ, within its tolerance; but this is rendering drift " +
+          '(chromium 130.0.6723.58 → 141.0.7390.37 since the baseline): re-baseline in this environment so the tolerance keeps measuring the page, not the machine',
+      );
+    });
+
+    it('a pass with no pixel diff mentions the environment change', () => {
+      expect(verdictFor({ name: 'home', status: 'passed', diffPercent: 0, environment: bump })).toBe(
+        'passed — no visual change, although the environment changed since the baseline (chromium 130.0.6723.58 → 141.0.7390.37)',
+      );
+    });
+
+    it('strict policy: changed because the environment changed, whatever the pixels', () => {
+      expect(verdictFor({ name: 'home', status: 'changed', diffPercent: 0, environment: { ...bump, policy: 'strict' } })).toBe(
+        'changed (0.00% pixels differ) — environment changed (strict policy): chromium 130.0.6723.58 → 141.0.7390.37 since the baseline; ' +
+          'environmentPolicy "strict" makes it changed whatever its pixels say, and approving re-baselines it in this environment',
+      );
+    });
+
+    it('a size change from another capture method: how it was captured, not the page', () => {
+      const viewport = { ...ENV_130, adapter: { ...ENV_130.adapter, captureMethod: 'viewport:webdriver' } };
+      expect(
+        verdictFor({
+          name: 'home',
+          status: 'changed',
+          diffPercent: 69.3,
+          sizeMismatch: { baseline: { width: 1280, height: 2348 }, candidate: { width: 1280, height: 720 } },
+          dom: sameDom,
+          environment: { delta: ['adapter.captureMethod'], renderingDelta: ['adapter.captureMethod'], baseline: ENV_130, candidate: viewport },
+        }),
+      ).toBe(
+        'changed (69.30% pixels differ) — capture method changed: full page (CDP) → viewport (WebDriver) since the baseline (baseline 1280×2348 → current 1280×720): ' +
+          'the size change comes from how the screenshot was taken, not from the page; re-baseline with this capture method, or capture the way the baseline was',
+      );
+    });
+
+    it('a real change keeps its verdict and gets the environment change as context', () => {
+      const dom = { changed: true, noiseHint: false, summary: { added: 1, removed: 0, attributeChanges: 0 } };
+      expect(verdictFor({ name: 'home', status: 'changed', diffPercent: 3, dom, environment: bump })).toBe(
+        'changed (3.00% pixels differ) and the DOM changed (1 added, 0 removed, 0 attribute changes) — a real structural change; confirm it is intended before approving; ' +
+          'the environment also changed since the baseline (chromium 130.0.6723.58 → 141.0.7390.37), which can add rendering differences of its own',
+      );
+    });
+
+    it('a context-only change (framework patch) changes nothing in the verdict', () => {
+      const context = { delta: ['framework.version'], renderingDelta: [], baseline: ENV_130, candidate: { ...ENV_130, framework: ENV_141.framework } };
+      expect(verdictFor({ name: 'home', status: 'changed', diffPercent: 0.4, dom: sameDom, environment: context })).toMatch(/likely render noise/);
+    });
+  });
+
+  it('groupChanges: drift is grouped by its change, never with likely noise', () => {
+    const groups = groupChanges([
+      { name: 'a', status: 'changed', diffPercent: 0.4, dom: sameDom, environment: bump },
+      { name: 'b', status: 'changed', diffPercent: 0.4, dom: sameDom, environment: bump },
+      { name: 'c', status: 'changed', diffPercent: 0.4, dom: sameDom },
+      { name: 'd', status: 'changed', diffPercent: 0.4, dom: sameDom },
+    ]);
+    expect(groups).toEqual([
+      {
+        basis: 'drift',
+        label: 'rendering drift: chromium 130.0.6723.58 → 141.0.7390.37 since the baseline, with the DOM and computed styles matching',
+        members: ['a', 'b'],
+      },
+      { basis: 'noise', label: 'likely render noise: the DOM and computed styles both match and the diff is small and scattered', members: ['c', 'd'] },
+    ]);
+  });
+
+  it('environmentLines: the run-level lines get_visual_results opens with, for changes two or more snapshots share', () => {
+    const snapshots = [
+      { name: 'a', status: 'changed' as const, diffPercent: 0.4, dom: sameDom, environment: bump },
+      { name: 'b', status: 'changed' as const, diffPercent: 0.4, dom: sameDom, environment: bump },
+    ];
+    expect(environmentLines(snapshots)).toEqual([
+      'Environment changed since the baselines (chromium 130.0.6723.58 → 141.0.7390.37): 2 diffs are rendering drift (DOM and computed styles identical), ' +
+        'not page changes; re-baseline them once the images are confirmed. Snapshots: a, b.',
+    ]);
+    expect(environmentLines(snapshots.slice(0, 1))).toEqual([]);
+  });
+
+  describe('explainSnapshot', () => {
+    let root: string;
+    beforeEach(() => {
+      root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-mcp-env-'));
+    });
+    afterEach(() => {
+      fs.rmSync(root, { recursive: true, force: true });
+    });
+    const writeResults = (snapshots: unknown[]) => {
+      const dir = path.join(root, 'visual-report');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'results.json'),
+        JSON.stringify({ version: '2.5.0', timestamp: 't', summary: { total: snapshots.length, passed: 0, changed: snapshots.length, newSnapshots: 0 }, snapshots }),
+      );
+    };
+
+    it('carries an environment layer, and drift guidance instead of the noise guidance', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([{ name: 'home', status: 'changed', diffPercent: 0.4, dom: sameDom, environment: bump }]);
+      const e = explainSnapshot(root, 'home');
+      expect(e.layers.environment).toEqual({
+        delta: ['browser.version', 'framework.version'],
+        renderingDelta: ['browser.version'],
+        change: 'chromium 130.0.6723.58 → 141.0.7390.37',
+        context: 'playwright 1.48.2 → 1.64.1',
+        drift: true,
+        policy: null,
+        baseline: ENV_130,
+        candidate: ENV_141,
+      });
+      expect(e.guidance).toContain(
+        'Rendering drift: the environment changed since the baseline (chromium 130.0.6723.58 → 141.0.7390.37) and the DOM and computed styles match, ' +
+          'so the machine changed, not the page. Compare the images (get_diff): if they match apart from rendering (glyph edges, font weight, subpixel layout), ' +
+          'the baseline needs re-approving in this environment once the human agrees; if something else differs, it is not drift alone. Do not call it render noise.',
+      );
+      expect(e.guidance.join(' ')).not.toMatch(/likely render noise|do not block on it/i);
+    });
+
+    it('no environment recorded: the layer is null', () => {
+      const { explainSnapshot } = require('../lib');
+      writeResults([{ name: 'home', status: 'changed', diffPercent: 0.4, dom: sameDom }]);
+      expect(explainSnapshot(root, 'home').layers.environment).toBeNull();
+    });
   });
 });

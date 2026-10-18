@@ -14,6 +14,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { type CaptureEnvironment, readEnvironment } from '../capture/environment';
 
 /**
  * Resolve the baselines directory: explicit override → config.json
@@ -53,6 +54,13 @@ export interface BaselineMetadata {
   width?: number;
   height?: number;
   approvedBy?: string;
+  /**
+   * The environment the approved capture was taken in (capture provenance),
+   * frozen from the capture's temp metadata.json on approve. Absent for
+   * baselines approved before it was recorded, or from an adapter that does
+   * not record it.
+   */
+  environment?: CaptureEnvironment;
 }
 
 export class BaselineStore {
@@ -191,14 +199,18 @@ export class BaselineStore {
       fs.rmSync(currentElements);
     }
 
-    // Update metadata
+    // Update metadata. The capture's environment is frozen into the baseline;
+    // a capture without one leaves the baseline without one (the previous
+    // baseline's would describe a screenshot it did not take).
     const now = new Date().toISOString();
     const existingMeta = this.readMetadata(name);
+    const environment = readEnvironment(this.readTempMetadata(name)?.environment);
     const meta: BaselineMetadata = {
       name,
       createdAt: existingMeta?.createdAt ?? now,
       updatedAt: now,
       approvedBy: 'local',
+      ...(environment ? { environment } : {}),
     };
     fs.writeFileSync(currentMetadata, JSON.stringify(meta, null, 2));
   }
@@ -296,6 +308,28 @@ export class BaselineStore {
   }
 
   /**
+   * Merge fields into the capture's temp metadata.json (creating it), so
+   * each part of an adapter (masks, environment…) adds its own without
+   * losing the others. A malformed file is replaced.
+   */
+  writeTempMetadata(name: string, fields: Record<string, unknown>): void {
+    const dir = path.join(this.tempDir, name);
+    fs.mkdirSync(dir, { recursive: true });
+    const merged = { ...(this.readTempMetadata(name) ?? {}), ...fields };
+    fs.writeFileSync(this.getTempMetadataPath(name), JSON.stringify(merged, null, 2));
+  }
+
+  /** The capture's temp metadata.json, or null when absent or malformed. */
+  readTempMetadata(name: string): Record<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.getTempMetadataPath(name), 'utf-8'));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Read a temp screenshot.
    */
   readTemp(name: string): Buffer | null {
@@ -362,6 +396,10 @@ export class BaselineStore {
 
   getTempDomPath(name: string): string {
     return path.join(this.tempDir, name, 'dom.html');
+  }
+
+  getTempMetadataPath(name: string): string {
+    return path.join(this.tempDir, name, 'metadata.json');
   }
 
   getBaselinesDir(): string {

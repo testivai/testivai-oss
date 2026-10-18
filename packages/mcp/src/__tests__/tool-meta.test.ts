@@ -1,4 +1,4 @@
-import { TOOL_META, type ToolMeta } from '../tool-meta';
+import { REVIEW_PROMPT, TOOL_META, TRIAGE_PROMPT, type ToolMeta } from '../tool-meta';
 
 /**
  * The model reads a tool's description before it calls the tool, so the
@@ -439,7 +439,7 @@ describe('triage-visual-diff prompt', () => {
 
     it('a text or markup edit never explains it; only what the DOM does not record can', () => {
       expect(para).toMatch(/a text or markup edit in the change under test never explains an identical-DOM diff, even where its regions sit on text the change edited/);
-      expect(para).toMatch(/a stylesheet change the style check does not cover, an image, a font or another asset, or the capture itself/);
+      expect(para).toMatch(/a stylesheet change the style check does not cover, an image, a font or another asset, the environment it was captured in \(rendering drift, above\), or the capture itself/);
       expect(para).toMatch(/If the change under test touched none of those, it is not an intended change: call it a glitch or a possible bug/);
     });
 
@@ -502,5 +502,41 @@ describe('toolMetaFor (approval prompt setting)', () => {
         description: metaOf(name).description,
       });
     }
+  });
+});
+
+// Rendering drift (results.json 2.5.0): the environment changed, the page did
+// not. The triage rubric and the review prompt must name it, never as noise.
+describe('rendering drift in the prompts', () => {
+  it('the triage rubric has a row for it: a glitch of the environment, unless the change under test changed the environment', () => {
+    const rubric = TRIAGE_PROMPT.rubric();
+    const row = rubric.split('\n').find((l) => l.startsWith('| environment.renderingDelta'));
+    expect(row).toBeDefined();
+    expect(row).toMatch(/rendering drift/);
+    expect(row).toMatch(/glitch/);
+    expect(row).toMatch(/intended change/);
+    expect(row).toMatch(/re-baseline/i);
+    expect(row).toMatch(/not render noise/);
+    expect(row).not.toMatch(/(usually|likely) render noise/i);
+  });
+
+  // "Unchanged DOM" (#210) lists what can explain an identical-DOM diff and
+  // calls anything else not an intended change. A Playwright or browser
+  // upgrade in the change under test is none of the assets it names, so
+  // without the environment in that list the paragraph would overrule the
+  // drift row's "intended change".
+  it('the unchanged-DOM paragraph counts the capture environment, so it agrees with the drift row', () => {
+    const para = TRIAGE_PROMPT.rubric()
+      .split('\n')
+      .find((l) => l.startsWith('Unchanged DOM:'));
+    expect(para).toMatch(/Only something the DOM does not record can: [^.]*the environment it was captured in \(rendering drift, above\)/);
+  });
+
+  it('review-visual-changes lists rendering drift as its own case', () => {
+    expect(REVIEW_PROMPT.text).toMatch(/rendering drift \(identical DOM and computed styles match, and the environment changed since the baseline/);
+  });
+
+  it('get_visual_results says a drift diff is not noise', () => {
+    expect(TOOL_META.get_visual_results.description).toMatch(/rendering drift/);
   });
 });

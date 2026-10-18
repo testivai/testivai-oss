@@ -12,7 +12,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { compareAll } from '../report/compare';
-import { generateResults } from '../report/generator';
+import { generateResults, RESULTS_SCHEMA_VERSION } from '../report/generator';
 import { makePng, RED, BLUE } from './helpers/synth';
 
 const W = 120;
@@ -156,7 +156,7 @@ describe('compareAll with masks and regions', () => {
     generateResults(results, reportDir);
 
     const written = JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8'));
-    expect(written.version).toBe('2.4.0');
+    expect(written.version).toBe(RESULTS_SCHEMA_VERSION);
     expect(written.snapshots[0].regions).toBeDefined();
   });
 

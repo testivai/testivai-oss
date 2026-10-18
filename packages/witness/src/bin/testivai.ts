@@ -8,6 +8,7 @@ import { witnessCommand } from '../commands/capture';
 import { approveCommand } from '../commands/approve';
 import { mergeCapturesCommand } from '../commands/merge-captures';
 import { reportCommand } from '../commands/report';
+import { envCommand } from '../commands/env';
 
 const packageJson = require('../../package.json');
 
@@ -50,6 +51,7 @@ program.addCommand(witnessCommand);
 program.addCommand(approveCommand);
 program.addCommand(mergeCapturesCommand);
 program.addCommand(reportCommand);
+program.addCommand(envCommand);
 
 // Parse arguments
 program.parse();

@@ -3,7 +3,7 @@ import { z, } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadLocalConfig } from '@testivai/witness/config';
-import { resolvePaths, readResults, verdictFor, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, missingBaselineLines, missingBaselineDiff, baselinesDirFor } from './lib';
+import { resolvePaths, readResults, verdictFor, listBaselines, approveSnapshot, approveAll, explainSnapshot, describeMissingResults, resolveApprovalPrompt, reportLinks, changeGroupLines, withPromptArguments, summaryLine, environmentLines, missingBaselineLines, missingBaselineDiff, baselinesDirFor } from './lib';
 import { CROP_LIMITS, snapshotDiffContent, type DiffRequest } from './diff-images';
 import { REVIEW_PROMPT, TRIAGE_PROMPT, toolMetaFor } from './tool-meta';
 
@@ -42,6 +42,8 @@ server.registerTool(
     }
     const lines = [
       summaryLine(results),
+      // An environment change several snapshots share, said once up front.
+      ...environmentLines(results.snapshots),
       '',
       ...withBlankAfter(changeGroupLines(results.snapshots)),
       ...results.snapshots.map((s) => `- ${s.name}: ${verdictFor(s)}`),

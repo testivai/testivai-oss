@@ -41,6 +41,33 @@ export {
 } from './capture/settle';
 export type { SettleState } from './capture/settle';
 
+// Capture provenance — the environment block every adapter records.
+export {
+  applyEnvironmentPolicyToName,
+  browserFromCapabilities,
+  browserFromUserAgent,
+  buildCaptureEnvironment,
+  CAPTURE_METHODS,
+  collectHostEnvironment,
+  detectCi,
+  distroFromOsRelease,
+  ENVIRONMENT_POLICIES,
+  installedPackageVersion,
+  parseEnvironmentVariant,
+  parseRenderProbe,
+  readEnvironment,
+  RENDER_PROBE_EXPRESSION,
+  webDriverEnvironment,
+} from './capture/environment';
+export type {
+  CaptureEnvironment,
+  CaptureEnvironmentParts,
+  EnvironmentPolicy,
+  HostEnvironment,
+  HostSources,
+  RenderEnvironment,
+  WebDriverEnvironmentInput,
+} from './capture/environment';
 // Stable full-page capture (fresh frame + capture until two in a row match) —
 // shared by every adapter that captures through CDP captureBeyondViewport.
 export {

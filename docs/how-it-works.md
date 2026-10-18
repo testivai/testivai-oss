@@ -66,6 +66,10 @@ Frameworks supported by the `init` wizard: Cypress, Puppeteer, Robot Framework, 
 
 Element maps (`elements.json`) come from the Playwright JS/TS, WebdriverIO, Selenium (JS / Python / Java) and Ruby adapters. playwright-python, playwright-java and the `testivai witness <url>` crawler capture the screenshot and the DOM without one, so computed styles are not compared for them (`styleCheck: "unavailable"`).
 
+### What a capture records about where it came from
+
+The Playwright JS/TS, WebdriverIO and Selenium (JS) adapters and the `testivai witness <url>` crawler also write `temp/<name>/metadata.json` with an `environment` block: the OS (and the Linux distro), the browser and its version, the test framework, the adapter and how it took the screenshot (`full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `viewport:webdriver`), what the page was rendered with (viewport, device scale, color scheme, reduced motion, locale, time zone, measured in the page), the CI provider and runner image, a container, and `TESTIVAI_ENV_LABEL`. Approving a capture freezes its block into the baseline's `metadata.json`. The Python, Ruby and Java adapters do not record it yet; their captures compare as before. `npx testivai env` prints this machine's part of the block (`--fonts` adds a fingerprint of the installed fonts). The full field list is in the [Extension API](./extension-api.md#capture-provenance-environment-in-metadatajson).
+
 ---
 
 ## Diff Algorithm
@@ -107,6 +111,18 @@ The DOM diff alone cannot tell render noise from a stylesheet-only change, so th
 | `"unavailable"`, or absent in older results | **Styles not compared**: could be render noise or a stylesheet-only change. No comparable style digests on both sides, so a stylesheet-only change is not ruled out. Compare the images before approving. |
 
 `dom.noiseHint` is `true` in the first, second and last rows, so read it together with `dom.styleCheck`, `diffPercent` and `regions` (`diffShape` from `@testivai/witness/report` applies the rule).
+
+### When the environment changed since the baseline
+
+When the baseline and the current capture both recorded their environment, the compare lists what changed (`environment.delta`) and the part of it that can change rendering (`environment.renderingDelta`: the browser, the OS, distro or architecture, the render settings, the capture method, a container or the label; framework, adapter and driver versions, the CI runner image and the project are context). A diff whose DOM is identical, whose styles match and whose rendering environment changed is **rendering drift**: the machine changed, not the page. The report says so ("Rendering drift — the environment changed since the baseline (chromium 130.0.6723.58 → 141.0.7390.37) …") instead of calling it render noise, and says it once at the top when several snapshots share the change. A size change from another capture method reads "Capture method changed — full page (CDP) → viewport (WebDriver)". Any other verdict keeps its reading and mentions the environment change as context.
+
+`environmentPolicy` in `.testivai/config.json` decides what a change of environment does:
+
+| Policy | Effect |
+|---|---|
+| `"warn"` (default) | Never changes a status: the report, MCP and the PR comment say what changed. |
+| `"separate"` | The adapters key each snapshot by environment, `<name>__<browser>__<platform>`, so each browser and OS gates against its own baselines. Never keyed by version. Only baselines of an environment this run captured can be reported missing. |
+| `"strict"` | A snapshot whose rendering environment changed is `changed`, whatever its pixels say (`environment.policy: "strict"`, exit 1 with `--fail-on-diff`). Approve it to re-baseline in the new environment. |
 
 ---
 
