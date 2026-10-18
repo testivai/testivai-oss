@@ -67890,8 +67890,8 @@ var require_zip_archive_entry = __commonJS({
       }
       this.crc = crc;
     };
-    ZipArchiveEntry.prototype.setExternalAttributes = function(attr) {
-      this.exattr = attr >>> 0;
+    ZipArchiveEntry.prototype.setExternalAttributes = function(attr2) {
+      this.exattr = attr2 >>> 0;
     };
     ZipArchiveEntry.prototype.setExtra = function(extra) {
       this.extra = extra;
@@ -67902,8 +67902,8 @@ var require_zip_archive_entry = __commonJS({
       }
       this.gpb = gpb;
     };
-    ZipArchiveEntry.prototype.setInternalAttributes = function(attr) {
-      this.inattr = attr;
+    ZipArchiveEntry.prototype.setInternalAttributes = function(attr2) {
+      this.inattr = attr2;
     };
     ZipArchiveEntry.prototype.setMethod = function(method) {
       if (method < 0) {
@@ -87815,10 +87815,10 @@ function extractAttributeValues(attrMap, options) {
   if (!attrMap || options.ignoreAttributes) return null;
   const attrValues = {};
   let hasAttrs = false;
-  for (let attr in attrMap) {
-    if (!Object.prototype.hasOwnProperty.call(attrMap, attr)) continue;
-    const cleanAttrName = attr.startsWith(options.attributeNamePrefix) ? attr.substr(options.attributeNamePrefix.length) : attr;
-    attrValues[cleanAttrName] = attrMap[attr];
+  for (let attr2 in attrMap) {
+    if (!Object.prototype.hasOwnProperty.call(attrMap, attr2)) continue;
+    const cleanAttrName = attr2.startsWith(options.attributeNamePrefix) ? attr2.substr(options.attributeNamePrefix.length) : attr2;
+    attrValues[cleanAttrName] = attrMap[attr2];
     hasAttrs = true;
   }
   return hasAttrs ? attrValues : null;
@@ -87857,13 +87857,13 @@ function getRawContent2(arr, options) {
 function attr_to_str_raw(attrMap, options) {
   let attrStr = "";
   if (attrMap && !options.ignoreAttributes) {
-    for (let attr in attrMap) {
-      if (!Object.prototype.hasOwnProperty.call(attrMap, attr)) continue;
-      let attrVal = attrMap[attr];
+    for (let attr2 in attrMap) {
+      if (!Object.prototype.hasOwnProperty.call(attrMap, attr2)) continue;
+      let attrVal = attrMap[attr2];
       if (attrVal === true && options.suppressBooleanAttributes) {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}`;
+        attrStr += ` ${attr2.substr(options.attributeNamePrefix.length)}`;
       } else {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
+        attrStr += ` ${attr2.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
       }
     }
   }
@@ -87880,19 +87880,19 @@ function propName2(obj) {
 function attr_to_str(attrMap, options, isStopNode) {
   let attrStr = "";
   if (attrMap && !options.ignoreAttributes) {
-    for (let attr in attrMap) {
-      if (!Object.prototype.hasOwnProperty.call(attrMap, attr)) continue;
+    for (let attr2 in attrMap) {
+      if (!Object.prototype.hasOwnProperty.call(attrMap, attr2)) continue;
       let attrVal;
       if (isStopNode) {
-        attrVal = attrMap[attr];
+        attrVal = attrMap[attr2];
       } else {
-        attrVal = options.attributeValueProcessor(attr, attrMap[attr]);
+        attrVal = options.attributeValueProcessor(attr2, attrMap[attr2]);
         attrVal = replaceEntitiesValue2(attrVal, options);
       }
       if (attrVal === true && options.suppressBooleanAttributes) {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}`;
+        attrStr += ` ${attr2.substr(options.attributeNamePrefix.length)}`;
       } else {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
+        attrStr += ` ${attr2.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
       }
     }
   }
@@ -88058,10 +88058,10 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
     } else if (jObj[key] instanceof Date) {
       val += this.buildTextValNode(jObj[key], key, "", level, matcher);
     } else if (typeof jObj[key] !== "object") {
-      const attr = this.isAttribute(key);
-      if (attr && !this.ignoreAttributesFn(attr, jPath)) {
-        attrStr += this.buildAttrPairStr(attr, "" + jObj[key], isCurrentStopNode);
-      } else if (!attr) {
+      const attr2 = this.isAttribute(key);
+      if (attr2 && !this.ignoreAttributesFn(attr2, jPath)) {
+        attrStr += this.buildAttrPairStr(attr2, "" + jObj[key], isCurrentStopNode);
+      } else if (!attr2) {
         if (key === this.options.textNodeName) {
           let newval = this.options.tagValueProcessor(key, "" + jObj[key]);
           val += this.replaceEntitiesValue(newval);
@@ -88185,9 +88185,9 @@ Builder.prototype.extractAttributes = function(obj) {
   } else {
     for (let key in obj) {
       if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-      const attr = this.isAttribute(key);
-      if (attr) {
-        attrValues[attr] = obj[key];
+      const attr2 = this.isAttribute(key);
+      if (attr2) {
+        attrValues[attr2] = obj[key];
         hasAttrs = true;
       }
     }
@@ -88258,13 +88258,13 @@ Builder.prototype.buildAttributesForStopNode = function(obj) {
   } else {
     for (let key in obj) {
       if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-      const attr = this.isAttribute(key);
-      if (attr) {
+      const attr2 = this.isAttribute(key);
+      if (attr2) {
         const val = obj[key];
         if (val === true && this.options.suppressBooleanAttributes) {
-          attrStr += " " + attr;
+          attrStr += " " + attr2;
         } else {
-          attrStr += " " + attr + '="' + val + '"';
+          attrStr += " " + attr2 + '="' + val + '"';
         }
       }
     }
@@ -115783,6 +115783,22 @@ function explainHeightChange(sm, context6 = {}) {
   return parts.join("; ");
 }
 
+// ../packages/witness/src/report/anchor.ts
+var PLAIN_SNAPSHOT_NAME = /^[A-Za-z0-9_-]{1,60}$/;
+function snapshotAnchorId(name) {
+  if (PLAIN_SNAPSHOT_NAME.test(name)) return `snap-${name}`;
+  const readable = name.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  return `snap-${readable ? `${readable}-` : ""}${fnv1a(name)}`;
+}
+function fnv1a(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
 // src/status.ts
 var STATUS_CONTEXT = "TestivAI / visual";
 function resolveStatusContext(input) {
@@ -115858,6 +115874,34 @@ ${names.map((n) => `- \`${n}\``).join("\n")}` : "";
 
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
+function runKeyFromEnv(env) {
+  const id = env.GITHUB_RUN_ID;
+  if (!id) return void 0;
+  return `${id}-${env.GITHUB_RUN_ATTEMPT || "1"}`;
+}
+function runMarkerLine(runKey) {
+  const safe = (runKey ?? "").replace(/[^A-Za-z0-9_-]/g, "").replace(/-{2,}/g, "-");
+  return safe ? `
+<!-- testivai-run:${safe} -->` : "";
+}
+function safeReportUrl(url2) {
+  if (!url2 || /[\s"'<>()`\\]/.test(url2)) return void 0;
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    return void 0;
+  }
+  if (parsed.protocol !== "https:") return void 0;
+  parsed.hash = "";
+  return parsed.toString();
+}
+function snapshotUrl(reportUrl, name) {
+  return `${reportUrl}#${snapshotAnchorId(name)}`;
+}
+function attr(value) {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
 function resolveUpsertMarker(statusContext) {
   if (statusContext === STATUS_CONTEXT) return UPSERT_MARKER;
   const safe = statusContext.replace(/-{2,}/g, "-").replace(/[<>]/g, "");
@@ -115923,21 +115967,27 @@ function renderDomHintMarkdown(snapshot2) {
   }
   return lines.length > 0 ? lines.join("\n") + "\n\n" : "";
 }
-function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER) {
+function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER, links = {}) {
   const { summary: summary2, snapshots } = results;
+  const reportUrl = safeReportUrl(links.reportUrl);
   const summaryLine = [
     `**${summary2.passed} passed**`,
     `**${summary2.changed} changed**`,
     `**${summary2.newSnapshots} new**`
   ].join(" | ");
-  let comment = `${marker2}
+  let comment = `${marker2}${runMarkerLine(links.runKey)}
 
 ### TestivAI Visual Report
 
 ${summaryLine} \u2014 **${summary2.total} total**
 
 `;
-  if (artifactUrl) {
+  if (reportUrl) {
+    const zip = artifactUrl ? ` \xB7 or [download it as a ZIP](${artifactUrl})` : "";
+    comment += `> **[Open the visual report](${reportUrl})** \u2014 baseline, current and diff side by side${zip}
+
+`;
+  } else if (artifactUrl) {
     comment += `> [Download visual report ZIP](${artifactUrl}) \u2014 contains baseline, current, and diff images
 
 `;
@@ -115955,8 +116005,9 @@ ${summaryLine} \u2014 **${summary2.total} total**
       const diffPercent = formatDiffPercent(snapshot2);
       const domHint = renderDomHintMarkdown(snapshot2);
       const size = snapshot2.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot2.sizeMismatch)}` : "";
+      const open2 = reportUrl ? ` \xB7 <a href="${attr(snapshotUrl(reportUrl, snapshot2.name))}">open in report</a>` : "";
       comment += `<details>
-<summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different${size}</summary>
+<summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different${size}${open2}</summary>
 
 ${domHint}
 \`\`\`
@@ -115975,7 +116026,8 @@ ${domHint}
   if (newSnapshots.length > 0) {
     comment += "#### New Snapshots\n\n";
     for (const snapshot2 of newSnapshots) {
-      comment += `- \`${snapshot2.name}\`
+      const open2 = reportUrl ? ` \u2014 [open](${snapshotUrl(reportUrl, snapshot2.name)})` : "";
+      comment += `- \`${snapshot2.name}\`${open2}
 `;
     }
     comment += "\n";
@@ -115983,11 +116035,14 @@ ${domHint}
   comment += "---\n> Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with `ignoreSelectors` or exclude it with `mask`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (`explain_snapshot`).\n\n*Generated by [TestivAI](https://github.com/testivai/testivai-oss)*\n";
   return comment;
 }
-function buildEmptyComment(artifactUrl, marker2 = UPSERT_MARKER) {
-  const link = artifactUrl ? `
+function buildEmptyComment(artifactUrl, marker2 = UPSERT_MARKER, links = {}) {
+  const reportUrl = safeReportUrl(links.reportUrl);
+  const link = reportUrl ? `
+> **[Open the visual report](${reportUrl})**${artifactUrl ? ` \xB7 or [download it as a ZIP](${artifactUrl})` : ""}
+` : artifactUrl ? `
 > [Download visual report ZIP](${artifactUrl})
 ` : "";
-  return `${marker2}
+  return `${marker2}${runMarkerLine(links.runKey)}
 
 ### TestivAI Visual Report
 
@@ -116071,7 +116126,8 @@ async function run() {
         repo: context6.repo.repo,
         issue_number: prNumber
       });
-      const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker) : buildComment(results, artifactUrl, upsertMarker);
+      const links = { runKey: runKeyFromEnv(process.env) };
+      const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker, links) : buildComment(results, artifactUrl, upsertMarker, links);
       const existingComment = comments.find(
         (c) => c.body?.includes(upsertMarker)
       );

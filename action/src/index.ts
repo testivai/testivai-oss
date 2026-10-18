@@ -7,7 +7,7 @@ import * as github from '@actions/github';
 import * as artifact from '@actions/artifact';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildComment, buildEmptyComment, resolveUpsertMarker } from './comment';
+import { buildComment, buildEmptyComment, resolveUpsertMarker, runKeyFromEnv } from './comment';
 import { determineStatus, resolveStatusContext } from './status';
 import type { ResultsData } from './types';
 
@@ -116,9 +116,12 @@ async function run(): Promise<void> {
       });
 
       // Build comment — includes artifact link when available
+      // The run marker lets the publish step check the comment is still
+      // about this run before adding the published report's links.
+      const links = { runKey: runKeyFromEnv(process.env) };
       const commentBody = results.snapshots.length === 0
-        ? buildEmptyComment(artifactUrl, upsertMarker)
-        : buildComment(results, artifactUrl, upsertMarker);
+        ? buildEmptyComment(artifactUrl, upsertMarker, links)
+        : buildComment(results, artifactUrl, upsertMarker, links);
 
       // Look for this lane's existing comment to upsert
       const existingComment = comments.find(c =>
