@@ -131,7 +131,9 @@ export function renderHtml(data: ReportData): string {
     /* Snapshot card */
     .snapshot { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
     .snapshot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .snapshot-name { font-size: 15px; font-weight: 650; }
+    .snapshot-name { font-size: 15px; font-weight: 650; color: inherit; text-decoration: none; }
+    .snapshot-name:hover { text-decoration: underline; }
+    .snapshot:target { outline: 2px solid var(--accent); outline-offset: 2px; }
     .snapshot-badge { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
     .badge-changed { background: var(--changed-bg); color: var(--changed); }
     .badge-new { background: var(--new-bg); color: var(--new); }
@@ -232,7 +234,7 @@ export function renderHtml(data: ReportData): string {
       .sidebar.open { transform: translateX(0); }
       .sidebar-backdrop.active { display: block; }
       .main { margin-left: 0; padding: 16px; max-width: 100%; }
-      .section { scroll-margin-top: 64px; }
+      .section, .snapshot { scroll-margin-top: 64px; }
       .snapshot { padding: 14px; }
       .snapshot-header { flex-wrap: wrap; gap: 6px; }
       .diff-view, .diff-view.two-col { grid-template-columns: 1fr; }
@@ -411,18 +413,20 @@ function renderSnapshot(snapshot: SnapshotResult): string {
   else if (hasCurrent && !hasBaseline) gridClass += ' one-col';
   else gridClass += ' two-col';
 
+  const anchor = snapshotAnchorId(snapshot.name);
+
   return `
-    <div class="snapshot">
+    <div class="snapshot" id="${anchor}">
       <div class="snapshot-header">
-        <span class="snapshot-name">${escapeHtml(snapshot.name)}</span>
+        <a class="snapshot-name" href="#${anchor}" title="Link to this snapshot">${escapeHtml(snapshot.name)}</a>
         <span class="snapshot-badge ${badgeClass}">${snapshot.status}</span>
       </div>
       ${renderStats(snapshot)}
       ${renderAnalysis(snapshot)}
       <div class="${gridClass}">
-        ${hasBaseline ? `<div class="diff-col"><label>Baseline</label><img src="${snapshot.baselinePath}" alt="Baseline"></div>` : ''}
-        ${hasDiff ? `<div class="diff-col"><label>Diff <span class="heat-legend" title="Heatmap: color = difference magnitude">subtle <span class="heat-bar"></span> strong</span></label><img src="${snapshot.diffPath}" alt="Diff heatmap"></div>` : ''}
-        ${hasCurrent ? `<div class="diff-col"><label>Current</label><img src="${snapshot.currentPath}" alt="Current"></div>` : ''}
+        ${hasBaseline ? `<div class="diff-col"><label>Baseline</label><img src="${escapeHtml(snapshot.baselinePath ?? '')}" alt="Baseline"></div>` : ''}
+        ${hasDiff ? `<div class="diff-col"><label>Diff <span class="heat-legend" title="Heatmap: color = difference magnitude">subtle <span class="heat-bar"></span> strong</span></label><img src="${escapeHtml(snapshot.diffPath ?? '')}" alt="Diff heatmap"></div>` : ''}
+        ${hasCurrent ? `<div class="diff-col"><label>Current</label><img src="${escapeHtml(snapshot.currentPath ?? '')}" alt="Current"></div>` : ''}
       </div>
       ${snapshot.status === 'changed' || snapshot.status === 'new' ? `
       <div class="approve-cmd">
@@ -545,7 +549,7 @@ function renderVerdict(snapshot: SnapshotResult): string {
   // Auto-passed within a tolerance although the DOM changed: say so, and
   // never ask for an approval there is nothing to give.
   if (snapshot.autoPassed && snapshot.dom?.changed && snapshot.dom.summary) {
-    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${snapshot.autoPassed}</code> criterion — within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot.autoPassed)}</code> criterion — within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
   }
 
   // Style-only only when the DOM is unchanged: a class or style attribute
@@ -583,7 +587,7 @@ function renderVerdict(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.autoPassed) {
-    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${snapshot.autoPassed}</code> criterion — reported for transparency, no action needed.</span></div>`;
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot.autoPassed)}</code> criterion — reported for transparency, no action needed.</span></div>`;
   }
 
   return '';
@@ -718,7 +722,7 @@ function renderRegions(snapshot: SnapshotResult): string {
   const chips = regions
     .map(
       (r, i) =>
-        `<li><a href="#" class="region-chip${r.classification === 'shift' ? ' region-shift' : ''}" data-diff="${snapshot.diffPath ?? ''}" title="${r.diffPixels} changed pixels${r.elements?.[0] ? ' — ' + escapeHtml(r.elements[0].selector) : ''}">#${i + 1} · ${describe(r)}</a></li>`,
+        `<li><a href="#" class="region-chip${r.classification === 'shift' ? ' region-shift' : ''}" data-diff="${escapeHtml(snapshot.diffPath ?? '')}" title="${r.diffPixels} changed pixels${r.elements?.[0] ? ' — ' + escapeHtml(r.elements[0].selector) : ''}">#${i + 1} · ${describe(r)}</a></li>`,
     )
     .join('');
 
@@ -757,7 +761,7 @@ function renderMasks(snapshot: SnapshotResult): string {
         : m.source.type === 'edge'
           ? `edge <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>`
           : `region <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>`;
-    return `${src} → ${m.width}×${m.height} @ (${m.x}, ${m.y}) <em>(${m.source.origin})</em>`;
+    return `${src} → ${m.width}×${m.height} @ (${m.x}, ${m.y}) <em>(${escapeHtml(m.source.origin)})</em>`;
   };
 
   const maskBlock =
@@ -785,4 +789,33 @@ function escapeHtml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/** A name that is already a readable, safe id (and short enough to keep). */
+const PLAIN_SNAPSHOT_NAME = /^[A-Za-z0-9_-]{1,60}$/;
+
+/**
+ * The id of a snapshot's card in the report, for links straight to it
+ * (`index.html#snap-home`). Exported so the PR comment builds the same id.
+ *
+ * A plain name (letters, digits, `_`, `-`) is kept as is. Any other name is
+ * reduced to those characters and suffixed with a hash of the full name, so
+ * names that differ only in other characters (`home page`, `home/page`)
+ * still get different ids. Always matches `snap-[A-Za-z0-9_-]+`, at most 74
+ * characters.
+ */
+export function snapshotAnchorId(name: string): string {
+  if (PLAIN_SNAPSHOT_NAME.test(name)) return `snap-${name}`;
+  const readable = name.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  return `snap-${readable ? `${readable}-` : ''}${fnv1a(name)}`;
+}
+
+/** 32-bit FNV-1a of a string's UTF-16 code units, as 8 hex digits. */
+function fnv1a(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
 }

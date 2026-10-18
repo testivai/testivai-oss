@@ -76,7 +76,7 @@ CI (GitHub Actions):
 - `src/report/diff-shape.ts` — `diffShape()`: scattered / concentrated / large, the rule for when matching styles still mean likely render noise (shared by compare, the report, MCP and the action)
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html
-- `src/report/template.ts`   — HTML template for the report
+- `src/report/template.ts`   — HTML template for the report; escapes every value it shows; `snapshotAnchorId()` is each snapshot's link target (`#snap-<name>`), shared with the PR comment
 - `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)

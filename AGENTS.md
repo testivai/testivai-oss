@@ -120,7 +120,7 @@ CI — GitHub Actions
 | `src/report/compare.ts` | Orchestrates diff, writes images to `visual-report/images/` |
 | `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
-| `src/report/template.ts` | Self-contained HTML template for the report |
+| `src/report/template.ts` | Self-contained HTML template for the report; escapes every value it shows; `snapshotAnchorId()` gives each snapshot a link target (`#snap-<name>`) |
 | `src/capture/stable-capture.ts` | Fresh-frame wait + capture until two in a row match (Chrome can return a wrong-viewport frame in a beyond-viewport capture); shared by the standalone CLI and the Playwright and Selenium adapters |
 
 ### @testivai/witness-playwright (`packages/playwright/`)
