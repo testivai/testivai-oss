@@ -407,6 +407,218 @@ model as data; a pull request that tries to talk the model into a verdict can
 still mislead the comment, which is one more reason approving stays a human
 decision.
 
+## Reports on GitHub Pages
+
+The reporter's comment links the report as a ZIP: download it, unzip it, open
+`index.html`. The companion `testivai/testivai-oss/publish@v1` action puts
+each run's report on the repository's GitHub Pages site instead, so the
+comment links straight to it, and each changed or new snapshot's row links to
+its card in the report:
+
+> **[Open the visual report](https://example.github.io/my-app/pr/14/39150236166-1/)** — baseline, current and diff side by side · or [download it as a ZIP](https://github.com/example/my-app/actions/runs/39150236166/artifacts/4402)
+
+The site holds the last 3 runs of each open pull request, forks included, at
+`pr/<number>/<run id>-<attempt>/`, and the latest run on the default branch at
+`main/`: the state pull requests merge into. Its front page lists them, each
+pull request has a page of its runs, and a link to a report that is no longer
+published explains why. The site is rebuilt from scratch on every publish
+from what is true then, so a closed pull request's reports go with the next
+publish, and nothing needs cleaning up.
+
+**It replaces the repository's whole GitHub Pages site.** GitHub gives a
+repository one site, and each publish deploys a new one. Use it in a
+repository whose Pages site is free for it, not one that serves your docs.
+
+### Who can open the reports
+
+That is GitHub's setting, which only repository admins can change; the action
+reads it and never changes it. It publishes only where Pages is on with
+Settings → Pages → Source set to **GitHub Actions**; otherwise it publishes
+nothing, says why in the job log, and the comment keeps the ZIP link.
+
+| Repository | Pages site | What happens |
+|---|---|---|
+| public | public | Published. Anyone with the link can open it; pages ask search engines not to index them. |
+| private or internal | private (GitHub Enterprise Cloud: Settings → Pages → Visibility) | Published. Only people who can read the repository can open it. |
+| private or internal | public (every other plan) | **Not published**, unless `TESTIVAI_PUBLIC_REPORTS` is `true`. |
+
+A public site would put a private repository's screenshots on the open
+internet, so that case needs a yes: the variable `TESTIVAI_PUBLIC_REPORTS` set
+to `true`. Set it on the `github-pages` environment (Settings → Environments →
+github-pages), which only admins can configure. GitHub also reads a
+repository or organization variable of that name when the environment has
+none, and on an organization repository people with write access can create
+repository variables. So it guards against publishing by accident; it is not
+an access control (anyone with write access can already read, and copy, the
+code).
+
+### Setup
+
+1. An admin sets Settings → Pages → Source to **GitHub Actions**.
+2. Add a workflow; `workflows:` names your visual test workflow (the one with
+   the `testivai/testivai-oss@v1` reporter step), by its `name:`:
+
+```yaml
+# .github/workflows/testivai-pages.yml
+name: TestivAI reports
+
+on:
+  workflow_run:
+    workflows: [TestivAI OSS]
+    types: [completed]
+  # Takes a closed pull request's reports off the site right away
+  # (the next publish would anyway). Runs the action from the default
+  # branch; it never checks out the pull request.
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+
+# Each publish builds the whole site: a newer one replaces a running one.
+concurrency:
+  group: testivai-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read          # runs and their report artifacts
+      pages: write           # deploy
+      id-token: write        # deploy
+      pull-requests: write   # the report links in comments
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page-url }}
+    steps:
+      - id: publish
+        uses: testivai/testivai-oss/publish@v1
+        with:
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+```
+
+`workflow_run` starts only from a workflow file on the default branch, so the
+publish runs once this is merged. It runs after every visual run, whichever
+branch or fork it came from, and that run's report is on the site a minute or
+two after the reporter's comment.
+
+After the deploy, the action adds the links to the TestivAI comment of each
+pull request whose latest published run it describes; a comment already about
+a newer run is left for that run's publish. A fork's CI run cannot comment
+(its token is read-only), so on a fork's pull request the action posts a
+comment of its own with the link, the run and the counts.
+
+### Inputs
+
+| Input | Default | |
+|---|---|---|
+| `public-reports` | `''` | Pass `${{ vars.TESTIVAI_PUBLIC_REPORTS }}` ([who can open the reports](#who-can-open-the-reports)). |
+| `runs-per-pr` | `3` | How many of each open pull request's latest runs to publish, 1 to 10. Every publish downloads them all again: lower it for a repository with many open pull requests. |
+| `artifact-name` | `testivai-visual-report` | The reporter's `artifact-name`. |
+| `status-context` | `''` | The reporter's `status-context`, if you set one, so the links go into that lane's comment. |
+| `comment` | `true` | `false` leaves comments alone. |
+| `include-dir` | `''` | A folder of your own pages to publish with the reports ([below](#pages-of-your-own-on-the-same-site)). |
+| `include-name` | `''` | The folder `include-dir` goes in on the site, such as `demo`. Required with `include-dir`. |
+| `github-token` | `github.token` | Reads runs, artifacts and Pages settings, and writes the comments. The deploy always uses the job's own token. |
+
+### Pages of your own on the same site
+
+Since each publish replaces the whole site, pages you want on it too (a demo,
+a landing page) go through the action: build them in an earlier step, from
+the default branch, and pass the folder as `include-dir`. They are published
+as they are under `include-name/` and linked from the front page; symbolic
+links in the folder are skipped, and its size counts toward the site's.
+
+Build them from the repository's own code only. `actions/checkout` without
+`ref:` checks out the default branch on `workflow_run`, and the pull
+request's base branch on `pull_request_target`, never the pull request
+itself: never point it at the pull request's head, or a fork's code would run
+with this job's token.
+
+```yaml
+# .github/workflows/testivai-pages.yml
+name: TestivAI reports
+
+on:
+  workflow_run:
+    workflows: [Visual Regression]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+
+concurrency:
+  group: testivai-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page-url }}
+    steps:
+      # The default branch, never the pull request.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: '24', cache: 'npm' }
+      - run: npm ci
+      - run: npm run build:demo   # writes demo/ from the default branch
+      - id: publish
+        uses: testivai/testivai-oss/publish@v1
+        with:
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+          include-dir: demo
+          include-name: demo
+```
+
+### What gets published, and what does not
+
+A pull request's CI run, a fork's included, decides what its report artifact
+holds. So a page is never the artifact's own `index.html`: the action reads
+only `results.json` and the report's PNGs, and rebuilds the page with the
+report template.
+
+- `results.json` is checked field by field (types, known values, sizes); a
+  report it cannot show gets a page that says why, with links to the run and
+  its ZIP. Every value on the page is escaped.
+- An image is published only if it is a PNG of sane dimensions, at a numbered
+  path (`images/<n>/current.png`), never under a snapshot's name. Others are
+  left out, and the page says which.
+- The ZIP is inflated in slices with limits (50 MB per image, 400 MB per
+  report) and refused as soon as it goes over one, so a crafted archive
+  cannot exhaust the runner.
+- Every page carries a content security policy: its own inline styles and
+  scripts and its own images, nothing loaded from or sent to another site.
+  Project sites on `<owner>.github.io` share one origin, so this keeps one
+  report from reaching another site's data even if markup ever got through
+  the escaping.
+- A fork's pages and the bot's comment on its pull request say the report
+  comes from a fork; that comment holds numbers and links only, no text from
+  the fork's results.
+- The action never checks out or runs code from the pull request.
+
+### Limits
+
+- The last 3 runs per open pull request (`runs-per-pr`), and the latest run on
+  the default branch. A report goes once its artifact expires (the reporter's
+  `artifact-retention-days`).
+- A run's report ZIP over 150 MB is not published, and the site stays under
+  900 MB (GitHub Pages allows 1 GB): when it would be over, older runs go
+  first, a fork's before a branch's, and each pull request's latest run last.
+  The pull request's page lists what was left out and why.
+- Only the 1000 newest report artifacts are read: a pull request whose last
+  report is older than those is not published.
+- Each publish downloads every published report again. With the default
+  `GITHUB_TOKEN` (1,000 API requests an hour per repository), that is plenty
+  for a few dozen open pull requests; lower `runs-per-pr` beyond that.
+
 ## Caveats
 
 - The Action assumes the local HTML report has already been generated by a framework adapter run. It does not run tests itself.

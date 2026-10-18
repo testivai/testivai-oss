@@ -197,12 +197,22 @@ var path2 = __toESM(require("path"));
 var RUN_STAMP_FILE = "testivai-run.json";
 function readRunStamp(reportDir) {
   try {
-    const raw = JSON.parse(fs2.readFileSync(path2.join(reportDir, RUN_STAMP_FILE), "utf8"));
-    if (typeof raw.runId !== "string" || !Number.isInteger(raw.runAttempt)) return null;
-    return { runId: raw.runId, runAttempt: raw.runAttempt, ...typeof raw.sha === "string" ? { sha: raw.sha } : {} };
+    return parseRunStamp(fs2.readFileSync(path2.join(reportDir, RUN_STAMP_FILE), "utf8"));
   } catch {
     return null;
   }
+}
+function parseRunStamp(text) {
+  let raw;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const { runId, runAttempt, sha } = raw;
+  if (typeof runId !== "string" || typeof runAttempt !== "number" || !Number.isInteger(runAttempt) || runAttempt < 1) return null;
+  return { runId, runAttempt, ...typeof sha === "string" ? { sha } : {} };
 }
 function staleReport(stamp, env) {
   if (!stamp || !env.GITHUB_RUN_ID || stamp.runId !== env.GITHUB_RUN_ID) return null;

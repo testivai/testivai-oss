@@ -4,6 +4,7 @@
 
 import { describeRegions, diffShape, STYLE_CHECK_DOES_NOT_COVER } from '../../packages/witness/src/report/diff-shape';
 import { describeSizeChange, explainHeightChange, formatSizeMismatch, formatSizes, sizeMismatchKind } from '../../packages/witness/src/report/size-mismatch';
+import { snapshotAnchorId } from '../../packages/witness/src/report/anchor';
 import {
   describeCaptureMethod,
   environmentChangeGroups,
@@ -15,6 +16,70 @@ import type { ResultsData, SnapshotResult } from './types';
 import { STATUS_CONTEXT } from './status';
 
 export const UPSERT_MARKER = '<!-- testivai-visual-report -->';
+
+/** Links from the comment into a published copy of the HTML report. */
+export interface CommentLinks {
+  /**
+   * Where this run's HTML report is published (e.g. GitHub Pages). The
+   * comment links it, and each changed or new snapshot's card in it. Only an
+   * https URL that cannot break out of a Markdown link or an HTML attribute
+   * is used; anything else is ignored.
+   */
+  reportUrl?: string;
+  /**
+   * The CI run the comment describes (`<run id>-<attempt>`), kept in a hidden
+   * marker so a later update can check the comment is still about that run.
+   */
+  runKey?: string;
+}
+
+const RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
+
+/** The run a comment describes, from its hidden marker; undefined for comments without one. */
+export function readRunKey(body: string): string | undefined {
+  return RUN_MARKER.exec(body)?.[1];
+}
+
+/** `<run id>-<attempt>` of the current GitHub Actions run, or undefined outside one. */
+export function runKeyFromEnv(env: Record<string, string | undefined>): string | undefined {
+  const id = env.GITHUB_RUN_ID;
+  if (!id) return undefined;
+  return `${id}-${env.GITHUB_RUN_ATTEMPT || '1'}`;
+}
+
+/** The hidden run marker line, or '' when there is no usable run key. */
+function runMarkerLine(runKey?: string): string {
+  const safe = (runKey ?? '').replace(/[^A-Za-z0-9_-]/g, '').replace(/-{2,}/g, '-');
+  return safe ? `\n<!-- testivai-run:${safe} -->` : '';
+}
+
+/**
+ * The report URL without its #fragment, when it is safe to put in a Markdown
+ * link and an HTML attribute: https, and no whitespace, quotes, angle
+ * brackets, parentheses, backticks or backslashes. Otherwise undefined.
+ */
+function safeReportUrl(url?: string): string | undefined {
+  if (!url || /[\s"'<>()`\\]/.test(url)) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== 'https:') return undefined;
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+/** A snapshot's card in the published report. */
+function snapshotUrl(reportUrl: string, name: string): string {
+  return `${reportUrl}#${snapshotAnchorId(name)}`;
+}
+
+/** Escape a URL for an HTML attribute in the comment. */
+function attr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
 
 /**
  * Resolve the PR comment upsert marker for a status context. The default
@@ -195,8 +260,10 @@ export function buildComment(
   results: ResultsData,
   artifactUrl?: string,
   marker: string = UPSERT_MARKER,
+  links: CommentLinks = {},
 ): string {
   const { summary, snapshots } = results;
+  const reportUrl = safeReportUrl(links.reportUrl);
 
   // Header summary line
   const summaryLine = [
@@ -205,7 +272,7 @@ export function buildComment(
     `**${summary.newSnapshots} new**`,
   ].join(' | ');
 
-  let comment = `${marker}
+  let comment = `${marker}${runMarkerLine(links.runKey)}
 
 ### TestivAI Visual Report
 
@@ -213,8 +280,12 @@ ${summaryLine} — **${summary.total} total**
 
 `;
 
-  // Artifact link — gives reviewers direct access to baseline/current/diff images
-  if (artifactUrl) {
+  // The published report opens in the browser; the ZIP stays as the fallback.
+  if (reportUrl) {
+    const zip = artifactUrl ? ` · or [download it as a ZIP](${artifactUrl})` : '';
+    comment += `> **[Open the visual report](${reportUrl})** — baseline, current and diff side by side${zip}\n\n`;
+  } else if (artifactUrl) {
+    // Artifact link — gives reviewers direct access to baseline/current/diff images
     comment += `> [Download visual report ZIP](${artifactUrl}) — contains baseline, current, and diff images\n\n`;
   }
 
@@ -242,9 +313,11 @@ ${summaryLine} — **${summary.total} total**
       const diffPercent = formatDiffPercent(snapshot);
       const domHint = renderSnapshotHints(snapshot);
       const size = snapshot.sizeMismatch ? ` · ${formatSizeMismatch(snapshot.sizeMismatch)}` : '';
+      // On the row itself, so it works without expanding the details.
+      const open = reportUrl ? ` · <a href="${attr(snapshotUrl(reportUrl, snapshot.name))}">open in report</a>` : '';
 
       comment += `<details>
-<summary><code>${snapshot.name}</code> — ${diffPercent}% different${size}</summary>
+<summary><code>${snapshot.name}</code> — ${diffPercent}% different${size}${open}</summary>
 
 ${domHint}
 \`\`\`
@@ -265,7 +338,8 @@ ${domHint}
   if (newSnapshots.length > 0) {
     comment += '#### New Snapshots\n\n';
     for (const snapshot of newSnapshots) {
-      comment += `- \`${snapshot.name}\`\n`;
+      const open = reportUrl ? ` — [open](${snapshotUrl(reportUrl, snapshot.name)})` : '';
+      comment += `- \`${snapshot.name}\`${open}\n`;
     }
     comment += '\n';
   }
@@ -281,12 +355,16 @@ ${domHint}
 export function buildEmptyComment(
   artifactUrl?: string,
   marker: string = UPSERT_MARKER,
+  links: CommentLinks = {},
 ): string {
-  const link = artifactUrl
-    ? `\n> [Download visual report ZIP](${artifactUrl})\n`
-    : '';
+  const reportUrl = safeReportUrl(links.reportUrl);
+  const link = reportUrl
+    ? `\n> **[Open the visual report](${reportUrl})**${artifactUrl ? ` · or [download it as a ZIP](${artifactUrl})` : ''}\n`
+    : artifactUrl
+      ? `\n> [Download visual report ZIP](${artifactUrl})\n`
+      : '';
 
-  return `${marker}
+  return `${marker}${runMarkerLine(links.runKey)}
 
 ### TestivAI Visual Report
 

@@ -16,7 +16,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PNG } from 'pngjs';
 
-import { BaselineStore, generateReport } from '@testivai/witness';
+import { BaselineStore, generateReport, snapshotAnchorId } from '@testivai/witness';
 
 const W = 240;
 const H = 120;
@@ -90,9 +90,11 @@ async function main(): Promise<void> {
     assert.strictEqual(control.environment, undefined);
 
     const html = fs.readFileSync(path.join(root, 'visual-report', 'index.html'), 'utf-8');
+    // Each snapshot's card, found by its link target (snapshotAnchorId).
     const card = (name: string) => {
-      const start = html.indexOf(`<span class="snapshot-name">${name}</span>`);
-      const end = html.indexOf('<div class="snapshot">', start + 1);
+      const start = html.indexOf(`<div class="snapshot" id="${snapshotAnchorId(name)}">`);
+      assert.notStrictEqual(start, -1, `no card for ${name} in the report`);
+      const end = html.indexOf('<div class="snapshot" ', start + 1);
       return html.slice(start, end === -1 ? undefined : end);
     };
     assert.match(card('pricing'), /Rendering drift — the environment changed since the baseline \(chromium 130\.0\.6723\.58 → 141\.0\.7390\.37\)/);

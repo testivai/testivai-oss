@@ -5,7 +5,7 @@
   "description": "GitHub Action to post TestivAI visual regression results to PRs",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.js && esbuild src/review.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/review.cjs",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.js && esbuild src/review.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/review.cjs && esbuild src/publish.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/publish.cjs",
     "test": "jest"
   },
   "repository": {
@@ -32,6 +32,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.1",
     "esbuild": "^0.28.2",
+    "fflate": "0.8.3",
     "jest": "^30.5.1",
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",

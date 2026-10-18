@@ -93,7 +93,7 @@ export {
 export type { LocalConfig } from './config';
 
 // Export report generator
-export { generateReport, compareAll, renderHtml } from './report';
+export { generateReport, compareAll, renderHtml, snapshotAnchorId } from './report';
 export type { GenerateReportOptions, CompareOptions, ReportData, ReportSummary, SnapshotResult, SnapshotStatus } from './report';
 
 // Export commands (for programmatic use)

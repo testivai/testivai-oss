@@ -268,6 +268,17 @@ posts one advisory comment: which diffs look like glitches, which
 match the PR, and which look like bugs. It never changes the check or a
 baseline. See [AI triage of every diff](docs/github-action.md#ai-triage-of-every-diff).
 
+### Reports on GitHub Pages
+
+Instead of a ZIP to download, the comment can link the report itself: the
+`testivai/testivai-oss/publish@v1` action publishes each pull request's last
+runs, forks included, and the default branch's latest run to the repository's
+GitHub Pages site, and adds the links to the comment. Each page is rebuilt from
+the run's checked `results.json` and PNGs. Who can open the site is GitHub's
+Pages setting: a private repository's reports go on a public site only when
+an admin says so. It replaces the repository's whole Pages site. See
+[Reports on GitHub Pages](docs/github-action.md#reports-on-github-pages).
+
 ### Approve changed baselines
 
 After CI posts the diff report on your PR, review the `testivai-visual-report` artifact, then comment:

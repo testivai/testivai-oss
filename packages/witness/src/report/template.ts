@@ -20,11 +20,46 @@ import {
   isRenderingDrift,
   snapshotEnvironmentChange,
 } from './environment';
+import { snapshotAnchorId } from './anchor';
+
+export { snapshotAnchorId };
+
+/** A line shown at the top of the report. */
+export interface ReportNotice {
+  text: string;
+  /** Linked after the text, in order; a link to anything but an https URL is left out. */
+  links?: Array<{ href: string; label: string }>;
+  /** 'warning' for something the reader should weigh (a fork's results). Default 'info'. */
+  tone?: 'info' | 'warning';
+}
+
+export interface RenderOptions {
+  notices?: ReportNotice[];
+  /** Ask search engines not to index the page (a report published to a site). */
+  noindex?: boolean;
+  /**
+   * Add a Content-Security-Policy that lets the page use only its own inline
+   * styles and scripts and its own images: nothing loaded from or sent to
+   * another site, no forms, no base URL. For a published report, whose data
+   * can come from a fork's CI run: defence in depth behind the escaping.
+   */
+  csp?: boolean;
+}
+
+/** All a report needs: its inline styles and scripts, and its images. */
+export const REPORT_CSP = [
+  "default-src 'none'",
+  "img-src 'self'",
+  "style-src 'unsafe-inline'",
+  "script-src 'unsafe-inline'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
 
 /**
  * Render a standalone HTML report from report data.
  */
-export function renderHtml(data: ReportData): string {
+export function renderHtml(data: ReportData, options: RenderOptions = {}): string {
   const { summary, snapshots, version, timestamp } = data;
 
   const changed = snapshots.filter((s) => s.status === 'changed');
@@ -39,8 +74,8 @@ export function renderHtml(data: ReportData): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TestivAI Visual Report</title>
+  ${options.csp ? `<meta http-equiv="Content-Security-Policy" content="${REPORT_CSP}">\n  ` : ''}<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${options.noindex ? '<meta name="robots" content="noindex, nofollow">\n  ' : ''}<title>TestivAI Visual Report</title>
   <style>
     /* ── Theme tokens ─────────────────────────────────────────────────────
        Light is the default (no attribute); html[data-theme="dark"] overrides.
@@ -139,10 +174,17 @@ export function renderHtml(data: ReportData): string {
     .section-title.new { color: var(--new); } .section-title.new::before { background: var(--new); }
     .section-title.passed { color: var(--passed); } .section-title.passed::before { background: var(--passed); }
 
+    /* Notices at the top of a published report (run, pull request, fork) */
+    .report-notice { background: var(--info-bg); border: 1px solid var(--border-soft); border-left: 4px solid var(--info); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+    .report-notice.warning { background: var(--new-bg); border-left-color: var(--new); }
+    .report-notice a { color: var(--link); }
+
     /* Snapshot card */
     .snapshot { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
     .snapshot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .snapshot-name { font-size: 15px; font-weight: 650; }
+    .snapshot-name { font-size: 15px; font-weight: 650; color: inherit; text-decoration: none; }
+    .snapshot-name:hover { text-decoration: underline; }
+    .snapshot:target { outline: 2px solid var(--accent); outline-offset: 2px; }
     .snapshot-badge { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
     .badge-changed { background: var(--changed-bg); color: var(--changed); }
     .badge-new { background: var(--new-bg); color: var(--new); }
@@ -247,7 +289,7 @@ export function renderHtml(data: ReportData): string {
       .sidebar.open { transform: translateX(0); }
       .sidebar-backdrop.active { display: block; }
       .main { margin-left: 0; padding: 16px; max-width: 100%; }
-      .section { scroll-margin-top: 64px; }
+      .section, .snapshot { scroll-margin-top: 64px; }
       .snapshot { padding: 14px; }
       .snapshot-header { flex-wrap: wrap; gap: 6px; }
       .diff-view, .diff-view.two-col { grid-template-columns: 1fr; }
@@ -305,6 +347,7 @@ export function renderHtml(data: ReportData): string {
   </aside>
 
   <main class="main">
+    ${renderNotices(options.notices ?? [])}
     ${envGroups
       .map(
         (g) => `
@@ -423,6 +466,28 @@ export function renderHtml(data: ReportData): string {
 </html>`;
 }
 
+/** The notices at the top of the report; a link only to an https page. */
+function renderNotices(notices: ReportNotice[]): string {
+  return notices
+    .map((n) => {
+      const links = (n.links ?? [])
+        .filter((l) => isHttpsUrl(l.href))
+        .map((l) => ` · <a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a>`)
+        .join('');
+      return `<div class="report-notice ${n.tone === 'warning' ? 'warning' : 'info'}">${escapeHtml(n.text)}${links}</div>`;
+    })
+    .join('\n    ');
+}
+
+function isHttpsUrl(value: string): boolean {
+  if (/[\s"'<>`\\]/.test(value)) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function renderSnapshot(snapshot: SnapshotResult): string {
   const badgeClass = snapshot.status === 'changed' ? 'badge-changed' : snapshot.status === 'new' ? 'badge-new' : 'badge-passed';
 
@@ -435,18 +500,20 @@ function renderSnapshot(snapshot: SnapshotResult): string {
   else if (hasCurrent && !hasBaseline) gridClass += ' one-col';
   else gridClass += ' two-col';
 
+  const anchor = snapshotAnchorId(snapshot.name);
+
   return `
-    <div class="snapshot">
+    <div class="snapshot" id="${anchor}">
       <div class="snapshot-header">
-        <span class="snapshot-name">${escapeHtml(snapshot.name)}</span>
+        <a class="snapshot-name" href="#${anchor}" title="Link to this snapshot">${escapeHtml(snapshot.name)}</a>
         <span class="snapshot-badge ${badgeClass}">${snapshot.status}</span>
       </div>
       ${renderStats(snapshot)}
       ${renderAnalysis(snapshot)}
       <div class="${gridClass}">
-        ${hasBaseline ? `<div class="diff-col"><label>Baseline</label><img src="${snapshot.baselinePath}" alt="Baseline"></div>` : ''}
-        ${hasDiff ? `<div class="diff-col"><label>Diff <span class="heat-legend" title="Heatmap: color = difference magnitude">subtle <span class="heat-bar"></span> strong</span></label><img src="${snapshot.diffPath}" alt="Diff heatmap"></div>` : ''}
-        ${hasCurrent ? `<div class="diff-col"><label>Current</label><img src="${snapshot.currentPath}" alt="Current"></div>` : ''}
+        ${hasBaseline ? `<div class="diff-col"><label>Baseline</label><img src="${escapeHtml(snapshot.baselinePath ?? '')}" alt="Baseline"></div>` : ''}
+        ${hasDiff ? `<div class="diff-col"><label>Diff <span class="heat-legend" title="Heatmap: color = difference magnitude">subtle <span class="heat-bar"></span> strong</span></label><img src="${escapeHtml(snapshot.diffPath ?? '')}" alt="Diff heatmap"></div>` : ''}
+        ${hasCurrent ? `<div class="diff-col"><label>Current</label><img src="${escapeHtml(snapshot.currentPath ?? '')}" alt="Current"></div>` : ''}
       </div>
       ${snapshot.status === 'changed' || snapshot.status === 'new' ? `
       <div class="approve-cmd">
@@ -550,7 +617,7 @@ function renderVerdict(snapshot: SnapshotResult): string {
     const next =
       snapshot.status === 'changed'
         ? 'Re-baseline once the images are confirmed to match apart from rendering.'
-        : `Auto-passed by the '${snapshot.autoPassed}' criterion; re-baseline in this environment so the tolerance keeps measuring the page, not the machine.`;
+        : `Auto-passed by the '${escapeHtml(snapshot.autoPassed ?? '')}' criterion; re-baseline in this environment so the tolerance keeps measuring the page, not the machine.`;
     return `<div class="verdict v-drift"><span>Rendering drift — the environment changed since the baseline (${escapeHtml(change)}), and the DOM and computed styles are identical: the machine changed, not the page${size}. ${next}</span></div>`;
   }
   const base = baseVerdict(snapshot);
@@ -599,7 +666,7 @@ function baseVerdict(snapshot: SnapshotResult): string {
   // Auto-passed within a tolerance although the DOM changed: say so, and
   // never ask for an approval there is nothing to give.
   if (snapshot.autoPassed && snapshot.dom?.changed && snapshot.dom.summary) {
-    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${snapshot.autoPassed}</code> criterion — within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot.autoPassed)}</code> criterion — within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
   }
 
   // Style-only only when the DOM is unchanged: a class or style attribute
@@ -637,7 +704,7 @@ function baseVerdict(snapshot: SnapshotResult): string {
   }
 
   if (snapshot.autoPassed) {
-    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${snapshot.autoPassed}</code> criterion — reported for transparency, no action needed.</span></div>`;
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot.autoPassed)}</code> criterion — reported for transparency, no action needed.</span></div>`;
   }
 
   return '';
@@ -795,7 +862,7 @@ function renderRegions(snapshot: SnapshotResult): string {
   const chips = regions
     .map(
       (r, i) =>
-        `<li><a href="#" class="region-chip${r.classification === 'shift' ? ' region-shift' : ''}" data-diff="${snapshot.diffPath ?? ''}" title="${r.diffPixels} changed pixels${r.elements?.[0] ? ' — ' + escapeHtml(r.elements[0].selector) : ''}">#${i + 1} · ${describe(r)}</a></li>`,
+        `<li><a href="#" class="region-chip${r.classification === 'shift' ? ' region-shift' : ''}" data-diff="${escapeHtml(snapshot.diffPath ?? '')}" title="${r.diffPixels} changed pixels${r.elements?.[0] ? ' — ' + escapeHtml(r.elements[0].selector) : ''}">#${i + 1} · ${describe(r)}</a></li>`,
     )
     .join('');
 
@@ -834,7 +901,7 @@ function renderMasks(snapshot: SnapshotResult): string {
         : m.source.type === 'edge'
           ? `edge <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>`
           : `region <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>`;
-    return `${src} → ${m.width}×${m.height} @ (${m.x}, ${m.y}) <em>(${m.source.origin})</em>`;
+    return `${src} → ${m.width}×${m.height} @ (${m.x}, ${m.y}) <em>(${escapeHtml(m.source.origin)})</em>`;
   };
 
   const maskBlock =
@@ -863,3 +930,4 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+

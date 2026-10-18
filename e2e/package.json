@@ -4,7 +4,7 @@
   "private": true,
   "description": "OSS smoke E2E - exercises the public surface of @testivai/witness end-to-end",
   "scripts": {
-    "test": "tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts"
+    "test": "tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts && tsx src/published-site.test.ts"
   },
   "dependencies": {
     "@testivai/witness": "workspace:*",
@@ -14,6 +14,8 @@
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/pngjs": "^6.0.5",
+    "fflate": "0.8.3",
+    "playwright-core": "1.63.0",
     "pngjs": "^7.0.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3"

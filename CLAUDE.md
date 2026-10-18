@@ -16,6 +16,7 @@ packages/
 action/        testivai/testivai-oss@v1      — GitHub Action: post PR comment + commit status
 approve/       testivai/testivai-oss/approve@v1 — GitHub Action: /testivai approve command handler
 review/        testivai/testivai-oss/review@v1  — GitHub Action: Claude triages each diff (glitch / intended change / bug / possible bug); advisory, `enabled: false` turns it off
+publish/       testivai/testivai-oss/publish@v1 — GitHub Action: publishes reports to the repository's GitHub Pages site, rebuilt from checked data, and links them in PR comments
 
 examples/      minimal working examples per framework
 docs/          public Markdown documentation
@@ -78,7 +79,7 @@ CI (GitHub Actions):
 - `src/report/diff-shape.ts` — `diffShape()`: scattered / concentrated / large, the rule for when matching styles still mean likely render noise (shared by compare, the report, MCP and the action)
 - `src/report/compare.ts`    — orchestrates diff, writes images to visual-report/images/, applies pass criteria (maxDiffPercent/maxDiffPixels/noiseAutoPass → status passed + autoPassed marker)
 - `src/report/generator.ts`  — writes results.json + renders index.html
-- `src/report/template.ts`   — HTML template for the report
+- `src/report/template.ts`   — HTML template for the report; escapes every value it shows; `snapshotAnchorId()` is each snapshot's link target (`#snap-<name>`), shared with the PR comment
 - `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)
@@ -103,10 +104,15 @@ CI (GitHub Actions):
 - `src/status.ts`            — determines pass/fail commit status
 - `src/types.ts`             — shared TypeScript interfaces
 - `src/review.ts`            — the review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment
-- `dist/index.js`, `dist/review.cjs` — bundled output (esbuild); **must be committed**; rebuild with `npm run build` inside `action/`
+- `src/publish.ts`           — the publish action's github-script steps: `build` (decide, build the site) and `finish` (after the deploy: check it answers, add the links)
+- `src/publish/`             — `pages.ts` (publish or not, from the Pages settings; consent `TESTIVAI_PUBLIC_REPORTS`), `plan.ts` (which runs: each open PR's last runs, forks included, and the default branch's latest, under a size budget; folders from numbers only), `archive.ts` (untrusted report ZIP: results.json, run stamp and PNGs only, inflated in slices with caps), `png.ts`, `site.ts` (pages rebuilt from `parseReportData` output with the report template, CSP, noindex; index pages, 404), `comments.ts` (the links in the PR comment; a fork's PR gets the bot's own, numbers and links only), `build.ts` + `api.ts` (orchestration and the GitHub API calls)
+- `dist/index.js`, `dist/review.cjs`, `dist/publish.cjs` — bundled output (esbuild); **must be committed**; rebuild with `pnpm run build` inside `action/`
 
 ### GitHub Action AI triage (`review/`)
 - `action.yml`               — composite action: github-script prepare → `anthropics/claude-code-action@v1` → github-script post; loads `action/dist/review.cjs`, so it ships with the action's dist at the same `v1` tag
+
+### GitHub Action Pages publisher (`publish/`)
+- `action.yml`               — composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`, never checks out code; setup in `docs/github-action.md#reports-on-github-pages`
 
 ### GitHub Action approver (`approve/`)
 - `action.yml`               — composite action; no build step needed (pure shell + github-script)
@@ -127,7 +133,7 @@ The GitHub Action (`action.yml` at repo root → `action/dist/index.js`) uses a 
 - The `v1` major tag is rolled automatically by `.github/workflows/release-action.yml` on every clean semver tag push
 - After any change to `action/src/`, rebuild dist AND push a new semver tag to roll `v1`
 
-The approve action (`approve/action.yml`) is a composite action — no build step, no dist. It ships automatically at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles).
+The approve action (`approve/action.yml`) is a composite action — no build step, no dist. It ships automatically at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
 
 ## .testivai/ directory layout (on-disk contract)
 
