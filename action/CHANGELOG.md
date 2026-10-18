@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-18
+
 ### Added
 
 - The PR comment can link straight into a published copy of the HTML report: **Open the visual report** above the snapshot list (the ZIP download stays beside it), and an *open in report* link on each changed snapshot's row and each new snapshot that lands on its card (`#snap-<name>`, the same id the report gives it). Only an https URL that cannot break out of the link is used. The links appear when the report is published for the run; without one the comment is unchanged
