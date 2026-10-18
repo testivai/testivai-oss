@@ -34,6 +34,7 @@ import {
 } from '@testivai/witness';
 import * as fs from 'fs';
 import * as path from 'path';
+import { captureFullPageScreenshot, type CdpDriver } from './capture/full-page';
 import type { WitnessDriver, WitnessOptions } from './types';
 
 /** id of the style element injected for the duration of a capture */
@@ -149,16 +150,17 @@ async function waitForFonts(driver: WitnessDriver): Promise<void> {
 async function captureScreenshot(driver: WitnessDriver): Promise<Buffer> {
   // Chromium drivers expose raw CDP; captureBeyondViewport gives a true
   // full-page capture without resizing the window (which breaks 100vh
-  // layouts — the reason we never use the resize trick).
+  // layouts — the reason we never use the resize trick). It waits for a
+  // fresh frame and captures until two in a row match: Chrome can return a
+  // frame painted for the wrong viewport while it sets up the capture
+  // (capture/full-page.ts).
   if (typeof driver.sendAndGetDevToolsCommand === 'function') {
+    const captureLog =
+      process.env.TESTIVAI_DEBUG === 'true'
+        ? (message: string) => console.log(`[TestivAI] Full-page capture: ${message}`)
+        : undefined;
     try {
-      const result = await driver.sendAndGetDevToolsCommand<{ data?: string }>(
-        'Page.captureScreenshot',
-        { captureBeyondViewport: true, format: 'png' },
-      );
-      if (result && typeof result.data === 'string' && result.data.length > 0) {
-        return Buffer.from(result.data, 'base64');
-      }
+      return await captureFullPageScreenshot(driver as CdpDriver, captureLog);
     } catch {
       // fall through to the viewport screenshot
     }
