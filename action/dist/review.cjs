@@ -52,8 +52,8 @@ __export(review_exports, {
   triagesMissing: () => triagesMissing
 });
 module.exports = __toCommonJS(review_exports);
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
 
 // ../packages/mcp/src/tool-meta.ts
 var REVIEW_PROMPT = {
@@ -135,7 +135,9 @@ var TRIAGE_PROMPT = {
       '| status "new" | There is no baseline to compare with: check the capture itself for obvious defects. |',
       `| status "missing" (in missingBaselines) | A committed baseline got no capture this run: there is no current image, and the report cannot tell a removed or renamed test from a skipped or failing one. Read the change under test. It removed or renamed that test or snapshot on purpose (the intent covers it): intended change. It removed or renamed it without meaning to (the intent does not cover it; for a rename, a new snapshot under the other name is the other half), or broke what the test needs to reach its capture (the page, a selector it waits for): bug. Otherwise possible bug: tell a person to check the test run's log for a failed or skipped test. Never a glitch on this evidence: there is no capture to call bad. |`,
       "",
-      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When the DOM is unchanged and styleCheck is "match" but the diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs can be a bad capture, or a change to something the style check does not cover. Look at what the change under test touched: if it changed CSS, an image, a font or another asset that could reach that area, judge it as a real change (intended change, bug or possible bug). Call it a glitch only when nothing in the change could have caused it, and say which image is wrong: if it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. If you cannot see what the change touched, say so, and call it a glitch only if the images clearly show a broken capture (a torn, half-drawn or partly blank render); otherwise a possible bug.',
+      "Unchanged DOM: no element, attribute or text differs between the baseline and the current capture (the DOM diff compares text too). The baseline is the last approved capture, and it can already contain the change under test (a copy edit approved earlier on the same branch), so a text or markup edit in the change under test never explains an identical-DOM diff, even where its regions sit on text the change edited. Only something the DOM does not record can: a stylesheet change the style check does not cover, an image, a font or another asset, or the capture itself. If the change under test touched none of those, it is not an intended change: call it a glitch or a possible bug.",
+      "",
+      'Bad captures: render noise is small and scattered (anti-aliasing and font hinting at the edges of glyphs). When the DOM is unchanged and styleCheck is "match" but the diff is larger or sits in one area, compare the two images. A block of content shifted with nothing inserted, text drawn at a different size in one place, content cut off, or background where content belongs can be a bad capture, or a change to something the style check does not cover. Look at what the change under test touched: if it changed CSS, an image, a font or another asset that could reach that area, judge it as a real change (intended change, bug or possible bug; an edit to text or markup cannot cause it, since the DOM is unchanged). Call it a glitch only when nothing in the change could have caused it, and say which image is wrong: if it is the baseline itself, it has to be replaced from a capture that two runs agree on; if it is the current capture, re-run the tests. If you cannot see what the change touched, say so, and call it a glitch only if the images clearly show a broken capture (a torn, half-drawn or partly blank render); otherwise a possible bug.',
       "",
       "Intent: judge intended change against bug by what the change under test was meant to do.",
       ...intentText,
@@ -183,6 +185,25 @@ function resolveBaselinesDir(projectRoot, override) {
   if (!dir) dir = path.join(".testivai", "baselines");
   dir = dir.split("{platform}").join(process.platform);
   return path.isAbsolute(dir) ? dir : path.join(projectRoot, dir);
+}
+
+// src/report-artifact.ts
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+var RUN_STAMP_FILE = "testivai-run.json";
+function readRunStamp(reportDir) {
+  try {
+    const raw = JSON.parse(fs2.readFileSync(path2.join(reportDir, RUN_STAMP_FILE), "utf8"));
+    if (typeof raw.runId !== "string" || !Number.isInteger(raw.runAttempt)) return null;
+    return { runId: raw.runId, runAttempt: raw.runAttempt, ...typeof raw.sha === "string" ? { sha: raw.sha } : {} };
+  } catch {
+    return null;
+  }
+}
+function staleReport(stamp, env) {
+  if (!stamp || !env.GITHUB_RUN_ID || stamp.runId !== env.GITHUB_RUN_ID) return null;
+  const thisAttempt = Number(env.GITHUB_RUN_ATTEMPT || "1");
+  return stamp.runAttempt < thisAttempt ? { reportAttempt: stamp.runAttempt, thisAttempt } : null;
 }
 
 // src/review.ts
@@ -257,11 +278,11 @@ function toTriage(results, { includeMissing = true } = {}) {
 }
 function resolveReportDir(root) {
   const { reportDir } = readConfig(root);
-  return path2.join(root, typeof reportDir === "string" && reportDir.length > 0 ? reportDir : "visual-report");
+  return path3.join(root, typeof reportDir === "string" && reportDir.length > 0 ? reportDir : "visual-report");
 }
 function readConfig(root) {
   try {
-    const config = JSON.parse(fs2.readFileSync(path2.join(root, ".testivai", "config.json"), "utf8"));
+    const config = JSON.parse(fs3.readFileSync(path3.join(root, ".testivai", "config.json"), "utf8"));
     return config && typeof config === "object" ? config : {};
   } catch {
     return {};
@@ -477,8 +498,8 @@ async function syncComment({
 }
 var runUrlOf = (context) => `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 function readResults(reportDir) {
-  const file = path2.join(reportDir, "results.json");
-  return fs2.existsSync(file) ? JSON.parse(fs2.readFileSync(file, "utf8")) : null;
+  const file = path3.join(reportDir, "results.json");
+  return fs3.existsSync(file) ? JSON.parse(fs3.readFileSync(file, "utf8")) : null;
 }
 async function write({
   github,
@@ -521,7 +542,15 @@ async function prepare({ github, context, core, env }) {
   const results = readResults(reportDir);
   if (!results) {
     return skip({
-      reason: `No results.json in ${path2.relative(root, reportDir) || "."} (the reportDir in .testivai/config.json, else visual-report): did the visual tests run? The AI triage was skipped.`,
+      reason: `No results.json in ${path3.relative(root, reportDir) || "."} (the reportDir in .testivai/config.json, else visual-report): did the visual tests run? The AI triage was skipped.`,
+      clearStale: true,
+      level: "warning"
+    });
+  }
+  const stale = staleReport(readRunStamp(reportDir), env);
+  if (stale) {
+    return skip({
+      reason: `The visual report this job downloaded is from attempt ${stale.reportAttempt} of this run, not this attempt (${stale.thisAttempt}): actions/download-artifact picks among same-named artifacts by ID, which is not upload order. The AI triage was skipped rather than triage a stale report. Re-run all jobs, or download the report by ID (download-artifact's artifact-ids input, from the reporter's artifact-id output).`,
       clearStale: true,
       level: "warning"
     });
@@ -537,8 +566,8 @@ async function prepare({ github, context, core, env }) {
       level: "notice"
     });
   }
-  const diffPath = path2.join(reportDir, "triage", "pr.diff");
-  fs2.mkdirSync(path2.dirname(diffPath), { recursive: true });
+  const diffPath = path3.join(reportDir, "triage", "pr.diff");
+  fs3.mkdirSync(path3.dirname(diffPath), { recursive: true });
   let diff;
   try {
     const { owner, repo } = context.repo;
@@ -548,7 +577,7 @@ async function prepare({ github, context, core, env }) {
     diff = `The pull request's diff could not be fetched (${err instanceof Error ? err.message : String(err)}). Judge what the change meant to do from the pull request title and description.
 `;
   }
-  fs2.writeFileSync(diffPath, diff);
+  fs3.writeFileSync(diffPath, diff);
   core.setOutput("run", "true");
   core.setOutput(
     "prompt",
@@ -558,10 +587,10 @@ async function prepare({ github, context, core, env }) {
       title: title ?? "",
       body: body ?? "",
       // Relative: Claude's Read tool works from the workspace.
-      diffPath: path2.relative(root, diffPath),
-      reportDir: path2.relative(root, reportDir),
+      diffPath: path3.relative(root, diffPath),
+      reportDir: path3.relative(root, reportDir),
       // Where witness and the MCP server find baselines: config.json baselinesDir ({platform} included), else .testivai/baselines.
-      baselinesDir: path2.relative(root, resolveBaselinesDir(root)) || ".",
+      baselinesDir: path3.relative(root, resolveBaselinesDir(root)) || ".",
       snapshots: toTriage(results, { includeMissing })
     })
   );
