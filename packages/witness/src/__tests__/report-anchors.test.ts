@@ -59,6 +59,17 @@ describe('snapshotAnchorId', () => {
     expect(id.length).toBeLessThanOrEqual(80);
   });
 
+  it('takes time in proportion to the name, even a name of many dashes', () => {
+    // A name comes from results.json, which a fork's CI run controls. A
+    // backtracking trim (/^-+|-+$/) is quadratic on dashes between two other
+    // characters: it retries the end anchor from every dash. Seconds, not ms.
+    const name = `x${'-'.repeat(50_000)}x`;
+    const started = Date.now();
+    const id = snapshotAnchorId(name);
+    expect(Date.now() - started).toBeLessThan(250);
+    expect(id).toMatch(SAFE_ID);
+  });
+
   it('is exported from the package root for the PR comment to use', () => {
     expect(fromPackageRoot).toBe(snapshotAnchorId);
   });

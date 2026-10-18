@@ -116887,8 +116887,15 @@ function explainHeightChange(sm, context6 = {}) {
 var PLAIN_SNAPSHOT_NAME = /^[A-Za-z0-9_-]{1,60}$/;
 function snapshotAnchorId(name) {
   if (PLAIN_SNAPSHOT_NAME.test(name)) return `snap-${name}`;
-  const readable = name.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const readable = trimDashes(name.replace(/[^A-Za-z0-9_-]+/g, "-")).slice(0, 60);
   return `snap-${readable ? `${readable}-` : ""}${fnv1a(name)}`;
+}
+function trimDashes(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === "-") start++;
+  while (end > start && value[end - 1] === "-") end--;
+  return value.slice(start, end);
 }
 function fnv1a(value) {
   let hash = 2166136261;

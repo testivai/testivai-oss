@@ -20,8 +20,21 @@ const PLAIN_SNAPSHOT_NAME = /^[A-Za-z0-9_-]{1,60}$/;
  */
 export function snapshotAnchorId(name: string): string {
   if (PLAIN_SNAPSHOT_NAME.test(name)) return `snap-${name}`;
-  const readable = name.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  const readable = trimDashes(name.replace(/[^A-Za-z0-9_-]+/g, '-')).slice(0, 60);
   return `snap-${readable ? `${readable}-` : ''}${fnv1a(name)}`;
+}
+
+/**
+ * Drop leading and trailing dashes. A loop, not /^-+|-+$/: that regex is
+ * quadratic on a run of dashes between two other characters, and a snapshot
+ * name can come from a results.json someone else wrote.
+ */
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start++;
+  while (end > start && value[end - 1] === '-') end--;
+  return value.slice(start, end);
 }
 
 /** 32-bit FNV-1a of a string's UTF-16 code units, as 8 hex digits. */
