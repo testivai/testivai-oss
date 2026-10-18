@@ -827,6 +827,40 @@ describe('prepare (the step before Claude runs)', () => {
     expect(core.outputs.claude_args).toBe(review.claudeArgs({ model: '', maxTurns: '30' }));
   });
 
+  // A re-run's review job can download the first attempt's report: artifact
+  // IDs are not in upload order and download-artifact takes the highest
+  // (testivai/testivai-site#20 triaged attempt 1's report in attempt 2). The
+  // reporter stamps the attempt next to results.json; a stale report is not
+  // triaged, and the earlier triage comment says why.
+  it('a report from an earlier attempt of this run: skips with a warning instead of triaging it', async () => {
+    writeResults(R);
+    fs.writeFileSync(path.join(dir, 'visual-report', 'testivai-run.json'), JSON.stringify({ runId: '7', runAttempt: 1, sha: 'abc' }));
+    const gh = fakeGithub({ comments: [bot(9, `${review.MARKER}\nold`)] });
+    const core = fakeCore();
+    await review.prepare({ github: gh, context: prContext(), core, env: env({ GITHUB_RUN_ID: '7', GITHUB_RUN_ATTEMPT: '2' }) });
+
+    expect(core.outputs.run).toBe('false');
+    const warning = core.log.find((l) => l.startsWith('warning: '));
+    expect(warning).toMatch(/attempt 1 of this run, not this attempt \(2\)/);
+    expect(warning).toMatch(/AI triage was skipped/);
+    expect(gh.calls.some((c) => c.op === 'diff')).toBe(false);
+    const update = gh.calls.find((c) => c.op === 'update');
+    expect(update?.args).toMatchObject({ comment_id: 9 });
+    expect(String((update?.args as { body?: string } | undefined)?.body)).toMatch(/attempt 1 of this run/);
+  });
+
+  it('a report stamped with this attempt, or from another run, or unstamped, is triaged as usual', async () => {
+    for (const stamp of [{ runId: '7', runAttempt: 2 }, { runId: '8', runAttempt: 1 }, null]) {
+      writeResults(R);
+      const file = path.join(dir, 'visual-report', 'testivai-run.json');
+      if (stamp) fs.writeFileSync(file, JSON.stringify(stamp));
+      else fs.rmSync(file, { force: true });
+      const core = fakeCore();
+      await review.prepare({ github: fakeGithub(), context: prContext(), core, env: env({ GITHUB_RUN_ID: '7', GITHUB_RUN_ATTEMPT: '2' }) });
+      expect(core.outputs.run).toBe('true');
+    }
+  });
+
   it('a missing baseline alone on a pull request: Claude runs, told where the baseline is committed', async () => {
     fs.mkdirSync(path.join(dir, '.testivai'));
     fs.writeFileSync(path.join(dir, '.testivai', 'config.json'), JSON.stringify({ baselinesDir: 'shots/{platform}' }));

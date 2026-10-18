@@ -175,6 +175,99 @@ describe('Apply baseline approvals', () => {
   });
 });
 
+/**
+ * A re-run uploads the report again under the same name, and artifact IDs are
+ * not in upload order (testivai/testivai-site#20: the second attempt's
+ * artifact had the lower ID). Downloading by name can then return an earlier
+ * attempt's report and approve its captures, so the step picks the newest
+ * artifact by creation time and downloads that one by ID.
+ */
+describe('Download visual-report artifact', () => {
+  const download = step('Download visual-report artifact');
+
+  /** A fake `gh`: run list from runs.txt, the run's artifacts from artifacts.json (through real jq), zips by ID. */
+  const FAKE_GH = [
+    '#!/usr/bin/env bash',
+    'echo "gh $*" >> "$FAKE_GH_LOG"',
+    'case "$1" in',
+    '  run)',
+    '    case "$2" in',
+    '      list) cat "$FAKE_GH_DIR/runs.txt" ;;',
+    '      *) echo "unexpected: gh $*" >&2; exit 1 ;;',
+    '    esac ;;',
+    '  api)',
+    '    url="$2"; shift 2; expr=""',
+    '    while [ $# -gt 0 ]; do case "$1" in --jq) expr="$2"; shift 2 ;; *) shift ;; esac; done',
+    '    case "$url" in',
+    '      */actions/runs/*/artifacts*) if [ -n "$expr" ]; then jq -r "$expr" "$FAKE_GH_DIR/artifacts.json"; else cat "$FAKE_GH_DIR/artifacts.json"; fi ;;',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash parameter expansion in the fake gh script
+    '      */actions/artifacts/*/zip) id="${url%/zip}"; id="${id##*/}"; cat "$FAKE_GH_DIR/$id.zip" ;;',
+    '      *) echo "unexpected: gh api $url" >&2; exit 1 ;;',
+    '    esac ;;',
+    '  *) echo "unexpected: gh $*" >&2; exit 1 ;;',
+    'esac',
+  ].join('\n');
+
+  const NAME = 'testivai-visual-report';
+  const ARTIFACTS = {
+    total_count: 4,
+    artifacts: [
+      { id: 200, name: NAME, created_at: '2026-10-18T13:35:12Z', expired: false }, // attempt 1: higher ID, older
+      { id: 100, name: NAME, created_at: '2026-10-18T13:40:20Z', expired: false }, // attempt 2: the newest
+      { id: 300, name: NAME, created_at: '2026-10-18T13:50:00Z', expired: true },
+      { id: 400, name: 'other-report', created_at: '2026-10-18T14:00:00Z', expired: false },
+    ],
+  };
+
+  function runDownload(workflow: string) {
+    const ghDir = path.join(tmp, 'gh');
+    const bin = path.join(tmp, 'bin');
+    fs.mkdirSync(ghDir, { recursive: true });
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'gh'), FAKE_GH, { mode: 0o755 });
+    fs.writeFileSync(path.join(ghDir, 'runs.txt'), '111\n');
+    fs.writeFileSync(path.join(ghDir, 'artifacts.json'), JSON.stringify(ARTIFACTS));
+    for (const [id, content] of [['200', 'attempt 1'], ['100', 'attempt 2'], ['300', 'expired'], ['400', 'other']]) {
+      const src = path.join(tmp, `zip-${id}`, 'pending-baselines', 'home');
+      fs.mkdirSync(src, { recursive: true });
+      fs.writeFileSync(path.join(src, 'screenshot.png'), content);
+      execFileSync('zip', ['-qr', path.join(ghDir, `${id}.zip`), '.'], { cwd: path.join(tmp, `zip-${id}`) });
+    }
+    const runnerTemp = path.join(tmp, 'runner-temp');
+    fs.mkdirSync(runnerTemp, { recursive: true });
+    const log = path.join(tmp, 'gh.log');
+    const env = expandEnv(download.env, {
+      'inputs.github-token': 'token',
+      'inputs.artifact-name': NAME,
+      'inputs.workflow': workflow,
+      'fromJson(steps.auth.outputs.result).branch': 'feature',
+      'runner.temp': runnerTemp,
+    });
+    try {
+      execFileSync('bash', ['-e', '-c', download.run!], {
+        cwd: tmp,
+        env: { PATH: `${bin}:${process.env.PATH}`, ...env, GITHUB_REPOSITORY: 'acme/shop', FAKE_GH_DIR: ghDir, FAKE_GH_LOG: log },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      throw new Error(`download step failed: ${String((err as { stderr?: Buffer }).stderr ?? err)}`);
+    }
+    const shot = path.join(runnerTemp, 'testivai-artifact', 'pending-baselines', 'home', 'screenshot.png');
+    return { content: fs.readFileSync(shot, 'utf8'), calls: fs.readFileSync(log, 'utf8') };
+  }
+
+  it.each([
+    ['a named workflow', 'visual.yml'],
+    ['an auto-detected run', ''],
+  ])("%s: downloads the newest unexpired artifact of that name by ID, even when an older one has a higher ID", (_label, workflow) => {
+    const { content, calls } = runDownload(workflow);
+    expect(content).toBe('attempt 2');
+    expect(calls).toContain('gh api repos/acme/shop/actions/artifacts/100/zip');
+    expect(calls).not.toMatch(/artifacts\/(200|300|400)\/zip/);
+    expect(calls).not.toContain('gh run download');
+  });
+});
+
 describe('Post confirmation comment', () => {
   const confirm = step('Post confirmation comment');
 

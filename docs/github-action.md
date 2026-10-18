@@ -335,6 +335,15 @@ The step can also go in the visual job itself, after the reporter, with
 `if: ${{ !cancelled() }}`; a separate job keeps the Claude step away from that
 job's write permissions.
 
+**Re-runs.** A re-run uploads the report again under the same name, and
+artifact IDs are not in upload order, while `actions/download-artifact` takes
+the highest ID among same-named artifacts. So on a re-run the reporter first
+deletes the earlier attempts' report (a failed delete only warns), and it
+writes the run and attempt next to `results.json` (`testivai-run.json`). If
+this job still gets an earlier attempt's report, the triage is skipped with a
+warning instead of describing results the run no longer has. The approve
+action picks the newest report by creation time.
+
 ### When it runs, and what it costs
 
 It uses tokens only when **all** of these hold, and otherwise skips in

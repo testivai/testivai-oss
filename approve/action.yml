@@ -164,13 +164,22 @@ runs:
           exit 1
         fi
 
-        echo "Downloading artifact '$ARTIFACT_NAME' from run $RUN_ID..."
-        mkdir -p "$ARTIFACT_DIR"
+        # A re-run uploads the report again under the same name, and artifact
+        # IDs are not in upload order, so `gh run download --name` could fetch
+        # an earlier attempt's report and approve its captures. Take the newest
+        # unexpired one by creation time and download it by ID.
+        ARTIFACT_ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+          --jq '[.artifacts[] | select(.name == $ENV.ARTIFACT_NAME and (.expired | not))] | sort_by(.created_at) | last | .id // empty')
+        if [ -z "$ARTIFACT_ID" ]; then
+          echo "::error::Run $RUN_ID has no unexpired artifact '$ARTIFACT_NAME'. Re-run the visual regression tests."
+          exit 1
+        fi
 
-        gh run download "$RUN_ID" \
-          --repo "$GITHUB_REPOSITORY" \
-          --name "$ARTIFACT_NAME" \
-          --dir  "$ARTIFACT_DIR"
+        echo "Downloading artifact '$ARTIFACT_NAME' (ID $ARTIFACT_ID) from run $RUN_ID..."
+        mkdir -p "$ARTIFACT_DIR"
+        gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$ARTIFACT_DIR.zip"
+        unzip -q -o "$ARTIFACT_DIR.zip" -d "$ARTIFACT_DIR"
+        rm -f "$ARTIFACT_DIR.zip"
 
         echo "Artifact downloaded. Contents:"
         find "$ARTIFACT_DIR" -type f | sort | head -40
