@@ -5,6 +5,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as artifact from '@actions/artifact';
+import { uploadReport, writeRunStamp } from './report-artifact';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildComment, buildEmptyComment, resolveUpsertMarker } from './comment';
@@ -71,14 +72,21 @@ async function run(): Promise<void> {
     let artifactUrl: string | undefined;
     if (uploadArtifact) {
       const artifactClient = new artifact.DefaultArtifactClient();
+      // Stamp the run and attempt next to results.json, so a step reading the
+      // report can tell an earlier attempt's (report-artifact.ts).
+      writeRunStamp(reportDir, process.env);
       const files = collectFilesRecursively(reportDir);
 
-      const uploadResult = await artifactClient.uploadArtifact(
-        artifactName,
+      // On a re-run, replaces the earlier attempts' report of the same name.
+      const uploadResult = await uploadReport({
+        client: artifactClient,
+        name: artifactName,
         files,
-        reportDir,
-        { retentionDays: artifactRetentionDays },
-      );
+        rootDir: reportDir,
+        retentionDays: artifactRetentionDays,
+        runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || '1'),
+        log: core,
+      });
 
       core.info(`Uploaded ${files.length} files as artifact '${artifactName}'`);
 

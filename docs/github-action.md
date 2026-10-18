@@ -45,6 +45,7 @@ Pin to `@v1` for rolling major-version updates, or `@v1.0.0` for a fixed point r
 | `github-token` | GitHub token for posting comments + commit status | Yes | `${{ github.token }}` |
 | `report-dir` | Directory containing `results.json` and the rendered HTML report | Yes | `visual-report` |
 | `fail-on-diff` | Fail the workflow when visual changes are detected | No | `false` |
+| `fail-on-missing` | Fail the workflow when a committed baseline received no capture this run (silent coverage loss) | No | `false` |
 | `upload-artifact` | Upload the report directory as a workflow artifact | No | `true` |
 | `artifact-retention-days` | Days to retain the artifact | No | `30` |
 | `artifact-name` | Name of the uploaded artifact | No | `testivai-visual-report` |
@@ -78,6 +79,7 @@ A check run whose conclusion reflects what actually needs to happen:
 | Baselines received no capture, `fail-on-missing: false` (default) | **`neutral`** | **no** |
 | Snapshots changed and `fail-on-diff: true` | `failure` | yes |
 | Baselines uncovered and `fail-on-missing: true` | `failure` | yes |
+| Snapshots changed and `fail-on-diff: true`, even when baselines received no capture in the same run | `failure` | yes |
 
 `neutral` is the important one. GitHub's branch protection documentation states
 that *"required status checks must have a successful, skipped, or neutral status
@@ -334,6 +336,15 @@ artifact there.
 The step can also go in the visual job itself, after the reporter, with
 `if: ${{ !cancelled() }}`; a separate job keeps the Claude step away from that
 job's write permissions.
+
+**Re-runs.** A re-run uploads the report again under the same name, and
+artifact IDs are not in upload order, while `actions/download-artifact` takes
+the highest ID among same-named artifacts. So on a re-run the reporter first
+deletes the earlier attempts' report (a failed delete only warns), and it
+writes the run and attempt next to `results.json` (`testivai-run.json`). If
+this job still gets an earlier attempt's report, the triage is skipped with a
+warning instead of describing results the run no longer has. The approve
+action picks the newest report by creation time.
 
 ### When it runs, and what it costs
 
