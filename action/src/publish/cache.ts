@@ -54,6 +54,9 @@ export interface ReportCacheOptions {
 
 const DIGEST = /^sha256:([0-9a-f]{64})$/i;
 
+/** Read-only, not through a symbolic link (Windows has no O_NOFOLLOW). */
+const OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** The hex SHA-256 a digest names, or undefined for anything else. */
@@ -103,18 +106,26 @@ export function openReportCache(dir: string, { log, maxEntryBytes }: ReportCache
       const want = sha256Of(digest);
       if (!usable || !name || !want) return undefined;
       const file = path.join(dir, name);
-      let bytes: Buffer;
+      // Opened once, never through a symbolic link (that open fails, ELOOP),
+      // and checked and read through that one descriptor: no other file can
+      // take its place between the check and the read.
+      let bytes: Buffer | undefined;
+      let unusable = '';
+      let fd: number | undefined;
       try {
-        const stat = fs.lstatSync(file, { throwIfNoEntry: false });
-        if (!stat) return undefined;
-        if (!stat.isFile() || stat.size > maxEntryBytes) {
-          log.info(`Report cache: ${name} is not a report it could use: downloaded again.`);
-          remove(file);
-          return undefined;
-        }
-        bytes = fs.readFileSync(file);
+        fd = fs.openSync(file, OPEN_ENTRY);
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile()) unusable = 'is not a file';
+        else if (stat.size > maxEntryBytes) unusable = `is over the ${maxEntryBytes}-byte limit`;
+        else bytes = fs.readFileSync(fd);
       } catch (error) {
-        log.info(`Report cache: ${name} could not be read (${message(error)}): downloaded again.`);
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+        unusable = `could not be read (${message(error)})`;
+      } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+      }
+      if (!bytes) {
+        log.info(`Report cache: ${name} ${unusable}: downloaded again.`);
         remove(file);
         return undefined;
       }

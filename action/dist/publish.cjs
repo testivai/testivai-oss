@@ -1376,6 +1376,7 @@ var import_crypto = require("crypto");
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var DIGEST = /^sha256:([0-9a-f]{64})$/i;
+var OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
 var message = (error) => error instanceof Error ? error.message : String(error);
 function sha256Of(digest) {
   const m = typeof digest === "string" ? DIGEST.exec(digest) : null;
@@ -1412,17 +1413,22 @@ function openReportCache(dir, { log, maxEntryBytes }) {
       if (!usable || !name || !want) return void 0;
       const file = path.join(dir, name);
       let bytes;
+      let unusable = "";
+      let fd2;
       try {
-        const stat = fs.lstatSync(file, { throwIfNoEntry: false });
-        if (!stat) return void 0;
-        if (!stat.isFile() || stat.size > maxEntryBytes) {
-          log.info(`Report cache: ${name} is not a report it could use: downloaded again.`);
-          remove(file);
-          return void 0;
-        }
-        bytes = fs.readFileSync(file);
+        fd2 = fs.openSync(file, OPEN_ENTRY);
+        const stat = fs.fstatSync(fd2);
+        if (!stat.isFile()) unusable = "is not a file";
+        else if (stat.size > maxEntryBytes) unusable = `is over the ${maxEntryBytes}-byte limit`;
+        else bytes = fs.readFileSync(fd2);
       } catch (error) {
-        log.info(`Report cache: ${name} could not be read (${message(error)}): downloaded again.`);
+        if (error.code === "ENOENT") return void 0;
+        unusable = `could not be read (${message(error)})`;
+      } finally {
+        if (fd2 !== void 0) fs.closeSync(fd2);
+      }
+      if (!bytes) {
+        log.info(`Report cache: ${name} ${unusable}: downloaded again.`);
         remove(file);
         return void 0;
       }

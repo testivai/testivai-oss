@@ -146,6 +146,73 @@ describe('read and write', () => {
     expect(Buffer.from(fs.readFileSync(outside)).equals(Buffer.from(ZIP))).toBe(true);
   });
 
+  it('refuses an entry swapped for a symbolic link between any check and the read, even to a file with the right digest', () => {
+    // The same module object cache.ts reads through its import.
+    const realFs = jest.requireActual<typeof import('fs')>('fs');
+    const outside = path.join(dir, 'outside.zip');
+    fs.writeFileSync(outside, ZIP);
+    open().write(30, sha256(ZIP), ZIP);
+    const entry = path.join(cacheDir, '30.zip');
+    let swapped = false;
+    const swap = () => {
+      swapped = true;
+      realFs.rmSync(entry);
+      realFs.symlinkSync(outside, entry);
+    };
+    // The first call that looks at the entry decides when the swap happens: a
+    // check (lstat, stat, exists, access) sees the real file and the swap
+    // follows it; an open or read sees the link.
+    const spies = (['lstatSync', 'statSync', 'existsSync', 'accessSync', 'openSync', 'readFileSync'] as const).map((name) => {
+      const original = (realFs[name] as (...args: unknown[]) => unknown).bind(realFs);
+      const checks = !['openSync', 'readFileSync'].includes(name);
+      return jest.spyOn(realFs, name as never).mockImplementation(((target: unknown, ...rest: unknown[]) => {
+        if (swapped || target !== entry) return original(target, ...rest);
+        if (!checks) swap();
+        const result = original(target, ...rest);
+        if (checks) swap();
+        return result;
+      }) as never);
+    });
+    try {
+      const cache = open();
+
+      expect(cache.read(30, sha256(ZIP))).toBeUndefined();
+      expect(swapped).toBe(true);
+      expect(cache.stats.hits).toBe(0);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(realFs.lstatSync(entry, { throwIfNoEntry: false })).toBeUndefined();
+    expect(Buffer.from(fs.readFileSync(outside)).equals(Buffer.from(ZIP))).toBe(true);
+  });
+
+  it('never writes through a symbolic link planted between removing the old entry and creating the new one', () => {
+    const realFs = jest.requireActual<typeof import('fs')>('fs');
+    const outside = path.join(dir, 'outside.zip');
+    fs.writeFileSync(outside, OTHER);
+    const cache = open();
+    const entry = path.join(cacheDir, '30.zip');
+    const originalRm = realFs.rmSync.bind(realFs);
+    let planted = false;
+    const spy = jest.spyOn(realFs, 'rmSync').mockImplementation(((target: fs.PathLike, options?: fs.RmOptions) => {
+      originalRm(target, options);
+      if (!planted && target === entry) {
+        planted = true;
+        realFs.symlinkSync(outside, entry);
+      }
+    }) as never);
+    try {
+      cache.write(30, sha256(ZIP), ZIP);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(planted).toBe(true);
+    expect(Buffer.from(fs.readFileSync(outside)).equals(Buffer.from(OTHER))).toBe(true);
+    expect(cache.stats.stored).toBe(0);
+    expect(cache.read(30, sha256(ZIP))).toBeUndefined();
+  });
+
   it('treats a directory in an entry’s place as a miss, and replaces it on write', () => {
     fs.mkdirSync(path.join(cacheDir, '30.zip'), { recursive: true });
     fs.writeFileSync(path.join(cacheDir, '30.zip', 'inside'), 'x');
