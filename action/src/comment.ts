@@ -58,7 +58,7 @@ function runMarkerLine(runKey?: string): string {
  * link and an HTML attribute: https, and no whitespace, quotes, angle
  * brackets, parentheses, backticks or backslashes. Otherwise undefined.
  */
-function safeReportUrl(url?: string): string | undefined {
+export function safeReportUrl(url?: string): string | undefined {
   if (!url || /[\s"'<>()`\\]/.test(url)) return undefined;
   let parsed: URL;
   try {

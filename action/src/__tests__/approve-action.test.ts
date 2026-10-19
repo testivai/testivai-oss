@@ -20,15 +20,15 @@ import { parse } from 'yaml';
 
 interface Step {
   name?: string;
+  id?: string;
   uses?: string;
   run?: string;
   env?: Record<string, string>;
   with?: Record<string, string>;
 }
 
-const ACTION = parse(
-  fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'approve', 'action.yml'), 'utf8'),
-) as { runs: { steps: Step[] } };
+const APPROVE_DIR = path.resolve(__dirname, '..', '..', '..', 'approve');
+const ACTION = parse(fs.readFileSync(path.join(APPROVE_DIR, 'action.yml'), 'utf8')) as { runs: { steps: Step[] } };
 const steps = ACTION.runs.steps;
 const step = (name: string): Step => {
   const found = steps.find((s) => s.name === name);
@@ -236,6 +236,8 @@ describe('Download visual-report artifact', () => {
     const runnerTemp = path.join(tmp, 'runner-temp');
     fs.mkdirSync(runnerTemp, { recursive: true });
     const log = path.join(tmp, 'gh.log');
+    const outputFile = path.join(tmp, 'github-output');
+    fs.writeFileSync(outputFile, '');
     const env = expandEnv(download.env, {
       'inputs.github-token': 'token',
       'inputs.artifact-name': NAME,
@@ -246,14 +248,14 @@ describe('Download visual-report artifact', () => {
     try {
       execFileSync('bash', ['-e', '-c', download.run!], {
         cwd: tmp,
-        env: { PATH: `${bin}:${process.env.PATH}`, ...env, GITHUB_REPOSITORY: 'acme/shop', FAKE_GH_DIR: ghDir, FAKE_GH_LOG: log },
+        env: { PATH: `${bin}:${process.env.PATH}`, ...env, GITHUB_REPOSITORY: 'acme/shop', FAKE_GH_DIR: ghDir, FAKE_GH_LOG: log, GITHUB_OUTPUT: outputFile },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
       throw new Error(`download step failed: ${String((err as { stderr?: Buffer }).stderr ?? err)}`);
     }
     const shot = path.join(runnerTemp, 'testivai-artifact', 'pending-baselines', 'home', 'screenshot.png');
-    return { content: fs.readFileSync(shot, 'utf8'), calls: fs.readFileSync(log, 'utf8') };
+    return { content: fs.readFileSync(shot, 'utf8'), calls: fs.readFileSync(log, 'utf8'), outputs: fs.readFileSync(outputFile, 'utf8') };
   }
 
   it.each([
@@ -266,30 +268,55 @@ describe('Download visual-report artifact', () => {
     expect(calls).not.toMatch(/artifacts\/(200|300|400)\/zip/);
     expect(calls).not.toContain('gh run download');
   });
+
+  it.each([
+    ['a named workflow', 'visual.yml'],
+    ['an auto-detected run', ''],
+  ])('%s: outputs the run it downloaded from, for the reply', (_label, workflow) => {
+    expect(runDownload(workflow).outputs).toBe('run-id=111\n');
+    expect(download.id).toBe('download');
+  });
 });
 
 describe('Post confirmation comment', () => {
   const confirm = step('Post confirmation comment');
 
-  async function runConfirm(outputs: { approved: string; skipped: string; count: string; actor: string }) {
+  async function runConfirm(
+    outputs: { approved: string; skipped: string; count: string; actor: string; runId?: string },
+    { comments = [], stamp }: { comments?: Array<{ user: { login: string }; body: string }>; stamp?: object } = {},
+  ) {
+    const runnerTemp = path.join(tmp, 'runner-temp');
+    fs.mkdirSync(path.join(runnerTemp, 'testivai-artifact'), { recursive: true });
+    if (stamp) fs.writeFileSync(path.join(runnerTemp, 'testivai-artifact', 'testivai-run.json'), JSON.stringify(stamp));
     const values = {
       'steps.apply.outputs.approved': outputs.approved,
       'steps.apply.outputs.skipped': outputs.skipped,
       'steps.apply.outputs.count': outputs.count,
+      'steps.download.outputs.run-id': outputs.runId ?? '',
       'fromJson(steps.auth.outputs.result).actor': outputs.actor,
       'inputs.github-token': 'token',
+      'github.action_path': APPROVE_DIR,
+      'runner.temp': runnerTemp,
     };
     const script = expand(confirm.with!.script, values);
     const env = expandEnv(confirm.env, values);
     const bodies: string[] = [];
-    const github = { rest: { issues: { createComment: async ({ body }: { body: string }) => void bodies.push(body) } } };
-    const context = { repo: { owner: 'o', repo: 'r' }, issue: { number: 1 } };
+    const github = {
+      rest: {
+        issues: {
+          listComments: async ({ page }: { page: number }) => ({ data: page === 1 ? comments : [] }),
+          createComment: async ({ body }: { body: string }) => void bodies.push(body),
+        },
+      },
+    };
+    const context = { repo: { owner: 'o', repo: 'r' }, issue: { number: 1 }, serverUrl: 'https://github.com' };
+    const core = { info: () => {}, warning: () => {} };
 
     const saved = { ...process.env };
     Object.assign(process.env, env);
     try {
       const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-      await new AsyncFunction('github', 'context', 'core', script)(github, context, {});
+      await new AsyncFunction('require', 'github', 'context', 'core', script)(require, github, context, core);
     } finally {
       for (const key of Object.keys(env)) delete process.env[key];
       Object.assign(process.env, saved);
@@ -314,5 +341,17 @@ describe('Post confirmation comment', () => {
   it('nothing approved still explains why', async () => {
     const bodies = await runConfirm({ approved: '', skipped: 'nope', count: '0', actor: 'octocat' });
     expect(bodies[0]).toContain('No baselines were updated.');
+  });
+
+  it("loads dist/approve.cjs and links the approved run's published report", async () => {
+    const report = 'https://o.github.io/r/pr/1/111-2/';
+    const comment = { user: { login: 'github-actions[bot]' }, body: `<!-- testivai-visual-report -->\n<!-- testivai-run:111-2 -->\n> **[Open the visual report](${report})**` };
+
+    const bodies = await runConfirm({ approved: 'home', skipped: '', count: '1', actor: 'octocat', runId: '111' }, { comments: [comment], stamp: { runId: '111', runAttempt: 2 } });
+
+    expect(confirm.with?.script).toContain('require(process.env.TESTIVAI_APPROVE_LIB)');
+    expect(bodies[0]).toContain('from [CI run 111, attempt 2](https://github.com/o/r/actions/runs/111/attempts/2)');
+    expect(bodies[0]).toContain(`**[Open the visual report](${report})**`);
+    expect(bodies[0]).toMatch(/- `home` · \[open in report\]\(https:\/\/o\.github\.io\/r\/pr\/1\/111-2\/#snap-home\)/);
   });
 });

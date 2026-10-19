@@ -164,6 +164,13 @@ Whole `report-dir/` (HTML report, `results.json`, all diff images and DOM captur
 
 The fastest path is the comment command: post `/testivai approve <name>` (or `/testivai approve --all`) directly on the PR. The companion `testivai/testivai-oss/approve@v1` action verifies the commenter has write access, restores the pending baselines from the workflow artifact, and commits them back to the PR branch — no local checkout needed.
 
+Its reply lists what was approved and names the CI run the captures came from.
+When [`publish@v1`](#reports-on-github-pages) has put that run's report on
+GitHub Pages, the reply also links the report and each approved snapshot's
+card in it. That link is taken from the TestivAI comment, where publish adds
+it after the deploy for that exact run, so a run whose report is not
+published yet gets a reply without it.
+
 ### Approve job setup
 
 Add a job that runs on PR comments. `issue_comment` workflows run from the

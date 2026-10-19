@@ -119,6 +119,7 @@ runs:
 
     # ── Step 3: Download the visual-report artifact ─────────────────────────
     - name: Download visual-report artifact
+      id: download
       if: ${{ fromJson(steps.auth.outputs.result).skip != true }}
       shell: bash
       env:
@@ -176,6 +177,7 @@ runs:
         fi
 
         echo "Downloading artifact '$ARTIFACT_NAME' (ID $ARTIFACT_ID) from run $RUN_ID..."
+        echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
         mkdir -p "$ARTIFACT_DIR"
         gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$ARTIFACT_DIR.zip"
         unzip -q -o "$ARTIFACT_DIR.zip" -d "$ARTIFACT_DIR"
@@ -282,53 +284,24 @@ runs:
         git push
 
     # ── Step 6: Post confirmation comment ───────────────────────────────────
+    # Names the approved run and, when publish@v1 has put that run's report on
+    # GitHub Pages, links it and each approved snapshot's card in it (the link
+    # comes from the TestivAI comment, never guessed). Logic: action/dist/approve.cjs.
     - name: Post confirmation comment
       if: ${{ fromJson(steps.auth.outputs.result).skip != true }}
       uses: actions/github-script@v9
       # Values arrive through env, never spliced into the script: snapshot
       # names come from the PR comment and from the PR's own CI artifact.
       env:
-        APPROVED: ${{ steps.apply.outputs.approved }}
-        SKIPPED:  ${{ steps.apply.outputs.skipped }}
-        COUNT:    ${{ steps.apply.outputs.count }}
-        ACTOR:    ${{ fromJson(steps.auth.outputs.result).actor }}
+        TESTIVAI_APPROVE_LIB: ${{ github.action_path }}/../action/dist/approve.cjs
+        APPROVED:     ${{ steps.apply.outputs.approved }}
+        SKIPPED:      ${{ steps.apply.outputs.skipped }}
+        COUNT:        ${{ steps.apply.outputs.count }}
+        ACTOR:        ${{ fromJson(steps.auth.outputs.result).actor }}
+        RUN_ID:       ${{ steps.download.outputs.run-id }}
+        ARTIFACT_DIR: ${{ runner.temp }}/testivai-artifact
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const approved = (process.env.APPROVED ?? '').trim().split(/\s+/).filter(Boolean);
-          const skipped  = (process.env.SKIPPED ?? '').trim().split(/\s+/).filter(Boolean);
-          const count    = parseInt(process.env.COUNT ?? '', 10) || 0;
-          const actor    = process.env.ACTOR ?? '';
-
-          let body = '';
-
-          if (count === 0) {
-            body = [
-              `No baselines were updated.`,
-              ``,
-              `Possible reasons:`,
-              `- The snapshot name(s) don't match any pending changes.`,
-              `- The artifact is from a run where no visual differences were detected.`,
-              `- Re-run the OSS visual regression tests and try again.`,
-            ].join('\n');
-          } else {
-            const list = approved.map(n => `- \`${n}\``).join('\n');
-            const skipNote = skipped.length
-              ? `\n\nNot found in pending baselines: ${skipped.map(n => `\`${n}\``).join(', ')}`
-              : '';
-            body = [
-              `**${count} baseline${count === 1 ? '' : 's'} approved** by @${actor}`,
-              ``,
-              list,
-              skipNote,
-              ``,
-              `CI runs again on this commit when the approve step pushes with a personal access token or GitHub App token. With the default \`GITHUB_TOKEN\`, GitHub starts no run for this push: push another commit to re-run CI.`,
-            ].join('\n');
-          }
-
-          await github.rest.issues.createComment({
-            owner:        context.repo.owner,
-            repo:         context.repo.repo,
-            issue_number: context.issue.number,
-            body,
-          });
+          const approve = require(process.env.TESTIVAI_APPROVE_LIB);
+          await approve.reply({ github, context, core, env: process.env });

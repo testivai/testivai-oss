@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-19
+
+### Added
+
+- `approve@v1`: the reply to `/testivai approve` names the CI run whose captures were approved (`from CI run 123, attempt 2`, linked). When `publish@v1` has put that run's report on GitHub Pages, the reply also links it (**Open the visual report**) and each approved snapshot's card in it (`open in report`, the same `#snap-<name>` anchors as the PR comment). The link is never guessed: it is taken from a github-actions[bot] comment whose run marker names the approved run, and only when it points at that run's page on that pull request; the run is the one the report was downloaded from, with the attempt from the report's run stamp when the stamp names that same run. If the comments cannot be read, the reply goes without the link. The reply step now loads `action/dist/approve.cjs`, which ships with the action at the same tag; no new permissions are needed
+
 ## [1.4.1] - 2026-10-19
 
 ### Fixed
