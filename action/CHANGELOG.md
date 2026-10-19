@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-19
+
+### Fixed
+
+- `publish@v1`: a pull request opened from a branch name an earlier pull request used no longer lists the earlier one's runs on its page of the site. A pull request's runs are now the ones on its branch since it was opened; GitHub's own run list attributes the earlier runs to the open pull request too. Seen on testivai/testivai-example, where #17 reused #16's branch and its page showed #16's trial runs
+- `publish@v1`: the `page-url` output (and so the `github-pages` environment's link, when the workflow sets `url` from it) is the site's https address. It passed on deploy-pages' `page_url`, which GitHub gives as `http://` for a github.io site; the comments already linked https
+
 ## [1.4.0] - 2026-10-18
 
 ### Added

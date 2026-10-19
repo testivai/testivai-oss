@@ -70,17 +70,17 @@ describe('octokitApi', () => {
     const { github, calls } = fake({
       'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: 'public', default_branch: 'main' }),
       'GET /repos/{owner}/{repo}/pulls': () => [
-        { number: 14, title: 'Restyle', user: { login: 'dev' }, head: { ref: 'feature', sha: 'aaa', repo: { id: 1, full_name: 'testivai/testivai-example' } } },
-        { number: 15, title: 'Typo', user: { login: 'someone' }, head: { ref: 'patch-1', sha: 'bbb', repo: { id: 9, full_name: 'someone/testivai-example' } } },
-        { number: 16, title: 'Gone', user: { login: 'ghost' }, head: { ref: 'x', sha: 'ccc', repo: null } },
+        { number: 14, title: 'Restyle', created_at: '2026-10-18T09:00:00Z', user: { login: 'dev' }, head: { ref: 'feature', sha: 'aaa', repo: { id: 1, full_name: 'testivai/testivai-example' } } },
+        { number: 15, title: 'Typo', created_at: '2026-10-18T09:30:00Z', user: { login: 'someone' }, head: { ref: 'patch-1', sha: 'bbb', repo: { id: 9, full_name: 'someone/testivai-example' } } },
+        { number: 16, title: 'Gone', created_at: '2026-10-18T10:00:00Z', user: { login: 'ghost' }, head: { ref: 'x', sha: 'ccc', repo: null } },
       ],
     });
     const api = octokitApi(github, 'testivai', 'testivai-example');
     await api.repo();
 
     expect(await api.openPrs()).toEqual([
-      { number: 14, headRepo: 'testivai/testivai-example', headRepoId: 1, headRef: 'feature', headSha: 'aaa', author: 'dev', fork: false, title: 'Restyle' },
-      { number: 15, headRepo: 'someone/testivai-example', headRepoId: 9, headRef: 'patch-1', headSha: 'bbb', author: 'someone', fork: true, title: 'Typo' },
+      { number: 14, headRepo: 'testivai/testivai-example', headRepoId: 1, headRef: 'feature', headSha: 'aaa', author: 'dev', fork: false, title: 'Restyle', createdAt: '2026-10-18T09:00:00Z' },
+      { number: 15, headRepo: 'someone/testivai-example', headRepoId: 9, headRef: 'patch-1', headSha: 'bbb', author: 'someone', fork: true, title: 'Typo', createdAt: '2026-10-18T09:30:00Z' },
     ]);
     expect(calls.find((c) => c.route.endsWith('/pulls'))?.params).toMatchObject({ state: 'open', per_page: 100, page: 1 });
   });

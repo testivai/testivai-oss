@@ -578,7 +578,8 @@ function octokitApi(github, owner, repo) {
         headSha: p.head.sha,
         author: p.user?.login ?? "",
         fork: String(p.head.repo.full_name).toLowerCase() !== fullName.toLowerCase(),
-        title: typeof p.title === "string" ? p.title : void 0
+        title: typeof p.title === "string" ? p.title : void 0,
+        createdAt: typeof p.created_at === "string" ? p.created_at : void 0
       }));
     },
     async artifacts(name, maxPages) {
@@ -1519,9 +1520,11 @@ function planSite(input) {
   let prs = [];
   for (const pr of input.prs) {
     const runs = [];
+    const opened = Date.parse(pr.createdAt ?? "");
     for (const r of finished) {
       if (runs.length >= limits.runsPerPr) break;
       if (r.headRepo !== pr.headRepo || r.headBranch !== pr.headRef) continue;
+      if (Date.parse(r.createdAt) < opened) continue;
       const entry = planned(r, `pr/${Math.trunc(pr.number)}/${Math.trunc(r.id)}-${Math.trunc(r.attempt)}`, pr.fork);
       if (entry.sizeBytes > limits.maxPrBytes) {
         dropped.push({ runId: r.id, pr: pr.number, reason: `its report is ${mb(entry.sizeBytes)}, over the ${mb(limits.maxPrBytes)} limit for one run` });
@@ -3052,7 +3055,7 @@ async function finishPublish(api, options) {
     if (verified) log.info(`The site answers at ${deployed}.`);
     else log.warning(`The site did not answer at ${deployed} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
   }
-  if (!options.comment) return { verified };
+  if (!options.comment) return { verified, siteUrl: state.siteUrl };
   for (const published of state.prs) {
     try {
       const action = commentFor(published, await api.comments(published.pr), options.marker);
@@ -3071,7 +3074,7 @@ async function finishPublish(api, options) {
       );
     }
   }
-  return { verified };
+  return { verified, siteUrl: state.siteUrl };
 }
 
 // src/publish.ts
@@ -3125,13 +3128,14 @@ async function finish({ github, context, core, env }) {
   const comment = parseComment(env.COMMENT ?? "true");
   if (!env.STATE_FILE) throw new Error("STATE_FILE is not set: the build step did not publish");
   const state = JSON.parse(fs2.readFileSync(env.STATE_FILE, "utf8"));
-  await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
+  const { siteUrl } = await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
     state,
     pageUrl: env.PAGE_URL,
     comment,
     marker: resolveUpsertMarker(resolveStatusContext(env.STATUS_CONTEXT ?? "")),
     log: core
   });
+  core.setOutput("page-url", siteUrl);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

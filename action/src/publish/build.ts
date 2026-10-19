@@ -262,7 +262,8 @@ export interface FinishOptions {
   log: Log;
 }
 
-export async function finishPublish(api: PublishApi, options: FinishOptions): Promise<{ verified: boolean | 'skipped' }> {
+/** verified: whether the site answered; siteUrl: the address the links use (the deploy's, as https, else the build's). */
+export async function finishPublish(api: PublishApi, options: FinishOptions): Promise<{ verified: boolean | 'skipped'; siteUrl: string }> {
   const { log } = options;
   let { state } = options;
 
@@ -294,7 +295,7 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
     else log.warning(`The site did not answer at ${deployed} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
   }
 
-  if (!options.comment) return { verified };
+  if (!options.comment) return { verified, siteUrl: state.siteUrl };
   for (const published of state.prs) {
     try {
       const action = commentFor(published, await api.comments(published.pr), options.marker);
@@ -313,5 +314,5 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
       );
     }
   }
-  return { verified };
+  return { verified, siteUrl: state.siteUrl };
 }
