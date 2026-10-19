@@ -11,7 +11,11 @@
  * reply itself is always posted.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { parseHealth } from '../../packages/witness/src/capture/health';
 import { snapshotAnchorId } from '../../packages/witness/src/report/anchor';
+import { assessHealth } from '../../packages/witness/src/report/health';
 import { readRunKey, safeReportUrl } from './comment';
 import { BOT_LOGIN } from './publish/comments';
 import { readRunStamp, type RunStamp } from './report-artifact';
@@ -73,13 +77,40 @@ export interface ReplyInput {
   serverUrl: string;
   /** owner/name. */
   repo: string;
+  /** Approved captures that were unhealthy (readApprovedHealth): said in the reply. */
+  unhealthy?: Array<{ name: string; reasons: string[] }>;
+}
+
+/**
+ * The approved captures that were unhealthy (a web font or stylesheet that
+ * failed to load), from each one's metadata.json in the downloaded artifact
+ * (pending-baselines/<name>/, what the apply step copied). The artifact comes
+ * from the pull request's own CI run: a name that would leave
+ * pending-baselines, or metadata that is not a valid health record, is
+ * skipped.
+ */
+export function readApprovedHealth(artifactDir: string, names: string[]): Array<{ name: string; reasons: string[] }> {
+  const out: Array<{ name: string; reasons: string[] }> = [];
+  for (const name of names) {
+    if (!name || name === '.' || name === '..' || /[/\\]/.test(name)) continue;
+    try {
+      const meta = JSON.parse(fs.readFileSync(path.join(artifactDir, 'pending-baselines', name, 'metadata.json'), 'utf-8'));
+      const health = parseHealth(meta?.health);
+      if (!health) continue;
+      const assessment = assessHealth(health);
+      if (assessment.unhealthy) out.push({ name, reasons: assessment.reasons });
+    } catch {
+      // no metadata, or not JSON: nothing recorded
+    }
+  }
+  return out;
 }
 
 const RERUN_NOTE =
   'CI runs again on this commit when the approve step pushes with a personal access token or GitHub App token. With the default `GITHUB_TOKEN`, GitHub starts no run for this push: push another commit to re-run CI.';
 
 /** The reply's Markdown. Snapshot names are shown as code and reach a link only as their anchor id. */
-export function buildApproveReply({ approved, skipped, count, actor, run, reportUrl, serverUrl, repo }: ReplyInput): string {
+export function buildApproveReply({ approved, skipped, count, actor, run, reportUrl, serverUrl, repo, unhealthy = [] }: ReplyInput): string {
   if (count === 0) {
     return [
       'No baselines were updated.',
@@ -98,6 +129,13 @@ export function buildApproveReply({ approved, skipped, count, actor, run, report
   const lines = [`**${count} baseline${count === 1 ? '' : 's'} approved** by @${actor}${from}`, ''];
   if (report) lines.push(`> **[Open the visual report](${report})** of that run: baseline, current and diff side by side`, '');
   lines.push(approved.map((n) => (report ? `- \`${n}\` · [open in report](${report}#${snapshotAnchorId(n)})` : `- \`${n}\``)).join('\n'));
+  for (const u of unhealthy) {
+    lines.push(
+      '',
+      `> **\`${u.name}\` was approved from an unhealthy capture** — ${u.reasons.join('; ')}. ` +
+        'Every compare against it will say so: fix the page, the server or the test, re-run and approve a healthy capture.',
+    );
+  }
   if (skipped.length) lines.push('', `Not found in pending baselines: ${skipped.map((n) => `\`${n}\``).join(', ')}`);
   lines.push('', RERUN_NOTE);
   return lines.join('\n');
@@ -161,8 +199,10 @@ export async function reply({ github, context, core, env }: { github: Github; co
     }
   }
 
+  const approvedNames = words(env.APPROVED);
+  const unhealthy = count > 0 && env.ARTIFACT_DIR ? readApprovedHealth(env.ARTIFACT_DIR, approvedNames) : [];
   const body = buildApproveReply({
-    approved: words(env.APPROVED),
+    approved: approvedNames,
     skipped: words(env.SKIPPED),
     count,
     actor: env.ACTOR ?? '',
@@ -170,6 +210,7 @@ export async function reply({ github, context, core, env }: { github: Github; co
     ...(reportUrl ? { reportUrl } : {}),
     serverUrl: context.serverUrl || 'https://github.com',
     repo: `${context.repo.owner}/${context.repo.repo}`,
+    ...(unhealthy.length > 0 ? { unhealthy } : {}),
   });
   await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
 }

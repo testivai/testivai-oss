@@ -3594,8 +3594,8 @@ var require_webidl = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural2 = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural2}: ${context6.types.join(", ")}.`;
+      const plural3 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural3}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -10960,9 +10960,9 @@ var require_pluralizer = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural2) {
+      constructor(singular, plural3) {
         this.singular = singular;
-        this.plural = plural2;
+        this.plural = plural3;
       }
       pluralize(count) {
         const one = count === 1;
@@ -22512,8 +22512,8 @@ var require_webidl2 = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural2 = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural2}: ${context6.types.join(", ")}.`;
+      const plural3 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural3}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -29115,9 +29115,9 @@ var require_pluralizer2 = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural2) {
+      constructor(singular, plural3) {
         this.singular = singular;
-        this.plural = plural2;
+        this.plural = plural3;
       }
       pluralize(count) {
         const one = count === 1;
@@ -44575,20 +44575,20 @@ var require_ms = __commonJS({
     function fmtLong(ms) {
       var msAbs = Math.abs(ms);
       if (msAbs >= d) {
-        return plural2(ms, msAbs, d, "day");
+        return plural3(ms, msAbs, d, "day");
       }
       if (msAbs >= h) {
-        return plural2(ms, msAbs, h, "hour");
+        return plural3(ms, msAbs, h, "hour");
       }
       if (msAbs >= m) {
-        return plural2(ms, msAbs, m, "minute");
+        return plural3(ms, msAbs, m, "minute");
       }
       if (msAbs >= s) {
-        return plural2(ms, msAbs, s, "second");
+        return plural3(ms, msAbs, s, "second");
       }
       return ms + " ms";
     }
-    function plural2(ms, msAbs, n, name) {
+    function plural3(ms, msAbs, n, name) {
       var isPlural = msAbs >= n * 1.5;
       return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
     }
@@ -117140,6 +117140,138 @@ ${detail}${others}`
   };
 }
 
+// ../packages/witness/src/report/health.ts
+var NAMED = 3;
+var plural2 = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+function requestLine(noun, entry) {
+  const url2 = entry.url || "(no URL)";
+  if (entry.status > 0) return `${noun} ${url2} returned ${entry.status}`;
+  return `${noun} ${url2} failed to load${entry.error ? ` (${entry.error})` : ""}`;
+}
+function requestLines(noun, entries, total) {
+  const shown = entries.slice(0, NAMED);
+  const lines = shown.map((e) => requestLine(noun, e));
+  const rest = total - shown.length;
+  if (rest > 0) lines.push(`${plural2(rest, `more ${noun}`)} failed to load`);
+  return lines;
+}
+function elementLines(noun, urls, total, requests) {
+  const byUrl = new Map(requests.map((e) => [e.url, e]));
+  const shown = urls.slice(0, NAMED);
+  const lines = shown.map((url2) => {
+    const request2 = byUrl.get(url2);
+    return request2 ? requestLine(noun, request2) : `${noun} ${url2 || "(no URL)"} did not load`;
+  });
+  const rest = total - shown.length;
+  if (rest > 0) lines.push(`${plural2(rest, `more ${noun}`)} did not load`);
+  return lines;
+}
+function fontLine(families) {
+  const quoted = families.map((f) => `'${f}'`);
+  if (quoted.length === 1) return `web font ${quoted[0]} failed to load, so the page rendered with a fallback font`;
+  const names = quoted.length === 2 ? `${quoted[0]} and ${quoted[1]}` : `${quoted.slice(0, 2).join(", ")} and ${quoted.length - 2} more`;
+  return `web fonts ${names} failed to load, so the page rendered with fallback fonts`;
+}
+function assessHealth(health) {
+  const reasons = [];
+  const warnings = [];
+  const problems = /* @__PURE__ */ new Set();
+  const failed = health.resources.failed;
+  if (health.fonts.status === "loading") {
+    reasons.push("web fonts were still loading when the page was captured");
+    problems.add("web fonts still loading");
+  }
+  const families = [...new Set(health.fonts.failed.map((f) => f.family))];
+  if (families.length > 0) {
+    reasons.push(fontLine(families));
+    problems.add("a failed web font");
+  }
+  if (failed.font && failed.font.count > 0) {
+    reasons.push(...requestLines("font file", failed.font.entries, failed.font.count));
+    problems.add("a failed web font");
+  }
+  const css = failed.css ?? { count: 0, entries: [] };
+  if (health.stylesheets.failed > 0) {
+    reasons.push(...elementLines("stylesheet", health.stylesheets.urls, health.stylesheets.failed, css.entries));
+    problems.add("a failed stylesheet");
+  }
+  const linked = new Set(health.stylesheets.urls);
+  const unlinked = css.entries.filter((e) => !linked.has(e.url));
+  const unlinkedCount = css.count - (css.entries.length - unlinked.length);
+  if (unlinkedCount > 0) {
+    reasons.push(...requestLines("stylesheet", unlinked, unlinkedCount));
+    problems.add("a failed stylesheet");
+  }
+  const img = failed.img ?? { count: 0, entries: [] };
+  if (health.images.broken > 0) warnings.push(...elementLines("image", health.images.urls, health.images.broken, img.entries));
+  const shownImages = new Set(health.images.urls);
+  const otherImages = img.entries.filter((e) => !shownImages.has(e.url));
+  const otherImageCount = img.count - (img.entries.length - otherImages.length);
+  if (otherImageCount > 0) warnings.push(...requestLines("image", otherImages, otherImageCount));
+  if (failed.script && failed.script.count > 0) warnings.push(...requestLines("script", failed.script.entries, failed.script.count));
+  if (failed.other && failed.other.count > 0) warnings.push(...requestLines("request", failed.other.entries, failed.other.count));
+  return { unhealthy: problems.size > 0, problems: [...problems], reasons, warnings };
+}
+var BASELINE_HEALTH_PREFIX = "baseline: ";
+var UNHEALTHY_CAPTURE_NEXT = "an unhealthy capture is a glitch of the capture or a broken asset, not render noise: fix the page, the server or the test and re-run; never approve it as a baseline";
+var UNHEALTHY_BASELINE_NEXT = "re-baseline from a healthy run";
+var joinAnd = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+function sideAssessment(health, side) {
+  const block = side === "candidate" ? health.candidate : health.baseline;
+  if (block) return assessHealth(block);
+  const isBaseline = (r) => r.startsWith(BASELINE_HEALTH_PREFIX);
+  const reasons = side === "baseline" ? health.reasons.filter(isBaseline).map((r) => r.slice(BASELINE_HEALTH_PREFIX.length)) : health.reasons.filter((r) => !isBaseline(r));
+  return { problems: [], reasons };
+}
+function captureHealthReading(health) {
+  if (!health?.unhealthy) return null;
+  const side = health.unhealthy;
+  const parts = [];
+  if (side !== "baseline") parts.push(sideAssessment(health, "candidate").reasons.join("; "));
+  if (side !== "candidate") {
+    const b = sideAssessment(health, "baseline");
+    const what = b.problems.length > 0 ? `with ${joinAnd(b.problems)}` : "unhealthy";
+    parts.push(`the baseline was captured ${what}${side === "both" ? " too" : ""} (${b.reasons.join("; ")})`);
+  }
+  const next = side === "candidate" ? UNHEALTHY_CAPTURE_NEXT : side === "baseline" ? UNHEALTHY_BASELINE_NEXT : `${UNHEALTHY_CAPTURE_NEXT}, and ${UNHEALTHY_BASELINE_NEXT}`;
+  return { side, detail: parts.filter(Boolean).join("; "), next };
+}
+
+// src/comment-health.ts
+var capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function unhealthyCaptureHint(snapshot2) {
+  const reading = captureHealthReading(snapshot2.captureHealth);
+  if (!reading) return "";
+  return `> **Unhealthy capture** \u2014 ${reading.detail}. ${capitalize(reading.next)}.
+
+`;
+}
+function captureWarningsHint(snapshot2) {
+  const warnings = snapshot2.captureHealth?.warnings ?? [];
+  if (warnings.length === 0) return "";
+  const shown = warnings.slice(0, 5).join("; ") + (warnings.length > 5 ? "; \u2026" : "");
+  return `> Capture warnings \u2014 ${shown}.
+
+`;
+}
+function unhealthyPassedLines(snapshots) {
+  const lines = [];
+  for (const snapshot2 of snapshots.filter((s) => s.status === "passed")) {
+    const reading = captureHealthReading(snapshot2.captureHealth);
+    if (!reading) continue;
+    const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
+    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot2.name}\` passed, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
+
+`);
+  }
+  return lines.slice(0, 10).join("");
+}
+function unhealthyNewSuffix(snapshot2) {
+  const reading = captureHealthReading(snapshot2.captureHealth);
+  if (!reading) return "";
+  return ` \u2014 **unhealthy capture**: ${reading.detail}; do not approve it as the baseline`;
+}
+
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
 function runKeyFromEnv(env) {
@@ -117237,6 +117369,9 @@ function renderDomHintMarkdown(snapshot2, include2 = {}) {
   return lines.length > 0 ? lines.join("\n") + "\n\n" : "";
 }
 function renderSnapshotHints(snapshot2) {
+  return unhealthyCaptureHint(snapshot2) + renderEnvironmentAndPageHints(snapshot2) + captureWarningsHint(snapshot2);
+}
+function renderEnvironmentAndPageHints(snapshot2) {
   const change = snapshotEnvironmentChange(snapshot2);
   if (!change) return renderDomHintMarkdown(snapshot2);
   const env = snapshot2.environment;
@@ -117300,6 +117435,7 @@ ${summaryLine} \u2014 **${summary2.total} total**
 
 `;
   }
+  comment += unhealthyPassedLines(snapshots);
   const changedSnapshots = snapshots.filter((s) => s.status === "changed");
   if (changedSnapshots.length > 0) {
     comment += "#### Changed Snapshots\n\n";
@@ -117329,7 +117465,7 @@ ${domHint}
     comment += "#### New Snapshots\n\n";
     for (const snapshot2 of newSnapshots) {
       const open2 = reportUrl ? ` \u2014 [open](${snapshotUrl(reportUrl, snapshot2.name)})` : "";
-      comment += `- \`${snapshot2.name}\`${open2}
+      comment += `- \`${snapshot2.name}\`${open2}${unhealthyNewSuffix(snapshot2)}
 `;
     }
     comment += "\n";

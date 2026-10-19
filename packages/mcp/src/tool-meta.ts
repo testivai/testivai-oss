@@ -43,6 +43,8 @@ export const TOOL_META = {
       'it is a bad capture or a change the style check does not cover (size, overflow, transform, images…), so look at the diff (get_diff) before approving; ' +
       'when the environment the snapshot was captured in changed since the baseline (a browser build, OS or distro, device scale, capture method…) ' +
       'and the DOM and computed styles match, the verdict is rendering drift: the machine changed, not the page, never noise; ' +
+      'when a web font or stylesheet failed to load in the current capture or the baseline (captureHealth), the verdict is unhealthy capture, said before anything else: ' +
+      'a glitch of the capture or a broken asset, never noise even when the DOM and computed styles match, and never to be approved as a baseline; ' +
       'a style-only change (identical DOM, different computed styles) is a real change, not noise, ' +
       'and so is any DOM change — both need human review. ' +
       'When the styles were not compared (style check unavailable), the verdict says so and does not call the diff noise: ' +
@@ -110,6 +112,8 @@ export const REVIEW_PROMPT = {
     '3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),',
     '   WHY it likely happened (use pageShift/shift classifications — e.g. content injected above),',
     '   and which case it is:',
+    '   - an unhealthy capture (the verdict says so: a web font or stylesheet failed to load in the current capture or the baseline):',
+    '     never noise; fix what failed (the page, the server or the test) and re-run, and never approve it as a baseline,',
     '   - likely render noise (identical DOM and computed styles match, and the diff is small and scattered; still not proof),',
     '   - rendering drift (identical DOM and computed styles match, and the environment changed since the baseline:',
     '     a browser build, OS or distro, device scale or capture method; the verdict names it): the machine changed, not the page,',
@@ -145,7 +149,7 @@ export const shellArg = (s: string): string => (/^[\w./@%+=:,-]+$/.test(s) ? s :
 function nextStepsFor(baselinesDir = '.testivai/baselines'): string {
   const dir = shellArg(baselinesDir.replace(/[`\r\n]/g, '') || '.');
   return (
-    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; ' +
+    'for an intended change, approve it once the human agrees (`/testivai approve <name>` on the pull request, or `npx testivai approve <name>` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on (for an unhealthy capture, fix what failed to load first; an unhealthy baseline is re-baselined from a healthy run); ' +
     `for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`
   );
 }
@@ -203,6 +207,7 @@ export const TRIAGE_PROMPT = {
       '',
       '| explain_snapshot shows | What it means |',
       '|---|---|',
+      '| captureHealth.unhealthy set (the verdict says "unhealthy capture") | A web font or stylesheet failed to load, or fonts were still loading, in the current capture or the baseline (captureHealth.reasons says what), so that image does not show the page as built and its diff is never render noise: an unhealthy capture is a glitch of the capture or a broken asset; fix the page, the server or the test; never approve it as a baseline. It is a glitch unless the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path): then it is a bug. When the baseline is the unhealthy side, the next step is to re-baseline from a healthy run. captureHealth.warnings (broken images, failed scripts) make no capture unhealthy: weigh a broken image where it sits in the diff. |',
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       '| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |',
       '| environment.renderingDelta non-empty, DOM unchanged and styleCheck "match" (rendering drift) | The environment the snapshot was captured in changed since the baseline (the verdict names what: a browser build, OS or distro, device scale, capture method) and the page did not: a glitch of the environment, not render noise. If the change under test itself changed the environment (a Playwright or browser upgrade, a new CI image), it is an intended change. Either way the next step is to re-baseline from this environment once the images match apart from rendering; if they differ in more than rendering, judge that difference on its own. |',
