@@ -2398,6 +2398,7 @@ function readSnapshot(value, path3) {
   optional(snapshot, "baselineApprovedAt", s, path3, (v, p) => text(v, p, 64));
   optional(snapshot, "sizeMismatch", s, path3, readSizeMismatch);
   optional(snapshot, "environment", s, path3, readSnapshotEnvironment);
+  if (s.thumbPath !== void 0) text(s.thumbPath, at(path3, "thumbPath"));
   return snapshot;
 }
 function readSnapshotEnvironment(value, path3) {
