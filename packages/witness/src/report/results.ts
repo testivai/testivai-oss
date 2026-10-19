@@ -86,7 +86,8 @@ export interface SnapshotResult {
    * diff not concentrated in one area, within noiseMaxDiffPercent; a diff
    * whose styles were not compared or changed, or whose regions all sit in
    * one area, is never auto-passed as noise), or 'shift' (every region is a pure
-   * element shift within shiftTolerance px). The diff image is still
+   * element shift within shiftTolerance px). Never present when
+   * `captureHealth.unhealthy` is set (schema 2.6.0). The diff image is still
    * written — auto-passes stay auditable.
    */
   autoPassed?: 'threshold' | 'noise' | 'shift';

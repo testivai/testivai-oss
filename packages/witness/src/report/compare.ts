@@ -105,7 +105,9 @@ export interface PassCriteria {
    * one area (see diffShape). A diff whose styles were not compared
    * ('unavailable' or missing) or changed ('mismatch'), or whose regions all
    * sit in one area (a bad capture, or a change the style check does not
-   * cover), stays 'changed' for a human. Default false.
+   * cover), stays 'changed' for a human. No criterion passes an unhealthy
+   * capture (captureHealth, a font or stylesheet that failed to load) whose
+   * pixels differ. Default false.
    */
   noiseAutoPass?: boolean;
   /** Upper bound (diff %, 0-100) for noiseAutoPass. Default 1. */
