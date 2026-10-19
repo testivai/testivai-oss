@@ -5,6 +5,7 @@
  * requests.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -405,6 +406,189 @@ describe('buildSite with pages of your own (include)', () => {
     const { api } = fakeApi(world());
 
     await expect(buildSite(api, options({ include: { dir: own, name: 'demo' }, limits: { maxSiteBytes: 1 * MB } }))).rejects.toThrow(/include-dir .* over the site's/);
+  });
+});
+
+describe('buildSite with a report cache (cacheDir)', () => {
+  const sha256 = (bytes: Uint8Array) => `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
+  /** The digest GitHub lists for each artifact (upload-artifact v4+): the SHA-256 of its ZIP. */
+  const digested = (w: World): World => ({
+    ...w,
+    artifacts: w.artifacts.map((a) => {
+      const zip = w.zips.get(a.id);
+      return zip instanceof Uint8Array ? { ...a, digest: sha256(zip) } : a;
+    }),
+  });
+  const cacheDir = () => path.join(dir, 'cache');
+  const cached = (over: object = {}) => options({ cacheDir: cacheDir(), ...over });
+
+  /** Every file of the site, by path. */
+  function files(root: string): Map<string, Buffer> {
+    return new Map(tree(root).map((f) => [f, fs.readFileSync(path.join(root, f))]));
+  }
+  function expectSameBytes(actual: Map<string, Buffer>, expected: Map<string, Buffer>) {
+    expect([...actual.keys()]).toEqual([...expected.keys()]);
+    for (const [f, bytes] of expected) expect({ f, same: bytes.equals(actual.get(f) as Buffer) }).toEqual({ f, same: true });
+  }
+
+  it('downloads nothing on a second publish of the same runs, and writes the same bytes as a build without the cache', async () => {
+    const w = digested(world());
+    const first = fakeApi(w);
+    await buildSite(first.api, cached());
+    expect(first.calls.download.sort()).toEqual([10, 20, 30, 40]);
+    const built = files(siteDir());
+
+    const second = fakeApi(w);
+    const result = await buildSite(second.api, cached());
+
+    expect(second.calls.download).toEqual([]);
+    expectSameBytes(files(siteDir()), built);
+    expect(result.published && result.downloads).toMatchObject({ downloaded: 0, downloadedBytes: 0, fromCache: 4, cacheChanged: false });
+
+    await buildSite(fakeApi(w).api, options());
+    expectSameBytes(files(siteDir()), built);
+  });
+
+  it('downloads only the new artifact of a re-run, and lets the replaced one go', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+
+    // Run 3 re-run: attempt 2 uploads a new artifact (a run's id stays, the artifact's does not).
+    const rerun = { ...w, runs: w.runs.map((r) => (r.id === 3 ? { ...r, attempt: 2 } : r)), zips: new Map(w.zips) };
+    rerun.zips.set(31, reportZip(0));
+    rerun.artifacts = w.artifacts.map((a) => (a.id === 30 ? { ...a, id: 31, digest: sha256(rerun.zips.get(31) as Uint8Array) } : a));
+    const { api, calls } = fakeApi(rerun);
+    const result = await buildSite(api, cached());
+
+    expect(calls.download).toEqual([31]);
+    expect(fs.readdirSync(cacheDir()).sort()).toEqual(['10.zip', '20.zip', '31.zip', '40.zip']);
+    expect(fs.existsSync(path.join(siteDir(), 'pr/14/3-2/index.html'))).toBe(true);
+    expect(result.published && result.downloads).toMatchObject({ downloaded: 1, fromCache: 3, cacheChanged: true });
+  });
+
+  it('rebuilds every page from its report each time, so what a page shows besides the report is never stale', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+
+    // Everything a run's page shows that is not in its artifact: the site's
+    // address, the pull request's number, fork status and author, the run
+    // line (commit, attempt, time), the default branch's name.
+    const changed: World = {
+      ...w,
+      repo: { ...w.repo, defaultBranch: 'trunk' },
+      pages: { ...w.pages, htmlUrl: 'https://reports.example.com/' },
+      prs: [pr(14, { fork: true, author: 'someone-else' }), ...w.prs.slice(1)],
+      runs: w.runs.map((r) => (r.headBranch === 'main' ? { ...r, headBranch: 'trunk' } : { ...r, headSha: 'e'.repeat(40) })),
+      artifacts: w.artifacts.map((a) => (a.headBranch === 'main' ? { ...a, headBranch: 'trunk' } : a)),
+    };
+    const { api, calls } = fakeApi(changed);
+    await buildSite(api, cached({ serverUrl: 'https://ghe.example.com' }));
+    const fromCache = files(siteDir());
+
+    expect(calls.download).toEqual([]);
+    expect(fromCache.get('pr/14/3-1/index.html')?.toString()).toContain('From a fork (someone-else)');
+    expect(fromCache.get('pr/14/3-1/index.html')?.toString()).toContain('https://reports.example.com/pr/14/');
+    await buildSite(fakeApi(changed).api, options({ serverUrl: 'https://ghe.example.com' }));
+    expectSameBytes(fromCache, files(siteDir()));
+  });
+
+  it('takes the reports of runs no longer published out of the cache', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+
+    // #15 closed.
+    const { api, calls } = fakeApi({ ...w, prs: w.prs.filter((p) => p.number !== 15) });
+    const result = await buildSite(api, cached());
+
+    expect(calls.download).toEqual([]);
+    expect(fs.readdirSync(cacheDir()).sort()).toEqual(['10.zip', '20.zip', '30.zip']);
+    expect(result.published && result.downloads).toMatchObject({ fromCache: 3, cacheChanged: true });
+  });
+
+  it('downloads again a report whose cache entry is not the artifact (other bytes, cut short), and publishes the same page', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+    const built = files(siteDir());
+    const entry = (id: number) => path.join(cacheDir(), `${id}.zip`);
+    fs.writeFileSync(entry(30), reportZip(0));
+    fs.truncateSync(entry(20), 10);
+
+    const { api, calls } = fakeApi(w);
+    await buildSite(api, cached());
+
+    expect(calls.download.sort()).toEqual([20, 30]);
+    expectSameBytes(files(siteDir()), built);
+    expect(fs.readFileSync(entry(30)).equals(Buffer.from(w.zips.get(30) as Uint8Array))).toBe(true);
+  });
+
+  it('never reads or writes through a symbolic link in the cache, or a path that leaves it', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+    const outside = path.join(dir, 'outside.zip');
+    fs.writeFileSync(outside, w.zips.get(30) as Uint8Array);
+    fs.rmSync(path.join(cacheDir(), '30.zip'));
+    fs.symlinkSync(outside, path.join(cacheDir(), '30.zip'));
+    fs.symlinkSync(dir, path.join(cacheDir(), '..zip'));
+
+    const { api, calls } = fakeApi(w);
+    await buildSite(api, cached());
+
+    expect(calls.download).toEqual([30]);
+    expect(fs.lstatSync(path.join(cacheDir(), '30.zip')).isFile()).toBe(true);
+    expect(fs.readdirSync(cacheDir()).sort()).toEqual(['10.zip', '20.zip', '30.zip', '40.zip']);
+    expect(fs.existsSync(outside)).toBe(true);
+    expect(fs.existsSync(siteDir())).toBe(true);
+  });
+
+  it('downloads a report whose artifact has no digest every time, and keeps nothing of it', async () => {
+    const w = world();
+    await buildSite(fakeApi(w).api, cached());
+    const { api, calls } = fakeApi(w);
+
+    const result = await buildSite(api, cached());
+
+    expect(calls.download.sort()).toEqual([10, 20, 30, 40]);
+    expect(fs.readdirSync(cacheDir())).toEqual([]);
+    expect(result.published && result.downloads).toMatchObject({ downloaded: 4, fromCache: 0, cacheChanged: false });
+  });
+
+  it('keeps nothing of a report it could not download', async () => {
+    const w = digested(world());
+    w.zips.set(20, Object.assign(new Error('Server Error'), { status: 500 }));
+
+    await buildSite(fakeApi(w).api, cached());
+
+    expect(fs.readdirSync(cacheDir()).sort()).toEqual(['10.zip', '30.zip', '40.zip']);
+    expect(fs.readFileSync(path.join(siteDir(), 'pr/14/2-1/index.html'), 'utf8')).toMatch(/could not be downloaded \(Server Error\)/);
+  });
+
+  it('publishes as before, downloading everything, when the cache folder cannot be used', async () => {
+    const blocked = path.join(dir, 'file');
+    fs.writeFileSync(blocked, 'x');
+    const { api, calls } = fakeApi(digested(world()));
+
+    const result = await buildSite(api, cached({ cacheDir: path.join(blocked, 'cache') }));
+
+    expect(result.published).toBe(true);
+    expect(calls.download.sort()).toEqual([10, 20, 30, 40]);
+    expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/report cache/i));
+  });
+
+  it('logs how many reports it downloaded, how many megabytes, and how many came from the cache', async () => {
+    const w = digested(world());
+    await buildSite(fakeApi(w).api, cached());
+    expect(log.info).toHaveBeenCalledWith(expect.stringMatching(/^Reports: 4 downloaded \(\d+(\.\d+)? MB\), 0 from the cache\b/));
+    jest.clearAllMocks();
+
+    await buildSite(fakeApi(w).api, cached());
+
+    expect(log.info).toHaveBeenCalledWith(expect.stringMatching(/^Reports: 0 downloaded \(0(\.0)? MB\), 4 from the cache \(\d+(\.\d+)? MB\)/));
+  });
+
+  it('logs the downloads without a cache too', async () => {
+    await buildSite(fakeApi(world()).api, options());
+
+    expect(log.info).toHaveBeenCalledWith(expect.stringMatching(/^Reports: 4 downloaded \(\d+(\.\d+)? MB\)\.$/));
   });
 });
 

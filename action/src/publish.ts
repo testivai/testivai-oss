@@ -3,7 +3,9 @@
  * as dist/publish.cjs.
  *
  * build: decide from the repository's Pages settings, build the site into
- * $RUNNER_TEMP/testivai-pages/site and record what was published next to it.
+ * $RUNNER_TEMP/testivai-pages/site and record what was published next to it;
+ * report ZIPs are kept in $RUNNER_TEMP/testivai-pages/cache (cache-save: the
+ * cache changed, so the action saves it).
  * finish (after actions/deploy-pages): check the site answers and add the
  * report links to the pull requests.
  */
@@ -39,6 +41,13 @@ export function parseComment(value: string): boolean {
   throw new Error(`comment must be true or false, not ${JSON.stringify(value)}`);
 }
 
+export function parseCache(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  throw new Error(`cache must be true or false, not ${JSON.stringify(value)}`);
+}
+
 /** include-dir (relative to the workspace) and include-name, or undefined without include-dir. */
 export function parseInclude(env: Env): { dir: string; name: string } | undefined {
   const dir = (env.INCLUDE_DIR ?? '').trim();
@@ -56,6 +65,8 @@ export async function build({ github, context, core, env }: { github: OctokitLik
   const stateFile = path.join(root, 'state.json');
 
   const include = parseInclude(env);
+  // The folder publish/action.yml restores and saves with actions/cache.
+  const cacheDir = parseCache(env.CACHE ?? 'true') ? env.CACHE_DIR?.trim() || path.join(root, 'cache') : undefined;
 
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || 'testivai-visual-report',
@@ -64,13 +75,16 @@ export async function build({ github, context, core, env }: { github: OctokitLik
     siteDir,
     serverUrl: context.serverUrl,
     ...(include ? { include } : {}),
+    ...(cacheDir ? { cacheDir } : {}),
     log: core,
   });
   if (!result.published) {
     core.notice(result.reason);
     core.setOutput('published', 'false');
+    core.setOutput('cache-save', 'false');
     return;
   }
+  core.setOutput('cache-save', result.downloads.cacheChanged ? 'true' : 'false');
   fs.writeFileSync(stateFile, JSON.stringify(result.state));
   core.info(`Built the site: ${result.files} files, ${Math.round(result.bytes / 1024)} KB.`);
   core.setOutput('published', 'true');

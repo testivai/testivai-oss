@@ -130,6 +130,18 @@ describe('GitHub Pages setup docs', () => {
     expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
   });
 
+  it('documents the report cache, unreleased: what it saves, what it checks, its trust boundary and how to turn it off', () => {
+    const start = DOC.indexOf('#### Unreleased: reports reused between publishes');
+    expect(start).toBeGreaterThan(DOC.indexOf('### Limits'));
+    const section = DOC.slice(start, DOC.indexOf('\n## ', start));
+    expect(section).toMatch(/downloads only the runs it has not built before; the rest come\s+from the Actions cache/);
+    expect(section).toMatch(/SHA-256/);
+    expect(section).toMatch(/byte\s+for\s+byte/);
+    expect(section).toContain('`cache: false`');
+    expect(section).toMatch(/unpacks/);
+    expect(ACTION.inputs.cache.default).toBe('true');
+  });
+
   it('is linked from the README', () => {
     expect(read('README.md')).toContain('docs/github-action.md#reports-on-github-pages');
   });
