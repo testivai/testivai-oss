@@ -70,6 +70,14 @@ describe('approve setup docs', () => {
     expect(doc).toMatch(/fine-grained personal access token/i);
   });
 
+  it('docs/github-action.md says the approve token also lets the Pages publish follow the approve', () => {
+    const doc = read('docs/github-action.md');
+    const start = doc.indexOf('### Approve with a token that re-runs CI');
+    const section = doc.slice(start, doc.indexOf('\n### ', start + 1));
+    expect(section).toMatch(/publish@v1|Pages/);
+    expect(section).toContain('#reports-on-github-pages');
+  });
+
   it.each(['README.md', 'SKILLS.md', 'AGENTS.md', 'CLAUDE.md', 'approve/action.yml'])(
     '%s does not promise an unconditional CI re-run after approve',
     (file) => {

@@ -120,6 +120,16 @@ describe('GitHub Pages setup docs', () => {
     expect(DOC).toMatch(/not\s+an\s+access\s+control/);
   });
 
+  it('says a run that GITHUB_TOKEN started, such as the re-run after an approve, gets no publish, and what avoids it', () => {
+    // GitHub starts no workflow_run for a run that GITHUB_TOKEN started, so the
+    // publish does not follow the visual re-run on an approve commit pushed with it.
+    const limits = DOC.slice(DOC.indexOf('### Limits'), DOC.indexOf('\n## ', DOC.indexOf('### Limits')));
+    expect(limits).toMatch(/GITHUB_TOKEN/);
+    expect(limits).toMatch(/\/testivai approve/);
+    expect(limits).toMatch(/no\s+publish|not\s+published|publishes\s+nothing/i);
+    expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
+  });
+
   it('is linked from the README', () => {
     expect(read('README.md')).toContain('docs/github-action.md#reports-on-github-pages');
   });
