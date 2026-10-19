@@ -189,7 +189,8 @@ function runNotices({ site, run, pr, artifactUrl }: RunReportInput): ReportNotic
   return notices;
 }
 
-function counts(s: ReportSummary): string {
+/** "1 changed · 2 passed": the front page's counts (the job summary uses them too). */
+export function counts(s: ReportSummary): string {
   const parts: string[] = [];
   if (s.changed) parts.push(`${s.changed} changed`);
   if (s.newSnapshots) parts.push(`${s.newSnapshots} new`);

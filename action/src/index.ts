@@ -9,6 +9,7 @@ import { uploadReport, writeRunStamp } from './report-artifact';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildComment, buildEmptyComment, resolveUpsertMarker, runKeyFromEnv } from './comment';
+import { summaryFromComment, writeJobSummary } from './job-summary';
 import { determineStatus, resolveStatusContext } from './status';
 import type { ResultsData } from './types';
 
@@ -113,6 +114,15 @@ async function run(): Promise<void> {
     const octokit = github.getOctokit(token);
     const context = github.context;
 
+    // Build comment — includes artifact link when available. It is also the
+    // job summary (below), for every event.
+    // The run marker lets the publish step check the comment is still
+    // about this run before adding the published report's links.
+    const links = { runKey: runKeyFromEnv(process.env) };
+    const commentBody = results.snapshots.length === 0
+      ? buildEmptyComment(artifactUrl, upsertMarker, links)
+      : buildComment(results, artifactUrl, upsertMarker, links);
+
     // Only post comment on PRs
     if (context.eventName === 'pull_request' && context.payload.pull_request) {
       const prNumber = context.payload.pull_request.number;
@@ -122,14 +132,6 @@ async function run(): Promise<void> {
         repo: context.repo.repo,
         issue_number: prNumber,
       });
-
-      // Build comment — includes artifact link when available
-      // The run marker lets the publish step check the comment is still
-      // about this run before adding the published report's links.
-      const links = { runKey: runKeyFromEnv(process.env) };
-      const commentBody = results.snapshots.length === 0
-        ? buildEmptyComment(artifactUrl, upsertMarker, links)
-        : buildComment(results, artifactUrl, upsertMarker, links);
 
       // Look for this lane's existing comment to upsert
       const existingComment = comments.find(c =>
@@ -156,6 +158,10 @@ async function run(): Promise<void> {
     } else {
       core.info('Not a PR event, skipping comment');
     }
+
+    // The comment on the run's page, for every event (a push has no comment):
+    // a failed write only warns (job-summary.ts).
+    await writeJobSummary(core, summaryFromComment(commentBody));
 
     const status = determineStatus(results, { failOnDiff, failOnMissing });
     const sha = context.payload.pull_request?.head.sha || context.sha;

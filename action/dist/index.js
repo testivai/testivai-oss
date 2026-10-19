@@ -117355,6 +117355,22 @@ ${link}
 `;
 }
 
+// src/job-summary.ts
+var MARKER_LINE = /^<!-- testivai-[^\n]*-->(?:\n|$)/gm;
+var APPROVE_BLOCK = /\n```\n\/testivai approve [^\n]*\n```\n/g;
+function summaryFromComment(body2) {
+  return body2.replace(MARKER_LINE, "").replace(APPROVE_BLOCK, "").replace(/^\n+/, "");
+}
+async function writeJobSummary(core, markdown) {
+  try {
+    await core.summary.addRaw(markdown, true).write();
+    return true;
+  } catch (error2) {
+    core.warning(`Could not write the job summary: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    return false;
+  }
+}
+
 // src/index.ts
 function collectFilesRecursively(dir) {
   return fs9.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -117425,6 +117441,8 @@ async function run() {
     }
     const octokit = github.getOctokit(token);
     const context6 = github.context;
+    const links = { runKey: runKeyFromEnv(process.env) };
+    const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker, links) : buildComment(results, artifactUrl, upsertMarker, links);
     if (context6.eventName === "pull_request" && context6.payload.pull_request) {
       const prNumber = context6.payload.pull_request.number;
       const { data: comments } = await octokit.rest.issues.listComments({
@@ -117432,8 +117450,6 @@ async function run() {
         repo: context6.repo.repo,
         issue_number: prNumber
       });
-      const links = { runKey: runKeyFromEnv(process.env) };
-      const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker, links) : buildComment(results, artifactUrl, upsertMarker, links);
       const existingComment = comments.find(
         (c) => c.body?.includes(upsertMarker)
       );
@@ -117457,6 +117473,7 @@ async function run() {
     } else {
       info("Not a PR event, skipping comment");
     }
+    await writeJobSummary(core_exports, summaryFromComment(commentBody));
     const status = determineStatus(results, { failOnDiff, failOnMissing });
     const sha = context6.payload.pull_request?.head.sha || context6.sha;
     let checkRunPosted = false;
