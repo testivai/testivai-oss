@@ -118,6 +118,7 @@ export function octokitApi(github: OctokitLike, owner: string, repo: string): Pu
           author: p.user?.login ?? '',
           fork: String(p.head.repo.full_name).toLowerCase() !== fullName.toLowerCase(),
           title: typeof p.title === 'string' ? p.title : undefined,
+          createdAt: typeof p.created_at === 'string' ? p.created_at : undefined,
         }));
     },
 

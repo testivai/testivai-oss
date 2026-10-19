@@ -83,11 +83,12 @@ export async function finish({ github, context, core, env }: { github: OctokitLi
   const comment = parseComment(env.COMMENT ?? 'true');
   if (!env.STATE_FILE) throw new Error('STATE_FILE is not set: the build step did not publish');
   const state = JSON.parse(fs.readFileSync(env.STATE_FILE, 'utf8')) as PublishState;
-  await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
+  const { siteUrl } = await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
     state,
     pageUrl: env.PAGE_URL,
     comment,
     marker: resolveUpsertMarker(resolveStatusContext(env.STATUS_CONTEXT ?? '')),
     log: core,
   });
+  core.setOutput('page-url', siteUrl);
 }

@@ -177,6 +177,62 @@ describe('planSite', () => {
     expect(plan.totalBytes).toBe(40 * MB);
   });
 
+  it('leaves out runs from before the pull request was opened: an earlier pull request on the same branch', () => {
+    // #16 ran twice on the branch and was closed; #17 was opened from the same branch.
+    const reused = pr(17, { headRef: 'shared', createdAt: '2026-10-18T22:44:04Z' });
+    const earlier = [run({ headBranch: 'shared', createdAt: '2026-10-18T21:17:11Z' }), run({ headBranch: 'shared', createdAt: '2026-10-18T21:19:09Z' })];
+    const sameSecond = run({ headBranch: 'shared', createdAt: '2026-10-18T22:44:04Z' });
+    const own = run({ headBranch: 'shared', createdAt: '2026-10-18T22:50:00Z' });
+    const runs = [...earlier, sameSecond, own];
+
+    const plan = planSite(input({ prs: [reused], runs, artifacts: runs.map((r) => artifact(r.id)) }));
+
+    expect(plan.prs[0].runs.map((r) => r.runId)).toEqual([own.id, sameSecond.id]);
+    // Not this pull request's runs at all, so not listed as "not published" on its page either.
+    expect(plan.dropped).toEqual([]);
+  });
+
+  it('leaves out a pull request whose only runs are from before it was opened', () => {
+    const reused = pr(17, { headRef: 'shared', createdAt: '2026-10-18T22:44:04Z' });
+    const earlier = run({ headBranch: 'shared', createdAt: '2026-10-18T21:19:09Z' });
+
+    const plan = planSite(input({ prs: [reused], runs: [earlier], artifacts: [artifact(earlier.id)] }));
+
+    expect(plan.prs).toEqual([]);
+  });
+
+  it('counts the runs-per-pr from the pull request’s own runs, not the earlier ones', () => {
+    const reused = pr(17, { headRef: 'shared', createdAt: '2026-10-18T12:00:00Z' });
+    const earlier = [1, 2, 3].map((i) => run({ headBranch: 'shared', createdAt: `2026-10-18T11:0${i}:00Z` }));
+    const own = [1, 2].map((i) => run({ headBranch: 'shared', createdAt: `2026-10-18T12:0${i}:00Z` }));
+    const runs = [...earlier, ...own];
+
+    const plan = planSite(input({ prs: [reused], runs, artifacts: runs.map((r) => artifact(r.id)) }));
+
+    expect(plan.prs[0].runs.map((r) => r.runId)).toEqual([own[1].id, own[0].id]);
+  });
+
+  it('keeps every run on the branch when the opening time is unknown or unreadable', () => {
+    const runs = [run({ headBranch: 'shared', createdAt: '2026-10-18T21:17:11Z' }), run({ headBranch: 'shared', createdAt: '2026-10-18T22:50:00Z' })];
+    const artifacts = runs.map((r) => artifact(r.id));
+
+    for (const createdAt of [undefined, '', 'not a date']) {
+      const plan = planSite(input({ prs: [pr(17, { headRef: 'shared', ...(createdAt === undefined ? {} : { createdAt }) })], runs, artifacts }));
+      expect(plan.prs[0].runs).toHaveLength(2);
+    }
+  });
+
+  it('compares the times as instants, whatever their format', () => {
+    // 22:44:04Z written with an offset and milliseconds; the run is 1 s earlier.
+    const reused = pr(17, { headRef: 'shared', createdAt: '2026-10-19T00:44:04.000+02:00' });
+    const before = run({ headBranch: 'shared', createdAt: '2026-10-18T22:44:03Z' });
+    const after = run({ headBranch: 'shared', createdAt: '2026-10-18T22:44:05Z' });
+
+    const plan = planSite(input({ prs: [reused], runs: [before, after], artifacts: [artifact(before.id), artifact(after.id)] }));
+
+    expect(plan.prs[0].runs.map((r) => r.runId)).toEqual([after.id]);
+  });
+
   it('names folders only from numbers', () => {
     const hostile = pr(3, { headRef: '../../evil', headRepo: 'x/../../y' });
     const r = run({ headRepo: 'x/../../y', headBranch: '../../evil' });

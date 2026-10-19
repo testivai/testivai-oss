@@ -609,6 +609,9 @@ report template.
 - The last 3 runs per open pull request (`runs-per-pr`), and the latest run on
   the default branch. A report goes once its artifact expires (the reporter's
   `artifact-retention-days`).
+- A pull request's runs are the ones on its branch since it was opened. A
+  pull request opened from a branch name an earlier one used does not show
+  the earlier one's reports.
 - A run's report ZIP over 150 MB is not published, and the site stays under
   900 MB (GitHub Pages allows 1 GB): when it would be over, older runs go
   first, a fork's before a branch's, and each pull request's latest run last.

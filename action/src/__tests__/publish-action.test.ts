@@ -80,7 +80,10 @@ describe('inputs and outputs', () => {
 
   it('outputs whether it published and where', () => {
     expect(ACTION.outputs.published.value).toBe('${{ steps.build.outputs.published }}');
-    expect(ACTION.outputs['page-url'].value).toContain('steps.deploy.outputs.page_url');
+    // The address the finish step linked (the deploy's, as https), else the build's;
+    // never deploy-pages' page_url as is, which GitHub gives as http for github.io.
+    expect(ACTION.outputs['page-url'].value).toBe('${{ steps.finish.outputs.page-url || steps.build.outputs.page-url }}');
+    expect(byId('finish')).toBe(steps[3]);
   });
 });
 
@@ -281,6 +284,21 @@ describe('the scripts load dist/publish.cjs and run', () => {
     expect(posted[0].params.issue_number).toBe(15);
     expect(posted[0].params.body).toContain('(https://testivai.github.io/testivai-example/pr/15/4-1/)');
     expect(posted[0].params.body).toContain(FORK_MARKER);
+  });
+
+  it("finish: outputs the site's https address when the deploy reports http (github.io)", async () => {
+    const { github } = fakeGithub('on');
+    const { core, outputs } = fakeCore();
+    await runScript(byId('build'), values(), { github, context, core });
+    delete outputs['page-url'];
+
+    await runScript(
+      byId('finish'),
+      values({ 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': 'http://testivai.github.io/testivai-example/' }),
+      { github, context, core },
+    );
+
+    expect(outputs['page-url']).toBe('https://testivai.github.io/testivai-example/');
   });
 
   it('build: publishes a folder of your own pages, relative to the workspace, under its name', async () => {

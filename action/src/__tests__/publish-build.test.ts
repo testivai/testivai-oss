@@ -263,6 +263,34 @@ describe('buildSite', () => {
     expect(fs.readFileSync(path.join(siteDir(), 'pr/14/3-1/index.html'), 'utf8')).toMatch(/inflates past|bytes, over the/);
   });
 
+  it('publishes only the runs of a pull request opened from a branch an earlier one used, never the earlier one’s', async () => {
+    // As on testivai-example: #16 ran on the branch and was closed, then #17 was opened from it.
+    const earlier = [run(31, { headBranch: 'shared', createdAt: '2026-10-18T21:17:11Z' }), run(32, { headBranch: 'shared', createdAt: '2026-10-18T21:19:09Z' })];
+    const own = run(33, { headBranch: 'shared', createdAt: '2026-10-18T22:44:07Z' });
+    const runs = [...earlier, own];
+    const { api, calls } = fakeApi(
+      world({
+        prs: [pr(17, { headRef: 'shared', createdAt: '2026-10-18T22:44:04Z' })],
+        runs,
+        artifacts: runs.map((r) => artifactOf(r)),
+        zips: new Map(runs.map((r) => [r.id * 10, reportZip(1)])),
+      }),
+    );
+
+    const result = await buildSite(api, options());
+
+    expect(tree(siteDir()).filter((f) => f.startsWith('pr/'))).toEqual(['pr/17/33-1/images/0/current.png', 'pr/17/33-1/index.html', 'pr/17/index.html']);
+    const page = fs.readFileSync(path.join(siteDir(), 'pr/17/index.html'), 'utf8');
+    expect(page).toContain('CI run 33, attempt 1');
+    for (const id of [31, 32]) {
+      expect(page).not.toContain(`CI run ${id},`);
+      expect(page).not.toContain(`Run ${id} `);
+    }
+    expect(page).not.toContain('Not published');
+    expect(calls.download).toEqual([330]);
+    expect(result.published && result.state.prs.map((p) => [p.pr, p.runId])).toEqual([[17, 33]]);
+  });
+
   it('starts from an empty site every time, so a closed pull request is gone', async () => {
     fs.mkdirSync(path.join(siteDir(), 'pr/7/1-1'), { recursive: true });
     fs.writeFileSync(path.join(siteDir(), 'pr/7/1-1/index.html'), 'old');
@@ -522,6 +550,18 @@ describe('finishPublish', () => {
     expect(result.verified).toBe(true);
     expect(log.warning).not.toHaveBeenCalled();
     expect(calls.update[0][1]).toContain('(https://testivai.github.io/testivai-example/pr/14/3-1/)');
+  });
+
+  it('returns the address it linked, as https, for the action’s page-url output', async () => {
+    const { api } = fakeApi(world());
+    const finish = (pageUrl?: string, state = STATE) => finishPublish(api, { state, ...(pageUrl === undefined ? {} : { pageUrl }), comment: false, marker: UPSERT_MARKER, fetch: ok, delayMs: 0, log });
+
+    expect((await finish('http://testivai.github.io/testivai-example/')).siteUrl).toBe('https://testivai.github.io/testivai-example/');
+    expect((await finish('https://reports.example.com/')).siteUrl).toBe('https://reports.example.com/');
+    // No usable deploy address: the one the build linked.
+    expect((await finish()).siteUrl).toBe(STATE.siteUrl);
+    expect((await finish('http://reports.example.com/')).siteUrl).toBe(STATE.siteUrl);
+    expect((await finish('http://testivai.github.io/testivai-example/', { ...STATE, visibility: 'private' })).siteUrl).toBe('https://testivai.github.io/testivai-example/');
   });
 
   it('ignores a deploy address that is not https', async () => {

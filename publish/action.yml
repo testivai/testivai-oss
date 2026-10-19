@@ -92,8 +92,11 @@ outputs:
     description: "'true' when the site was built and deployed, 'false' when the repository's settings say not to."
     value: ${{ steps.build.outputs.published }}
   page-url:
-    description: The site's address.
-    value: ${{ steps.deploy.outputs.page_url || steps.build.outputs.page-url }}
+    description: >
+      The site's https address: the one the deploy reports (GitHub gives a
+      github.io address as http, read here as https), else the one from the
+      repository's Pages settings.
+    value: ${{ steps.finish.outputs.page-url || steps.build.outputs.page-url }}
 
 runs:
   using: 'composite'
@@ -130,6 +133,7 @@ runs:
       uses: actions/deploy-pages@v5
 
     - name: Add the report links to the pull requests
+      id: finish
       if: steps.build.outputs.published == 'true'
       uses: actions/github-script@v9
       env:

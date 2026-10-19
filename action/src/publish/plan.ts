@@ -4,7 +4,9 @@
  * The site is rebuilt from scratch on every publish, from what is true now:
  * the last `runsPerPr` runs of every open pull request (forks included) and
  * the latest run on the default branch (main/, the approved state other pull
- * requests merge into). A closed pull request is simply not in the next
+ * requests merge into). A pull request's runs are those on its head branch
+ * since it was opened: a run from before belongs to an earlier pull request
+ * from the same branch name. A closed pull request is simply not in the next
  * build, so cleanup needs no job of its own, and two publishes that race
  * each build a complete site.
  *
@@ -22,6 +24,8 @@ export interface PlanPr {
   fork: boolean;
   /** Shown (as text) on the site's index pages. */
   title?: string;
+  /** When the pull request was opened (ISO 8601). */
+  createdAt?: string;
 }
 
 export interface PlanRun {
@@ -123,9 +127,13 @@ export function planSite(input: PlanInput): SitePlan {
   let prs: SitePlan['prs'] = [];
   for (const pr of input.prs) {
     const runs: PlannedRun[] = [];
+    // NaN when unknown or unreadable, and nothing compares below NaN: every run is kept.
+    const opened = Date.parse(pr.createdAt ?? '');
     for (const r of finished) {
       if (runs.length >= limits.runsPerPr) break;
       if (r.headRepo !== pr.headRepo || r.headBranch !== pr.headRef) continue;
+      // An earlier pull request's run on the same branch name: not this one's, so not listed as dropped either.
+      if (Date.parse(r.createdAt) < opened) continue;
       const entry = planned(r, `pr/${Math.trunc(pr.number)}/${Math.trunc(r.id)}-${Math.trunc(r.attempt)}`, pr.fork);
       if (entry.sizeBytes > limits.maxPrBytes) {
         dropped.push({ runId: r.id, pr: pr.number, reason: `its report is ${mb(entry.sizeBytes)}, over the ${mb(limits.maxPrBytes)} limit for one run` });
