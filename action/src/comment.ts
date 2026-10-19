@@ -31,7 +31,17 @@ export interface CommentLinks {
    * marker so a later update can check the comment is still about that run.
    */
   runKey?: string;
+  /**
+   * Published thumbnails (thumb.png: baseline | current | diff of the changed
+   * area) of changed snapshots, by snapshot name. At most
+   * MAX_COMMENT_THUMBNAILS are shown, only with `reportUrl`, and only an
+   * https URL inside the report URL is used.
+   */
+  thumbnails?: Array<{ name: string; url: string }>;
 }
+
+/** The most thumbnails one comment shows. */
+export const MAX_COMMENT_THUMBNAILS = 5;
 
 const RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
 

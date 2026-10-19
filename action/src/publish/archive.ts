@@ -3,7 +3,7 @@
  *
  * Only what the published report is rebuilt from is read: results.json, the
  * run stamp (testivai-run.json, from action/src/report-artifact.ts) and the
- * baseline/current/diff PNGs under images/<snapshot>/. Every other entry,
+ * baseline/current/diff/thumb PNGs under images/<snapshot>/. Every other entry,
  * the artifact's own index.html included, is never decompressed, and nothing
  * is written to disk.
  *
@@ -37,7 +37,7 @@ export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
 export interface ReportArchive {
   results?: Uint8Array;
   runStamp?: Uint8Array;
-  /** By path in the archive: images/<snapshot>/(baseline|current|diff).png. */
+  /** By path in the archive: images/<snapshot>/(baseline|current|diff|thumb).png. */
   images: Map<string, Uint8Array>;
 }
 
@@ -52,7 +52,7 @@ export class ArchiveRefused extends Error {
 /** Compressed bytes handed to the decompressor at a time. */
 const SLICE = 16 * 1024;
 
-const IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff)\.png$/;
+const IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff|thumb)\.png$/;
 
 /** A plain relative path: no backslash, NUL, leading slash, empty, '.' or '..' segment. */
 function isPlainPath(name: string): boolean {

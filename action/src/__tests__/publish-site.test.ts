@@ -10,6 +10,8 @@
  * 404 page explains a link to a report that is no longer published.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type { ReportArchive } from '../publish/archive';
 import type { PlannedRun, PlanPr, SitePlan } from '../publish/plan';
 import { buildIndexPages, buildRunReport, type RunOutcome, type SiteFile, type SiteInfo } from '../publish/site';
@@ -247,6 +249,83 @@ describe('buildRunReport', () => {
       expect(html).not.toContain('<script>alert(1)');
       expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;/current.png');
     });
+  });
+});
+
+describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
+  const PAGE = 'pr/14/39150236166-1/index.html';
+
+  it('publishes a thumb that is a PNG at images/<n>/thumb.png, like the other images', () => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' }), changed('checkout', { thumbPath: 'images/checkout/thumb.png' })]), {
+        'images/home/current.png': PNG,
+        'images/home/thumb.png': PNG,
+        'images/checkout/thumb.png': PNG,
+      }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(PNG);
+    // The run's data says which thumbs were published (the PR comment reads it).
+    expect(outcome.ok && outcome.data.snapshots.map((s) => s.thumbPath)).toEqual(['images/0/thumb.png', 'images/1/thumb.png']);
+    // The report page itself does not show it.
+    expect(htmlAt(files, PAGE)).not.toContain('thumb.png');
+  });
+
+  it('leaves out a thumb that is not a PNG, and names it on the page', () => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' })]), { 'images/home/current.png': PNG, 'images/home/thumb.png': HTML_AS_PNG }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')).toBeUndefined();
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/current.png')).toBeDefined();
+    expect(outcome.ok && outcome.omittedImages).toEqual(['images/home/thumb.png (not a PNG)']);
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+    expect(htmlAt(files, PAGE)).toMatch(/report-notice warning">1 image was left out[^<]*images\/home\/thumb\.png \(not a PNG\)/);
+  });
+
+  it('takes no thumb from a path that names another kind of image', () => {
+    const { files, outcome } = build(archiveOf(results([changed('home', { thumbPath: 'images/home/diff.png' })]), { 'images/home/diff.png': PNG }));
+
+    expect(files.map((f) => f.path).sort()).toEqual(['pr/14/39150236166-1/images/0/diff.png', PAGE]);
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+  });
+
+  it('builds a report without thumbs exactly as before: the same files, byte for byte', () => {
+    // fixtures/publish-site-no-thumbnails.html is this page as main built it
+    // before thumbnails (ed73679). A change to the report template changes it
+    // too: regenerate it from that change's output, never from this one.
+    const before = fs.readFileSync(path.join(__dirname, 'fixtures', 'publish-site-no-thumbnails.html'), 'utf-8');
+    const images = {
+      'images/home/baseline.png': PNG,
+      'images/home/current.png': PNG,
+      'images/home/diff.png': PNG,
+      'images/checkout/step 2/current.png': PNG,
+      'images/signup/current.png': PNG,
+    };
+    const snapshots = [
+      changed('home'),
+      changed('checkout/step 2'),
+      { name: 'signup', status: 'new', diffPercent: 0, diffCount: 0, totalPixels: 0, currentPath: 'images/signup/current.png' },
+    ];
+    const archive = archiveOf(
+      results(snapshots, { summary: { total: 3, passed: 0, changed: 2, newSnapshots: 1, missing: 0 } }),
+      images,
+      { runId: '39150236166', runAttempt: 1, sha: 'x' },
+    );
+
+    const { files } = build(archive);
+
+    expect(files.map((f) => f.path).sort()).toEqual([
+      'pr/14/39150236166-1/images/0/baseline.png',
+      'pr/14/39150236166-1/images/0/current.png',
+      'pr/14/39150236166-1/images/0/diff.png',
+      'pr/14/39150236166-1/images/1/current.png',
+      'pr/14/39150236166-1/images/2/current.png',
+      PAGE,
+    ]);
+    for (const f of files) if (f.path.endsWith('.png')) expect(f.data).toBe(PNG);
+    expect(htmlAt(files, PAGE)).toBe(before);
   });
 });
 

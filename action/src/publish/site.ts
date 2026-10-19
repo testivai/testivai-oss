@@ -9,6 +9,9 @@
  * numbered paths (images/<snapshot index>/<kind>.png), so no name from the
  * report ends up in a URL, and every page is noindex, under a content
  * security policy that keeps it from loading or sending anything elsewhere.
+ * A changed snapshot's thumbnail (thumb.png, witness schema 2.6.0) is
+ * published the same way, at images/<snapshot index>/thumb.png; the page does
+ * not show it, the pull request comment does (comments.ts).
  *
  * Every function here is pure: the caller writes the files.
  */
@@ -54,8 +57,8 @@ export type RunOutcome =
   | (OutcomeBase & { ok: true; summary: ReportSummary; data: ReportData; omittedImages: string[] })
   | (OutcomeBase & { ok: false; reason: string });
 
-const KINDS = ['baseline', 'current', 'diff'] as const;
-const PATH_FIELD = { baseline: 'baselinePath', current: 'currentPath', diff: 'diffPath' } as const;
+const KINDS = ['baseline', 'current', 'diff', 'thumb'] as const;
+const PATH_FIELD = { baseline: 'baselinePath', current: 'currentPath', diff: 'diffPath', thumb: 'thumbPath' } as const;
 
 /** Policy for the index and fallback pages: no scripts at all. */
 const PAGE_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";

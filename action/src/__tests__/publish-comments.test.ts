@@ -10,7 +10,7 @@
  */
 
 import { buildComment, buildEmptyComment, readRunKey, UPSERT_MARKER } from '../comment';
-import { commentFor, FORK_MARKER, type ExistingComment, type PublishedPr } from '../publish/comments';
+import { commentFor, FORK_MARKER, publishedThumbnails, type ExistingComment, type PublishedPr } from '../publish/comments';
 import type { ReportData } from '../../../packages/witness/src/report/results';
 import { parseReportData } from '../../../packages/witness/src/report/validate';
 
@@ -236,5 +236,65 @@ describe('commentFor, a fork pull request', () => {
 
   it("rebuilds the reporter's comment instead when the fork's run could comment (pull_request_target)", () => {
     expect(commentFor(fork(), [reporterComment('39150236166-1')], UPSERT_MARKER)).toMatchObject({ kind: 'update', id: 77 });
+  });
+});
+
+describe('publishedThumbnails: the thumbs the comment shows', () => {
+  /** A run's data as site.ts leaves it: thumbPath set only for a thumb it published, at its numbered path. */
+  function withThumbs(snapshots: Array<{ name: string; status: 'changed' | 'new' | 'passed'; thumb?: boolean }>): PublishedPr {
+    const data: ReportData = {
+      ...DATA,
+      snapshots: snapshots.map((s, i) => ({
+        name: s.name,
+        status: s.status,
+        diffPercent: 1,
+        diffCount: 1,
+        totalPixels: 100,
+        ...(s.thumb ? { thumbPath: `images/${i}/thumb.png` } : {}),
+      })),
+    };
+    return published({ outcome: { ok: true, summary: data.summary, data } });
+  }
+
+  it('lists the first 5 changed snapshots with a published thumb, in results order, from the page URL and numbers only', () => {
+    const p = withThumbs([
+      { name: 'a', status: 'changed', thumb: true },
+      { name: 'new-one', status: 'new', thumb: true },
+      { name: 'b', status: 'changed' },
+      { name: 'c', status: 'changed', thumb: true },
+      { name: 'passed-one', status: 'passed', thumb: true },
+      { name: 'd', status: 'changed', thumb: true },
+      { name: 'e', status: 'changed', thumb: true },
+      { name: 'f', status: 'changed', thumb: true },
+      { name: 'g', status: 'changed', thumb: true },
+    ]);
+
+    expect(publishedThumbnails(p)).toEqual([
+      { name: 'a', url: `${URL}images/0/thumb.png` },
+      { name: 'c', url: `${URL}images/3/thumb.png` },
+      { name: 'd', url: `${URL}images/5/thumb.png` },
+      { name: 'e', url: `${URL}images/6/thumb.png` },
+      { name: 'f', url: `${URL}images/7/thumb.png` },
+    ]);
+  });
+
+  it('takes nothing from a thumbPath that is not the numbered path site.ts gives', () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    if (p.outcome.ok) p.outcome.data.snapshots[0].thumbPath = 'https://evil.example/x.png';
+
+    expect(publishedThumbnails(p)).toEqual([]);
+  });
+
+  it('lists none for a report that could not be shown', () => {
+    expect(publishedThumbnails(published({ outcome: { ok: false, reason: 'x' } }))).toEqual([]);
+  });
+
+  it("puts no image in the comment the publish posts on a fork's pull request", () => {
+    const p = { ...withThumbs([{ name: 'a', status: 'changed', thumb: true }]), fork: true };
+
+    const action = commentFor(p, [], UPSERT_MARKER);
+
+    expect(action.kind).toBe('create');
+    expect(action.kind === 'create' && action.body).not.toMatch(/<img|thumb\.png/);
   });
 });

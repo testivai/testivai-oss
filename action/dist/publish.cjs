@@ -311,6 +311,7 @@ function resolveStatusContext(input) {
 
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
+var MAX_COMMENT_THUMBNAILS = 5;
 var RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
 function readRunKey(body) {
   return RUN_MARKER.exec(body)?.[1];
@@ -1279,7 +1280,7 @@ var ArchiveRefused = class extends Error {
   }
 };
 var SLICE = 16 * 1024;
-var IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff)\.png$/;
+var IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff|thumb)\.png$/;
 function isPlainPath(name) {
   if (name.includes("\\") || name.includes("\0") || name.startsWith("/")) return false;
   return name.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
@@ -1392,10 +1393,19 @@ function updateReporterComment(published, comment, marker) {
     return { kind: "none", why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey };
+  const links = { reportUrl: published.url, runKey, thumbnails: publishedThumbnails(published) };
   const body = data.snapshots.length === 0 ? buildEmptyComment(published.artifactUrl, marker, links) : buildComment(data, published.artifactUrl, marker, links);
   if (body === comment.body) return { kind: "none", why: "the comment already links the report" };
   return { kind: "update", id: comment.id, body };
+}
+function publishedThumbnails(published) {
+  if (!published.outcome.ok) return [];
+  const thumbnails = [];
+  published.outcome.data.snapshots.forEach((s, i2) => {
+    if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== "changed" || s.thumbPath !== `images/${i2}/thumb.png`) return;
+    thumbnails.push({ name: s.name, url: `${published.url}images/${i2}/thumb.png` });
+  });
+  return thumbnails;
 }
 function forkComment(published, comments) {
   const body = forkCommentBody(published);
@@ -2607,8 +2617,8 @@ function checkPng(bytes) {
 }
 
 // src/publish/site.ts
-var KINDS = ["baseline", "current", "diff"];
-var PATH_FIELD = { baseline: "baselinePath", current: "currentPath", diff: "diffPath" };
+var KINDS = ["baseline", "current", "diff", "thumb"];
+var PATH_FIELD = { baseline: "baselinePath", current: "currentPath", diff: "diffPath", thumb: "thumbPath" };
 var PAGE_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
 function buildRunReport(input) {
   const { site, run, archive } = input;

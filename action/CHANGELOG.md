@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `publish@v1` publishes each changed snapshot's thumbnail (`thumb.png`, written by `@testivai/witness` 2.6.0 and later: the changed area of the baseline, the current capture and the diff side by side, at most 800×400 px) at `images/<n>/thumb.png` beside the run's other images, after the same PNG header check; one that fails it is left out and named on the page like any other image. The report page itself does not show it
+
 ## [1.5.0] - 2026-10-19
 
 ### Added

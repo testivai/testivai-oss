@@ -7,11 +7,12 @@
  * cannot comment, so for a fork with no reporter comment the publish posts
  * its own, built only from numbers and its own links: a fork controls the
  * text in its results (snapshot names, the reasons a report was refused),
- * and none of it goes into a comment the bot posts.
+ * and none of it goes into a comment the bot posts, so it shows no
+ * thumbnail either: those go only into the reporter's rebuilt comment.
  */
 
 import type { ReportData, ReportSummary } from '../../../packages/witness/src/report/results';
-import { buildComment, buildEmptyComment, readRunKey } from '../comment';
+import { buildComment, buildEmptyComment, MAX_COMMENT_THUMBNAILS, readRunKey } from '../comment';
 import type { ResultsData } from '../types';
 
 /** Marks the comment the publish posts on a fork's pull request. */
@@ -63,13 +64,30 @@ function updateReporterComment(published: PublishedPr, comment: ExistingComment,
     return { kind: 'none', why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey };
+  const links = { reportUrl: published.url, runKey, thumbnails: publishedThumbnails(published) };
   const body =
     data.snapshots.length === 0
       ? buildEmptyComment(published.artifactUrl, marker, links)
       : buildComment(data as unknown as ResultsData, published.artifactUrl, marker, links);
   if (body === comment.body) return { kind: 'none', why: 'the comment already links the report' };
   return { kind: 'update', id: comment.id, body };
+}
+
+/**
+ * The thumbnails the comment shows: the first MAX_COMMENT_THUMBNAILS changed
+ * snapshots, in results order, whose thumb.png the site published. site.ts
+ * sets `thumbPath` to images/<index>/thumb.png only for a thumb it published
+ * (parseReportData never takes one from results.json), and the URL is built
+ * from the run's page URL and that index only.
+ */
+export function publishedThumbnails(published: PublishedPr): Array<{ name: string; url: string }> {
+  if (!published.outcome.ok) return [];
+  const thumbnails: Array<{ name: string; url: string }> = [];
+  published.outcome.data.snapshots.forEach((s, i) => {
+    if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== 'changed' || s.thumbPath !== `images/${i}/thumb.png`) return;
+    thumbnails.push({ name: s.name, url: `${published.url}images/${i}/thumb.png` });
+  });
+  return thumbnails;
 }
 
 function forkComment(published: PublishedPr, comments: ExistingComment[]): CommentAction {
