@@ -186,7 +186,7 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `action.yml` | Composite action — no build step, ships as-is |
+| `action.yml` | Composite action; its reply step loads `action/dist/approve.cjs` (`action/src/approve.ts`: names the approved run, links its published report from the TestivAI comment) |
 
 ---
 
@@ -354,7 +354,7 @@ push a new semver tag: git tag v1.x.y && git push origin v1.x.y
 CI rolls the v1 major tag automatically
 ```
 
-The `approve/action.yml` composite action has no build step — it ships at the same `v1` tag automatically. The `review/` and `publish/` composite actions load `action/dist/review.cjs` and `action/dist/publish.cjs`, so they ship with the dist at the same tag.
+The `approve/`, `review/` and `publish/` composite actions load `action/dist/approve.cjs`, `action/dist/review.cjs` and `action/dist/publish.cjs`, so they ship with the dist at the same tag.
 
 ---
 

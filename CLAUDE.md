@@ -115,7 +115,7 @@ CI (GitHub Actions):
 - `action.yml`               — composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`, never checks out code; setup in `docs/github-action.md#reports-on-github-pages`
 
 ### GitHub Action approver (`approve/`)
-- `action.yml`               — composite action; no build step needed (pure shell + github-script)
+- `action.yml`               — composite action: github-script auth → checkout → shell download and apply → commit → github-script reply; the reply loads `action/dist/approve.cjs` (`action/src/approve.ts`: names the approved run, links its published report from the TestivAI comment)
 
 ## Changesets (versioning + publishing)
 
@@ -133,7 +133,7 @@ The GitHub Action (`action.yml` at repo root → `action/dist/index.js`) uses a 
 - The `v1` major tag is rolled automatically by `.github/workflows/release-action.yml` on every clean semver tag push
 - After any change to `action/src/`, rebuild dist AND push a new semver tag to roll `v1`
 
-The approve action (`approve/action.yml`) is a composite action — no build step, no dist. It ships automatically at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
+The approve action (`approve/action.yml`) is a composite action; its reply step loads `action/dist/approve.cjs`, so rebuild the dist after changing `action/src/approve.ts`. It ships with the dist at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
 
 ## .testivai/ directory layout (on-disk contract)
 
@@ -291,4 +291,4 @@ Exit-code contract (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 c
 - Branch names: `feat/`, `fix/`, `chore/`, `docs/`
 - Every public API change needs a changeset (`pnpm changeset`)
 - `action/dist/index.js` must always be committed — CI verifies this
-- Composite actions (`approve/action.yml`) need no build step
+- Composite actions need no build step of their own, but `approve/`, `review/` and `publish/` load `action/dist/*.cjs`: rebuild it with `pnpm run build` in `action/`
