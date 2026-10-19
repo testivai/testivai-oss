@@ -15,6 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { type CaptureEnvironment, readEnvironment } from '../capture/environment';
+import { type CaptureHealth, parseHealth } from '../capture/health';
 
 /**
  * Resolve the baselines directory: explicit override → config.json
@@ -61,6 +62,13 @@ export interface BaselineMetadata {
    * not record it.
    */
   environment?: CaptureEnvironment;
+  /**
+   * What failed to load when the approved capture was taken (capture
+   * health), frozen from the capture's temp metadata.json on approve, so
+   * every compare against an unhealthy baseline can say so. Absent when the
+   * capture recorded none (not checked).
+   */
+  health?: CaptureHealth;
 }
 
 export class BaselineStore {
@@ -199,18 +207,21 @@ export class BaselineStore {
       fs.rmSync(currentElements);
     }
 
-    // Update metadata. The capture's environment is frozen into the baseline;
-    // a capture without one leaves the baseline without one (the previous
-    // baseline's would describe a screenshot it did not take).
+    // Update metadata. The capture's environment and health are frozen into
+    // the baseline; a capture without one leaves the baseline without one (the
+    // previous baseline's would describe a screenshot it did not take).
     const now = new Date().toISOString();
     const existingMeta = this.readMetadata(name);
-    const environment = readEnvironment(this.readTempMetadata(name)?.environment);
+    const tempMeta = this.readTempMetadata(name);
+    const environment = readEnvironment(tempMeta?.environment);
+    const health = parseHealth(tempMeta?.health);
     const meta: BaselineMetadata = {
       name,
       createdAt: existingMeta?.createdAt ?? now,
       updatedAt: now,
       approvedBy: 'local',
       ...(environment ? { environment } : {}),
+      ...(health ? { health } : {}),
     };
     fs.writeFileSync(currentMetadata, JSON.stringify(meta, null, 2));
   }

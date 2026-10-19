@@ -68,6 +68,17 @@ export type {
   RenderEnvironment,
   WebDriverEnvironmentInput,
 } from './capture/environment';
+// Capture health — what failed to load, recorded by the adapters that run the probe.
+export {
+  HEALTH_LIMITS,
+  HEALTH_PROBE_EXPRESSION,
+  hostPath,
+  mergeResourceFailures,
+  parseHealth,
+  RESOURCE_TYPES,
+  resourceTypeFromCdp,
+} from './capture/health';
+export type { CaptureHealth, ResourceFailure, ResourceFailures, ResourceType } from './capture/health';
 // Stable full-page capture (fresh frame + capture until two in a row match) —
 // shared by every adapter that captures through CDP captureBeyondViewport.
 export {

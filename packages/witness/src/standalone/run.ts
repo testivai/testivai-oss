@@ -13,6 +13,10 @@
  * stay unattributed, no page shift is detected, and the computed-style check
  * has nothing to compare (dom.styleCheck is 'unavailable', a stylesheet-only
  * change is not ruled out, and noiseAutoPass never passes these snapshots).
+ * Capture health is recorded: the in-page probe after the capture, plus what
+ * the crawler saw on the network (failed requests, cross-origin ones
+ * included), so a page whose fonts or stylesheets failed reads as an
+ * unhealthy capture.
  */
 
 import CDP from 'chrome-remote-interface';
@@ -29,6 +33,15 @@ import {
   type CaptureEnvironment,
   type HostEnvironment,
 } from '../capture/environment';
+import {
+  type CaptureHealth,
+  HEALTH_PROBE_EXPRESSION,
+  isBrowserFaviconRequest,
+  mergeResourceFailures,
+  parseHealth,
+  type ResourceFailure,
+  resourceTypeFromCdp,
+} from '../capture/health';
 import { loadLocalConfig } from '../config/local-config';
 import { generateReport } from '../report/generator';
 import { logger } from '../utils/logger';
@@ -103,6 +116,8 @@ const PAGE_LOADED = `location.href !== 'about:blank' && document.readyState === 
  * about:blank and were lost, the font wait and reveal pass ran on it, and
  * the capture raced the real page's entry animations. The viewport is applied
  * before the page is requested, so the page never loads at another size.
+ * `prepare` runs before the page is requested too (watchNetwork, so every
+ * request the page makes is seen).
  *
  * Exported for testing.
  */
@@ -110,12 +125,14 @@ export async function openPage(
   port: number,
   url: string,
   viewport?: { width: number; height: number },
+  prepare?: (client: any) => void | Promise<void>,
 ): Promise<PageClient> {
   const target = await CDP.New({ port });
   const page: PageClient = { client: null, targetId: target.id };
   try {
     page.client = await CDP({ port, target: target.id });
     await Promise.all([page.client.Page.enable(), page.client.Runtime.enable()]);
+    if (prepare) await prepare(page.client);
     if (viewport) {
       await page.client.Emulation.setDeviceMetricsOverride({
         width: viewport.width,
@@ -318,6 +335,79 @@ export function standaloneEnvironment(input: { probe: unknown; product: string |
   });
 }
 
+/** The failed requests a page made, as watchNetwork saw them. */
+export interface NetworkWatch {
+  failures(): ResourceFailure[];
+}
+
+/**
+ * Watch a tab's requests (CDP Network events) for capture health: each
+ * request that answered 400 or more, or failed without a response. Not the
+ * page itself (a Document), a request the page cancelled, or Chrome's
+ * net::ERR_ABORTED without a status (a 404'd stylesheet or font is reported
+ * both as a response and as aborted: the status wins). Call before the page is
+ * requested. Exported for testing.
+ */
+export async function watchNetwork(client: any): Promise<NetworkWatch> {
+  interface Seen {
+    url: string;
+    type?: string;
+    status?: number;
+    error?: string;
+    canceled?: boolean;
+  }
+  const requests = new Map<string, Seen>();
+  const seen = (id: unknown, url?: unknown, type?: unknown): Seen | undefined => {
+    if (typeof id !== 'string') return undefined;
+    let request = requests.get(id);
+    if (!request && typeof url === 'string') requests.set(id, (request = { url }));
+    if (request && typeof type === 'string' && !request.type) request.type = type;
+    return request;
+  };
+  client.on('Network.requestWillBeSent', (e: any) => {
+    const request = seen(e?.requestId, e?.request?.url, e?.type);
+    if (request && typeof e?.request?.url === 'string') request.url = e.request.url; // a redirect's new address
+  });
+  client.on('Network.responseReceived', (e: any) => {
+    const request = seen(e?.requestId, e?.response?.url, e?.type);
+    if (request && typeof e?.response?.status === 'number') request.status = e.response.status;
+  });
+  client.on('Network.loadingFailed', (e: any) => {
+    const request = seen(e?.requestId, undefined, e?.type);
+    if (!request) return;
+    if (typeof e?.errorText === 'string') request.error = e.errorText;
+    request.canceled = e?.canceled === true;
+  });
+  await client.Network.enable();
+  return {
+    failures() {
+      const out: ResourceFailure[] = [];
+      for (const r of requests.values()) {
+        if (r.type === 'Document' || !/^https?:/i.test(r.url)) continue;
+        if (r.type === 'Other' && isBrowserFaviconRequest(r.url)) continue;
+        const type = resourceTypeFromCdp(r.type);
+        if (r.status !== undefined) {
+          if (r.status >= 400) out.push({ url: r.url, type, status: r.status });
+        } else if (r.error && !r.canceled && r.error !== 'net::ERR_ABORTED') {
+          out.push({ url: r.url, type, status: 0, error: r.error });
+        }
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * A page's capture health: the probe's result, with the failed requests the
+ * network watch saw merged in (null when the network was not watched). Null
+ * without a valid probe result: not checked. Exported for testing.
+ */
+export function standaloneHealth(probe: unknown, failures: ResourceFailure[] | null): CaptureHealth | null {
+  const health = parseHealth(probe);
+  if (!health) return null;
+  return failures ? mergeResourceFailures(health, failures) : health;
+}
+
 export async function runStandaloneWitness(
   startUrl: string,
   options: StandaloneOptions,
@@ -373,8 +463,15 @@ export async function runStandaloneWitness(
         config.environmentPolicy,
       );
       let page: PageClient | undefined;
+      let network: NetworkWatch | null = null;
       try {
-        page = await openPage(port, url, viewport);
+        page = await openPage(port, url, viewport, async (client) => {
+          try {
+            network = await watchNetwork(client);
+          } catch {
+            network = null; // the probe still records what the page can see
+          }
+        });
         // Capture provenance: measured before anything is injected.
         const probe = await evaluate<unknown>(page.client, RENDER_PROBE_EXPRESSION).catch(() => undefined);
         const product = await Promise.resolve(page.client.Browser?.getVersion?.())
@@ -385,11 +482,20 @@ export async function runStandaloneWitness(
 
         const screenshot = await captureFullPage(page.client);
         const dom = await evaluate<string>(page.client, domSnapshotExpression(config.ignoreSelectors ?? []));
+        // Capture health, read after the capture so it sees what loaded.
+        const healthProbe = await evaluate<unknown>(page.client, HEALTH_PROBE_EXPRESSION).catch(() => undefined);
         store.writeTemp(name, screenshot, typeof dom === 'string' ? dom : undefined);
         try {
           store.writeTempMetadata(name, { name, environment: standaloneEnvironment({ probe, product }) });
         } catch {
           // without it the compare cannot tell rendering drift from noise for this page
+        }
+        try {
+          const watched = network as NetworkWatch | null;
+          const health = standaloneHealth(healthProbe, watched ? watched.failures() : null);
+          if (health) store.writeTempMetadata(name, { health });
+        } catch {
+          // no health only means this page's capture health was not checked
         }
 
         captured.push(name);

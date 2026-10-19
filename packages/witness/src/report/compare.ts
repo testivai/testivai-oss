@@ -19,7 +19,9 @@ import {
 } from '../diff/mask';
 import type { RegionOptions } from '../diff/types';
 import { type EnvironmentPolicy, readEnvironment } from '../capture/environment';
+import { parseHealth } from '../capture/health';
 import { diffEnvironments } from './environment';
+import { isUnhealthyCapture, snapshotCaptureHealth } from './health';
 import {
   attributeRegions,
   compareStyleHashes,
@@ -145,7 +147,10 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
     fs.writeFileSync(currentPath, tempBuffer);
 
     if (!store.exists(name)) {
-      // New snapshot — no baseline to compare against
+      // New snapshot — no baseline to compare against. Its health is said
+      // before anyone approves it: an unhealthy first capture must not
+      // become the baseline.
+      const firstHealth = snapshotCaptureHealth(null, parseHealth(store.readTempMetadata(name)?.health));
       results.push({
         name,
         status: 'new',
@@ -153,6 +158,7 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
         diffCount: 0,
         totalPixels: 0,
         currentPath: `images/${name}/current.png`,
+        ...(firstHealth ? { captureHealth: firstHealth } : {}),
       });
       continue;
     }
@@ -194,8 +200,9 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
 
     // Capture provenance: the environment each side was captured in. Only
     // when both recorded one: an unrecorded side is unknown, not a change.
+    const candidateMeta = store.readTempMetadata(name);
     const baselineEnv = readEnvironment(baselineMeta?.environment);
-    const candidateEnv = readEnvironment(store.readTempMetadata(name)?.environment);
+    const candidateEnv = readEnvironment(candidateMeta?.environment);
     if (baselineEnv && candidateEnv) {
       const { delta, renderingDelta } = diffEnvironments(baselineEnv, candidateEnv);
       result.environment = delta.length > 0
@@ -208,6 +215,12 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
         result.environment.policy = 'strict';
       }
     }
+
+    // Capture health: what failed to load on each side. Either side recorded
+    // is enough: an unhealthy baseline is called out on every compare against
+    // it. Unrecorded on both sides is not checked: no field.
+    const health = snapshotCaptureHealth(parseHealth(baselineMeta?.health), parseHealth(candidateMeta?.health));
+    if (health) result.captureHealth = health;
 
     // DOM-level signal. Only meaningful when both sides captured DOM.
     // Computed whenever the two files differ at all (pixels, dimensions, or
@@ -242,6 +255,10 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
           };
           domSignal.noiseHint = false;
         }
+        // An unhealthy capture is never render noise: a font that fell back
+        // or a stylesheet that failed leaves the DOM identical and the
+        // declared styles matching, and only the health record says so.
+        if (isUnhealthyCapture(result)) domSignal.noiseHint = false;
         result.dom = domSignal;
       }
       if (result.regions && result.regions.length > 0) {
@@ -295,6 +312,12 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
     result.diffPercent = 0;
     return;
   }
+
+  // An unhealthy capture (a font that fell back, a stylesheet that failed,
+  // on either side) whose pixels differ is never passed by a tolerance: the
+  // diff is a glitch of the capture or a broken asset, and the fix is the
+  // page, the server or the test, not a tolerance.
+  if (isUnhealthyCapture(result)) return;
 
   const withinPercent = result.diffPercent <= maxDiffPercent;
   const withinPixels = maxDiffPixels !== undefined && result.diffCount <= maxDiffPixels;

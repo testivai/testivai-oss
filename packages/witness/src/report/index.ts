@@ -28,12 +28,26 @@ export {
   snapshotEnvironmentChange,
 } from './environment';
 export type { EnvironmentChangeGroup, EnvironmentSnapshotInput } from './environment';
+export {
+  approveHealthWarning,
+  assessHealth,
+  BASELINE_HEALTH_PREFIX,
+  captureHealthReading,
+  isUnhealthyCapture,
+  snapshotCaptureHealth,
+  UNHEALTHY_BASELINE_NEXT,
+  UNHEALTHY_CAPTURE_NEXT,
+} from './health';
+export type { CaptureHealthReading, HealthAssessment, HealthSnapshotInput } from './health';
+export { parseHealth } from '../capture/health';
 export type { CaptureEnvironment, RenderEnvironment } from '../capture/environment';
+export type { CaptureHealth, ResourceFailures, ResourceType } from '../capture/health';
 export type {
   ReportData,
   ReportSummary,
   SnapshotResult,
   SnapshotStatus,
+  SnapshotCaptureHealth,
   SnapshotDomSignal,
   SnapshotEnvironment,
 } from './results';

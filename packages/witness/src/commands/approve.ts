@@ -1,7 +1,23 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { BaselineStore } from '../baselines/store';
+import { parseHealth } from '../capture/health';
+import { approveHealthWarning } from '../report/health';
 import { logger } from '../utils/logger';
+
+/**
+ * Warn when the capture about to become the baseline is unhealthy (a font or
+ * stylesheet failed to load): every compare against it would say so. It is
+ * still approved. With --json the warning goes to stderr, so stdout stays the
+ * JSON result.
+ */
+function warnIfUnhealthy(store: BaselineStore, name: string, json: boolean | undefined): void {
+  const warning = approveHealthWarning(parseHealth(store.readTempMetadata(name)?.health));
+  if (!warning) return;
+  const line = `  ⚠ ${name}: ${warning}.`;
+  if (json) process.stderr.write(`${line}\n`);
+  else console.log(chalk.yellow(line));
+}
 
 export const approveCommand = new Command('approve')
   .description('Approve visual snapshots as new baselines')
@@ -68,6 +84,7 @@ export const approveCommand = new Command('approve')
         const failed: Array<{ name: string; error: string }> = [];
         for (const snapName of tempNames) {
           try {
+            warnIfUnhealthy(store, snapName, options.json);
             store.approve(snapName);
             approvedNames.push(snapName);
             if (!options.json) console.log(chalk.green(`  ✓ Approved: ${snapName}`));
@@ -91,6 +108,7 @@ export const approveCommand = new Command('approve')
       // ── Approve specific name ─────────────────────────────────────────────
       if (name) {
         try {
+          warnIfUnhealthy(store, name, options.json);
           store.approve(name);
           if (options.json) process.stdout.write(JSON.stringify({ approved: [name], failed: [] }) + '\n');
           else {

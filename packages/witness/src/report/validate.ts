@@ -18,9 +18,18 @@
  */
 
 import type { CaptureEnvironment } from '../capture/environment';
+import { type CaptureHealth, parseHealth } from '../capture/health';
 import type { AttributedRegion, PageShift, RegionElement } from '../diff/attribution';
 import type { MaskRect, MaskSource, MaskSpec } from '../diff/mask';
-import type { ReportData, ReportSummary, SnapshotDomSignal, SnapshotEnvironment, SnapshotResult, SnapshotStatus } from './results';
+import type {
+  ReportData,
+  ReportSummary,
+  SnapshotCaptureHealth,
+  SnapshotDomSignal,
+  SnapshotEnvironment,
+  SnapshotResult,
+  SnapshotStatus,
+} from './results';
 
 /** The results.json major version this reads: the major of RESULTS_SCHEMA_VERSION (generator.ts). */
 export const SUPPORTED_SCHEMA_MAJOR = 2;
@@ -40,6 +49,7 @@ export const REPORT_DATA_LIMITS = {
   environmentKeys: 20,
   environmentValueLength: 200,
   environmentFields: 100,
+  healthLines: 100,
 } as const;
 
 export type ParsedReportData = { ok: true; data: ReportData } | { ok: false; reason: string };
@@ -182,7 +192,24 @@ function readSnapshot(value: unknown, path: string): SnapshotResult {
   optional(snapshot, 'baselineApprovedAt', s, path, (v, p) => text(v, p, 64));
   optional(snapshot, 'sizeMismatch', s, path, readSizeMismatch);
   optional(snapshot, 'environment', s, path, readSnapshotEnvironment);
+  optional(snapshot, 'captureHealth', s, path, readCaptureHealth);
   return snapshot;
+}
+
+/** A snapshot's capture health (schema 2.6.0); each recorded block goes through parseHealth. */
+function readCaptureHealth(value: unknown, path: string): SnapshotCaptureHealth {
+  const h = record(value, path);
+  const block = (v: unknown, p: string): CaptureHealth => parseHealth(v) ?? fail(p, 'expected a capture health block');
+  const lines = (v: unknown, p: string) => list(v, p, REPORT_DATA_LIMITS.healthLines, (l, q) => text(l, q));
+  const unhealthyPath = at(path, 'unhealthy');
+  const health: SnapshotCaptureHealth = {
+    unhealthy: h.unhealthy === null ? null : oneOf(h.unhealthy, unhealthyPath, ['candidate', 'baseline', 'both'] as const),
+    reasons: lines(h.reasons, at(path, 'reasons')),
+    warnings: lines(h.warnings, at(path, 'warnings')),
+  };
+  optional(health, 'candidate', h, path, block);
+  optional(health, 'baseline', h, path, block);
+  return { ...(health.candidate ? { candidate: health.candidate } : {}), ...(health.baseline ? { baseline: health.baseline } : {}), ...health };
 }
 
 /** A snapshot's capture provenance (schema 2.5.0). */

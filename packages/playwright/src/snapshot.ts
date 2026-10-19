@@ -17,6 +17,7 @@ import {
   RENDER_PROBE_EXPRESSION,
 } from '@testivai/witness';
 import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
+import { recordCaptureHealth } from './capture/health';
 import { captureFullPageScreenshot } from './capture/full-page';
 
 /**
@@ -502,6 +503,12 @@ export async function snapshot(
     } catch {
       // no environment only means the compare cannot tell drift from noise for this capture
     }
+
+    // Capture health: what failed to load (web fonts, stylesheets, images,
+    // requests that answered 400+), read after the capture so it sees what
+    // loaded. A font that fell back leaves the DOM and the declared styles
+    // the same, so only this tells an unhealthy capture from render noise.
+    await recordCaptureHealth(page as unknown as { evaluate(expression: string): Promise<unknown> }, new BaselineStore(process.cwd()), snapshotName);
 
     // Element map: layout + computed-style digest for every visible
     // element, powering attribution ("WHICH element changed"), exact

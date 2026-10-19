@@ -1,0 +1,24 @@
+/* The 16 Oct reproduction: a web font applied with !important to the body.
+   When /fonts/fancy.ttf answers 404 the browser falls back to monospace: the
+   DOM and the declared (computed) styles stay the same, only the glyphs change. */
+@font-face {
+  font-family: "Fancy";
+  src: url("/fonts/fancy.ttf") format("truetype");
+}
+
+html, body { margin: 0; background: #fff; color: #222; }
+body { font-family: "Fancy", monospace !important; }
+
+/* Fixed boxes, so the fallback font changes glyphs, never the layout or the page size. */
+.word {
+  position: absolute;
+  width: 72px;
+  height: 20px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.w1 { top: 16px; left: 16px; }
+.w2 { top: 340px; left: 600px; }
+.w3 { top: 680px; left: 1180px; }
