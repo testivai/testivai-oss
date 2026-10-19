@@ -6,6 +6,8 @@
  * snapshotAnchorId(), so the two never drift apart.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { snapshotAnchorId as fromPackageRoot } from '../index';
 import type { ReportData, SnapshotResult } from '../report/results';
 import { renderHtml, snapshotAnchorId } from '../report/template';
@@ -99,5 +101,24 @@ describe('report link targets', () => {
     const html = renderHtml(report([snap('home', 'changed')]));
 
     expect(html).toContain('href="#snap-home"');
+  });
+});
+
+describe('docs/cli/report.md documents the link targets', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', 'docs', 'cli', 'report.md'), 'utf8');
+  const start = doc.indexOf('## Linking to a snapshot');
+  const section = start === -1 ? '' : doc.slice(start, doc.indexOf('\n## ', start + 1));
+
+  it('has a section on linking to one snapshot', () => {
+    expect(section).not.toBe('');
+  });
+
+  it('every #snap- id it shows is the one the report gives that name', () => {
+    const shown = [...section.matchAll(/`([^`\n]+)`\s*→\s*`#(snap-[^`]+)`/g)];
+    expect(shown.length).toBeGreaterThanOrEqual(2);
+    for (const [, name, id] of shown) expect(id).toBe(snapshotAnchorId(name));
+    // One plain name, kept as is, and one that is not, hashed.
+    expect(shown.some(([, name, id]) => id === `snap-${name}`)).toBe(true);
+    expect(shown.some(([, name, id]) => id !== `snap-${name}`)).toBe(true);
   });
 });
