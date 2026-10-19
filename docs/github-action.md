@@ -218,6 +218,12 @@ and write** and **Actions: read**, and save it as a repository secret
 owner. A GitHub App installation token with the same permissions works too.
 When the secret is not set, the `||` falls back to `GITHUB_TOKEN`.
 
+The token also lets [the reports on GitHub Pages](#reports-on-github-pages)
+follow an approve. GitHub starts no `workflow_run` for a run that
+`GITHUB_TOKEN` started, so with the default token the publish does not run
+after the visual check on the approve commit: that run's report is not
+published, and its comment gets no report link, until the next publish.
+
 ### Approve locally
 
 Alternatively, approve locally on the PR branch, commit the updated baselines, and push:
@@ -628,6 +634,15 @@ report template.
 - Each publish downloads every published report again. With the default
   `GITHUB_TOKEN` (1,000 API requests an hour per repository), that is plenty
   for a few dozen open pull requests; lower `runs-per-pr` beyond that.
+- A run that `GITHUB_TOKEN` started gets no publish: GitHub starts no
+  `workflow_run` for it. That includes the visual check on a
+  `/testivai approve` commit pushed with the default token, so that run's
+  report is not published, and its comment gets no report link, until the
+  next publish (the pull request's next push, or any other run that
+  publishes). The approve reply still links the approved run's report,
+  published before the approve. [An approve token](#approve-with-a-token-that-re-runs-ci)
+  avoids it: the approve push then starts the pull request's workflow as the
+  token's owner, and the publish follows.
 
 ## Caveats
 
