@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `publish@v1` publishes each changed snapshot's thumbnail (`thumb.png`, written by `@testivai/witness` 2.6.0 and later: the changed area of the baseline, the current capture and the diff side by side, at most 800×400 px) at `images/<n>/thumb.png` beside the run's other images, after the same PNG header check; one that fails it is left out and named on the page like any other image. The report page itself does not show it
+- The PR comment shows each changed snapshot's thumbnail once `publish@v1` has published it: the first line inside the snapshot's `<details>` is the picture (baseline | current | diff of the changed area), linked to the snapshot's card in the report, for the first 5 changed snapshots that have one, and the first 3 of those are expanded (`<details open>`) so it shows without a click. It comes with the publish's edit of the comment, like the report links; without a published report the comment is unchanged. Only an https URL inside the run's report URL is used, and the snapshot name in `alt` is escaped. A private Pages site gets no pictures (GitHub fetches a comment's images without the reader's sign-in, so they would show broken), and the comment the publish posts on a fork's pull request stays numbers and links only
 
 ## [1.5.0] - 2026-10-19
 

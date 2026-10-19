@@ -312,6 +312,7 @@ function resolveStatusContext(input) {
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
 var MAX_COMMENT_THUMBNAILS = 5;
+var OPEN_WITH_THUMBNAIL = 3;
 var RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
 function readRunKey(body) {
   return RUN_MARKER.exec(body)?.[1];
@@ -338,6 +339,18 @@ function snapshotUrl(reportUrl, name) {
 }
 function attr(value) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+function attrText(value) {
+  return value.replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function thumbnailUrls(reportUrl, thumbnails) {
+  const urls = /* @__PURE__ */ new Map();
+  if (!reportUrl) return urls;
+  for (const t of thumbnails ?? []) {
+    const url = safeReportUrl(t.url);
+    if (url?.startsWith(reportUrl) && !urls.has(t.name)) urls.set(t.name, url);
+  }
+  return urls;
 }
 function resolveUpsertMarker(statusContext) {
   if (statusContext === STATUS_CONTEXT) return UPSERT_MARKER;
@@ -434,6 +447,7 @@ function renderSnapshotHints(snapshot) {
 function buildComment(results, artifactUrl, marker = UPSERT_MARKER, links = {}) {
   const { summary, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
+  const thumbnails = thumbnailUrls(reportUrl, links.thumbnails);
   const summaryLine = [
     `**${summary.passed} passed**`,
     `**${summary.changed} changed**`,
@@ -472,15 +486,22 @@ ${summaryLine} \u2014 **${summary.total} total**
   const changedSnapshots = snapshots.filter((s) => s.status === "changed");
   if (changedSnapshots.length > 0) {
     comment += "#### Changed Snapshots\n\n";
+    let shown = 0;
     for (const snapshot of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot);
       const domHint = renderSnapshotHints(snapshot);
       const size = snapshot.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot.sizeMismatch)}` : "";
       const open = reportUrl ? ` \xB7 <a href="${attr(snapshotUrl(reportUrl, snapshot.name))}">open in report</a>` : "";
-      comment += `<details>
+      const thumb = reportUrl && shown < MAX_COMMENT_THUMBNAILS ? thumbnails.get(snapshot.name) : void 0;
+      if (thumb) shown++;
+      const picture = thumb && reportUrl ? `<a href="${attr(snapshotUrl(reportUrl, snapshot.name))}"><img src="${attr(thumb)}" alt="${attrText(`${snapshot.name}: baseline, current, diff`)}"></a>
+
+` : "";
+      const expanded = thumb && shown <= OPEN_WITH_THUMBNAIL ? " open" : "";
+      comment += `<details${expanded}>
 <summary><code>${snapshot.name}</code> \u2014 ${diffPercent}% different${size}${open}</summary>
 
-${domHint}
+${picture}${domHint}
 \`\`\`
 /testivai approve ${snapshot.name}
 \`\`\`
@@ -1377,13 +1398,13 @@ function runIdOf(key) {
   const m = key ? /^(\d+)-\d+$/.exec(key) : null;
   return m ? Number(m[1]) : void 0;
 }
-function commentFor(published, comments, marker) {
+function commentFor(published, comments, marker, options = {}) {
   const reporter = comments.find((c) => c.body.includes(marker) && readRunKey(c.body) !== void 0);
-  if (reporter) return updateReporterComment(published, reporter, marker);
+  if (reporter) return updateReporterComment(published, reporter, marker, options.thumbnails !== false);
   if (!published.fork) return { kind: "none", why: `no TestivAI comment for run ${published.runId} on the pull request` };
   return forkComment(published, comments);
 }
-function updateReporterComment(published, comment, marker) {
+function updateReporterComment(published, comment, marker, withThumbnails) {
   const runKey = readRunKey(comment.body);
   const described = runIdOf(runKey);
   if (described !== published.runId) {
@@ -1393,7 +1414,7 @@ function updateReporterComment(published, comment, marker) {
     return { kind: "none", why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey, thumbnails: publishedThumbnails(published) };
+  const links = { reportUrl: published.url, runKey, thumbnails: withThumbnails ? publishedThumbnails(published) : [] };
   const body = data.snapshots.length === 0 ? buildEmptyComment(published.artifactUrl, marker, links) : buildComment(data, published.artifactUrl, marker, links);
   if (body === comment.body) return { kind: "none", why: "the comment already links the report" };
   return { kind: "update", id: comment.id, body };
@@ -3069,7 +3090,7 @@ async function finishPublish(api, options) {
   if (!options.comment) return { verified, siteUrl: state.siteUrl };
   for (const published of state.prs) {
     try {
-      const action = commentFor(published, await api.comments(published.pr), options.marker);
+      const action = commentFor(published, await api.comments(published.pr), options.marker, { thumbnails: state.visibility === "public" });
       if (action.kind === "create") {
         await api.createComment(published.pr, action.body);
         log.info(`#${published.pr}: posted the report link.`);

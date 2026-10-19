@@ -289,6 +289,33 @@ describe('publishedThumbnails: the thumbs the comment shows', () => {
     expect(publishedThumbnails(published({ outcome: { ok: false, reason: 'x' } }))).toEqual([]);
   });
 
+  it("shows them in the reporter's rebuilt comment: 5 images, the first three snapshots open", () => {
+    const p = withThumbs(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ name, status: 'changed' as const, thumb: true })));
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind).toBe('update');
+    if (action.kind !== 'update') return;
+    expect(action.body.match(/<img /g)).toHaveLength(5);
+    expect(action.body.match(/<details open>/g)).toHaveLength(3);
+    expect(action.body).toContain(`<img src="${URL}images/0/thumb.png" alt="a: baseline, current, diff">`);
+    expect(action.body).not.toContain('images/5/thumb.png');
+    // The reporter's own comment, before the publish, has none.
+    expect(reporter.body).not.toContain('<img');
+  });
+
+  it('shows none when told not to (a private site: GitHub cannot fetch its images for the comment)', () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER, { thumbnails: false });
+
+    expect(action.kind).toBe('update');
+    expect(action.kind === 'update' && action.body).toContain(`[Open the visual report](${URL})`);
+    expect(action.kind === 'update' && action.body).not.toContain('<img');
+  });
+
   it("puts no image in the comment the publish posts on a fork's pull request", () => {
     const p = { ...withThumbs([{ name: 'a', status: 'changed', thumb: true }]), fork: true };
 

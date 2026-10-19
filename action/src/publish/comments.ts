@@ -47,14 +47,23 @@ function runIdOf(key: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-export function commentFor(published: PublishedPr, comments: ExistingComment[], marker: string): CommentAction {
+export interface CommentOptions {
+  /**
+   * Show the published thumbnails (default true). Off for a private site:
+   * GitHub fetches a comment's images through its own proxy, without the
+   * reader's sign-in, so a private site's image would show broken.
+   */
+  thumbnails?: boolean;
+}
+
+export function commentFor(published: PublishedPr, comments: ExistingComment[], marker: string, options: CommentOptions = {}): CommentAction {
   const reporter = comments.find((c) => c.body.includes(marker) && readRunKey(c.body) !== undefined);
-  if (reporter) return updateReporterComment(published, reporter, marker);
+  if (reporter) return updateReporterComment(published, reporter, marker, options.thumbnails !== false);
   if (!published.fork) return { kind: 'none', why: `no TestivAI comment for run ${published.runId} on the pull request` };
   return forkComment(published, comments);
 }
 
-function updateReporterComment(published: PublishedPr, comment: ExistingComment, marker: string): CommentAction {
+function updateReporterComment(published: PublishedPr, comment: ExistingComment, marker: string, withThumbnails: boolean): CommentAction {
   const runKey = readRunKey(comment.body) as string;
   const described = runIdOf(runKey);
   if (described !== published.runId) {
@@ -64,7 +73,7 @@ function updateReporterComment(published: PublishedPr, comment: ExistingComment,
     return { kind: 'none', why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey, thumbnails: publishedThumbnails(published) };
+  const links = { reportUrl: published.url, runKey, thumbnails: withThumbnails ? publishedThumbnails(published) : [] };
   const body =
     data.snapshots.length === 0
       ? buildEmptyComment(published.artifactUrl, marker, links)

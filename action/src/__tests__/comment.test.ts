@@ -562,3 +562,88 @@ describe('verdict lines in the PR comment (layered analysis)', () => {
     expect(comment).toContain('DOM unchanged, styles not compared');
   });
 });
+
+describe('thumbnails in the comment (publish@v1, witness schema 2.6.0)', () => {
+  const REPORT = 'https://testivai.github.io/testivai-example/pr/14/39150236166-1/';
+  const thumb = (i: number) => `${REPORT}images/${i}/thumb.png`;
+  const changed = (name: string): SnapshotResult => ({ name, status: 'changed', diffPercent: 1.5 });
+  const results = (snapshots: SnapshotResult[]): ResultsData => ({
+    timestamp: Date.now(),
+    summary: { total: snapshots.length, passed: 0, changed: snapshots.filter((s) => s.status === 'changed').length, newSnapshots: snapshots.filter((s) => s.status === 'new').length },
+    snapshots,
+  });
+  /** The <details> block of a snapshot, from its opening tag to its closing one. */
+  const detailsOf = (comment: string, name: string) => {
+    const start = comment.lastIndexOf('<details', comment.indexOf(`<summary><code>${name}</code>`));
+    return comment.slice(start, comment.indexOf('</details>', start));
+  };
+  const firstLineInside = (block: string) => block.split('\n').slice(1).find((l) => l.trim() !== '' && !l.startsWith('<summary>'));
+
+  it("puts the thumbnail first in the snapshot's details, linked to its card in the report", () => {
+    const comment = buildComment(results([changed('home')]), undefined, undefined, { reportUrl: REPORT, thumbnails: [{ name: 'home', url: thumb(0) }] });
+
+    expect(firstLineInside(detailsOf(comment, 'home'))).toBe(
+      `<a href="${REPORT}#snap-home"><img src="${thumb(0)}" alt="home: baseline, current, diff"></a>`,
+    );
+  });
+
+  it('opens the first three snapshots that have a thumbnail; the rest stay collapsed', () => {
+    const names = ['a', 'no-thumb', 'b', 'c', 'd', 'e'];
+    const thumbnails = names.filter((n) => n !== 'no-thumb').map((name, i) => ({ name, url: thumb(i) }));
+
+    const comment = buildComment(results(names.map(changed)), undefined, undefined, { reportUrl: REPORT, thumbnails });
+
+    const opened = names.filter((n) => detailsOf(comment, n).startsWith('<details open>'));
+    expect(opened).toEqual(['a', 'b', 'c']);
+    expect(detailsOf(comment, 'no-thumb')).not.toContain('<img');
+    for (const n of ['d', 'e']) {
+      expect(detailsOf(comment, n).startsWith('<details>\n')).toBe(true);
+      expect(detailsOf(comment, n)).toContain('<img');
+    }
+  });
+
+  it('shows at most 5 thumbnails, however many it is given', () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+
+    const comment = buildComment(results(names.map(changed)), undefined, undefined, { reportUrl: REPORT, thumbnails: names.map((name, i) => ({ name, url: thumb(i) })) });
+
+    expect(comment.match(/<img /g)).toHaveLength(5);
+    expect(detailsOf(comment, 'f')).not.toContain('<img');
+  });
+
+  it('shows no image without a report URL: the comment is the one without links', () => {
+    const data = results([changed('home')]);
+    const thumbnails = [{ name: 'home', url: thumb(0) }];
+
+    expect(buildComment(data, 'https://zip', undefined, { thumbnails })).toBe(buildComment(data, 'https://zip'));
+    expect(buildComment(data, 'https://zip', undefined, { reportUrl: 'http://insecure.example/r/', thumbnails })).not.toContain('<img');
+  });
+
+  it.each([
+    ['on another site', 'https://evil.example/thumb.png'],
+    ["in another run's folder", 'https://testivai.github.io/testivai-example/pr/14/39150299999-1/images/0/thumb.png'],
+    ['over plain http', thumb(0).replace('https:', 'http:')],
+    ['with a quote that would end the attribute', `${REPORT}images/0/thumb.png"onerror="x`],
+    ['with a space', `${REPORT}images/0/thumb .png`],
+  ])('drops a thumbnail URL %s', (_label, url) => {
+    const comment = buildComment(results([changed('home')]), undefined, undefined, { reportUrl: REPORT, thumbnails: [{ name: 'home', url }] });
+
+    expect(comment).not.toContain('<img');
+    expect(comment).not.toContain('<details open>');
+  });
+
+  it('escapes the snapshot name in alt: it comes from the pull request', () => {
+    const name = 'a "quoted" <b>name</b> & co';
+
+    const comment = buildComment(results([changed(name)]), undefined, undefined, { reportUrl: REPORT, thumbnails: [{ name, url: thumb(0) }] });
+
+    expect(comment).toContain('alt="a &quot;quoted&quot; &lt;b&gt;name&lt;/b&gt; &amp; co: baseline, current, diff"');
+    expect(comment).not.toContain('alt="a "quoted"');
+  });
+
+  it('gives a new snapshot no image', () => {
+    const comment = buildComment(results([{ name: 'fresh', status: 'new' }]), undefined, undefined, { reportUrl: REPORT, thumbnails: [{ name: 'fresh', url: thumb(0) }] });
+
+    expect(comment).not.toContain('<img');
+  });
+});
