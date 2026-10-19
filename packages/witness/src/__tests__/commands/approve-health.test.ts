@@ -33,8 +33,14 @@ describe('testivai approve and capture health', () => {
     stdout = [];
     stderr = [];
     jest.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void output.push(args.join(' ')));
-    jest.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => (stdout.push(String(chunk)), true));
-    jest.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => (stderr.push(String(chunk)), true));
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    jest.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderr.push(String(chunk));
+      return true;
+    });
   });
 
   afterEach(() => {

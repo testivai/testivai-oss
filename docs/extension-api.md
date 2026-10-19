@@ -36,17 +36,18 @@ This page is the contract. Changes here follow semver — the schema bumps a maj
             ├── screenshot.png  # required
             ├── dom.html        # optional
             ├── elements.json   # optional
-            └── metadata.json   # optional — capture provenance (`environment`), mask geometry
+            └── metadata.json   # optional — capture provenance (`environment`), capture health (`health`), mask geometry
 ```
 
 ### Adapter responsibilities
 
-A new adapter — JS, Python, or otherwise — needs to do **one required thing, and up to three optional ones**:
+A new adapter — JS, Python, or otherwise — needs to do **one required thing, and up to four optional ones**:
 
 1. Capture a full-page screenshot and write it to `.testivai/temp/<name>/screenshot.png`.
 2. Optionally capture `document.documentElement.outerHTML` and write it to `.testivai/temp/<name>/dom.html`. This enables the DOM diff and the noise hint.
 3. Optionally capture an element map and write it to `.testivai/temp/<name>/elements.json`: a JSON array of `{ path, x, y, width, height, styleHash }`, one entry per collected element, in the screenshot's coordinates (`styleHash` is a digest of the element's computed styles). Generate it with the shared collector (`collectElementMap` in `packages/witness/src/capture/element-map.ts`, which the Python, Java and Ruby packages ship as a generated script) so the paths and digests match what other adapters write against the same baselines.
 4. Optionally record where the capture came from as `environment` in `.testivai/temp/<name>/metadata.json` (see "Capture provenance" below). Approving the capture freezes it into the baseline's `metadata.json`, and the compare then says when a diff is rendering drift (the browser, OS or capture method changed, the page did not) instead of calling it render noise.
+5. Optionally record what failed to load as `health` in the same `metadata.json` (see "Capture health" below): evaluate `HEALTH_PROBE_EXPRESSION` in the page after the screenshot and write its result. The compare then says when a capture is unhealthy (a web font or stylesheet failed to load) instead of calling its diff render noise. An adapter that does not run the probe writes no `health`: that reads as "not checked", never as healthy.
 
 That's the entire contract for capture. After the test run, the user invokes `npx testivai report` (or the framework adapter triggers it via a lifecycle hook), which:
 
@@ -66,11 +67,12 @@ Without `elements.json` on both sides, computed styles are not compared (`styleC
   "approvedBy": "local",     // optional — set by `testivai approve`
   "width": 1280,             // optional — viewport width at capture
   "height": 800,             // optional — viewport height at capture
-  "environment": { … }       // optional — capture provenance, see below
+  "environment": { … },      // optional — capture provenance, see below
+  "health": { … }            // optional — capture health, see below
 }
 ```
 
-`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer. A capture's `metadata.json` in `temp/<name>/` is optional; the JS adapters always write one, with `environment` and, when masks are used, the mask geometry. `testivai approve` (and the MCP approve tools) copy the capture's `environment` into the baseline's `metadata.json`; a capture without one leaves the baseline without one. The approve GitHub Action copies the capture directory as it is.
+`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer. A capture's `metadata.json` in `temp/<name>/` is optional; the JS adapters always write one, with `environment` and, when masks are used, the mask geometry. `testivai approve` (and the MCP approve tools) copy the capture's `environment` and `health` into the baseline's `metadata.json`; a capture without one leaves the baseline without one. The approve GitHub Action copies the capture directory as it is.
 
 ### Capture provenance: `environment` in metadata.json
 
@@ -112,6 +114,35 @@ Every JS adapter (Playwright, WebdriverIO, Selenium) and `testivai witness <url>
 
 The compare reads the baseline's and the capture's blocks side by side (`snapshots[].environment` in results.json). A field recorded on one side only is unknown, not a change; `container`, `label` and `ci.provider` are always decided by the collector, so their absence means "no". Only some fields can change rendering (`renderingDelta`): the browser, `os.platform`, `os.arch`, `os.distro` (and `os.release` on macOS and Windows), every `render` field, `adapter.captureMethod`, `container` and `label`. Framework, adapter and driver versions, the CI runner image and the project are context. `testivai env` prints this machine's part of the block.
 
+### Capture health: `health` in metadata.json
+
+What failed to load when the page was captured, read in the page **after** the screenshot by `HEALTH_PROBE_EXPRESSION` (`packages/witness/src/capture/health.ts`, exported from `@testivai/witness`), a self-contained expression any adapter can evaluate. The Playwright JS/TS adapter and `testivai witness <url>` record it; the crawler also merges what it saw on the network (failed requests, cross-origin ones included) in the same shape. URLs are recorded as host and path, never the query string (it can carry tokens). Lists keep the first 10 entries; the counts are complete.
+
+```jsonc
+"health": {
+  "fonts":       { "status": "loaded",            // "loaded" | "loading" | "unavailable" (no Font Loading API)
+                   "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] },  // FontFaces whose status is "error"
+  "stylesheets": { "failed": 1, "urls": ["example.com/css/site.css"] },  // <link rel=stylesheet> with no sheet, or whose request answered 400+
+  "images":      { "broken": 0, "urls": [] },     // <img> complete with naturalWidth 0
+  "resources":   { "status": "checked",           // "unavailable" without Resource Timing responseStatus (Chromium 109+)
+                   "failed": {                    // requests that answered 400+ (or failed with no response: status 0 and error), by type
+                     "css":  { "count": 1, "entries": [{ "url": "example.com/css/site.css", "status": 404 }] },
+                     "font": { "count": 1, "entries": [{ "url": "example.com/fonts/fancy.woff2", "status": 404 }] }
+                   } }
+}
+```
+
+| Field | Notes |
+|---|---|
+| `fonts.status` | `document.fonts.status` after the capture; `unavailable` without the Font Loading API (not checked, not unhealthy) |
+| `fonts.failed[]` | every `FontFace` whose status is `error`: `family` (quotes removed), `weight`, `style` |
+| `stylesheets.failed`, `.urls` | `<link rel=stylesheet>` (not alternate, not disabled) whose `sheet` is null (failed or blocked), or whose request answered 400 or more: Chromium gives a stylesheet that answered 404 an empty sheet |
+| `images.broken`, `.urls` | `<img>` with a source that finished without an image (`complete && naturalWidth === 0`) |
+| `resources.status` | `checked`, or `unavailable` when the browser does not report Resource Timing `responseStatus` |
+| `resources.failed.<type>` | `css`, `font`, `img`, `script`, `other` (by file extension, then by what started the request): `{ count, entries[] }`, each entry `{ url, status }`, plus `error` when a network watcher saw the request fail without a response (`status` 0). The favicon the browser requests by itself is not counted |
+
+A capture is **unhealthy** when web fonts were still loading, a `FontFace` errored, a stylesheet failed, or a `css` or `font` request failed. Broken images and failed `script` and `other` requests are **warnings**: recorded and shown, never unhealthy on their own. `parseHealth` validates a block (anything malformed is null: not checked); `assessHealth` from `@testivai/witness/report` applies the rule.
+
 ### `config.json`
 
 ```jsonc
@@ -147,7 +178,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.5.0",         // results.json SCHEMA version
+  "version": "2.6.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 7,
@@ -296,6 +327,27 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       }
     },
     {
+      "name": "fancy-font",
+      "status": "changed",    // unhealthy: never noise, never auto-passed while pixels differ
+      "diffPercent": 0.07,
+      "diffCount": 678,
+      "totalPixels": 921600,
+      "baselinePath": "images/fancy-font/baseline.png",
+      "currentPath":  "images/fancy-font/current.png",
+      "diffPath":     "images/fancy-font/diff.png",
+      "dom": { "changed": false, "summary": null, "noiseHint": false, "styleCheck": "match" },
+      "captureHealth": {
+        "candidate": { "fonts": { "status": "loaded", "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] }, "…": "…" },
+        "baseline":  { "fonts": { "status": "loaded", "failed": [] }, "…": "…" },
+        "unhealthy": "candidate",  // "candidate" | "baseline" | "both" | null
+        "reasons": [
+          "web font 'Fancy' failed to load, so the page rendered with a fallback font",
+          "font file example.com/fonts/fancy.woff2 returned 404"
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "fresh-baseline",
       "status": "new",
       "diffPercent": 0,
@@ -338,13 +390,18 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].pageShift` | object | optional | whole-page uniform displacement: `{ dy, belowY, count }`. Requires element maps on both sides |
 | `snapshots[].masks` | array | optional | masks applied to this comparison, resolved to pixels: `{ x, y, width, height, source }`. Present when non-empty |
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
-| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
+| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. Never present when `captureHealth.unhealthy` is set: from schema 2.6.0 no criterion passes an unhealthy capture whose pixels differ. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
 | `snapshots[].environment` | object | optional | emitted from schema 2.5.0 when the baseline and the current capture both recorded an `environment` in their metadata.json (one side unrecorded is unknown, not a change) |
 | `snapshots[].environment.delta` | string[] | yes within `environment` | every field that differs, as sorted dotted paths (`browser.version`); empty when the environments match |
 | `snapshots[].environment.renderingDelta` | string[] | yes within `environment` | the subset that can change rendering (see "Capture provenance"). Pixels differ, `dom.changed` false, `dom.styleCheck: "match"`, a diff not concentrated in one area and a non-empty `renderingDelta` is **rendering drift**: the environment changed, not the page (`isRenderingDrift` from `@testivai/witness/report`). Never word it as render noise |
 | `snapshots[].environment.baseline` / `.candidate` | object | optional | both recorded blocks; present when `delta` is non-empty |
 | `snapshots[].environment.policy` | `"strict"` | optional | present when `environmentPolicy: "strict"` made the snapshot `changed` because `renderingDelta` is non-empty, whatever its pixels (a byte-identical capture included, with `diffPercent` 0). Under `"warn"` (default) and `"separate"`, the environment never changes a status |
+| `snapshots[].captureHealth` | object | optional | emitted from schema 2.6.0 when the baseline or the current capture recorded `health` in its metadata.json (see "Capture health"); absent when neither did (not checked). Present on `new` snapshots too, for the first capture |
+| `snapshots[].captureHealth.candidate` / `.baseline` | object | optional | each side's recorded `health` block; absent for a side that recorded none |
+| `snapshots[].captureHealth.unhealthy` | enum &#124; null | yes within `captureHealth` | `candidate` &#124; `baseline` &#124; `both` &#124; `null`. When set, the reading is **Unhealthy capture**, never render noise: `dom.noiseHint` is false and no pass criterion applies while pixels differ (`status` stays `changed`); a zero-pixel diff still passes by the existing rules, and the warning is still shown. An unhealthy baseline is called out on every compare against it (re-baseline from a healthy run). Both this and rendering drift can be true: unhealthy is said first |
+| `snapshots[].captureHealth.reasons` | string[] | yes within `captureHealth` | why, in plain words ("web font 'Fancy' failed to load, so the page rendered with a fallback font", "stylesheet example.com/css/site.css returned 404"); the baseline's start with `baseline: `. Empty when not unhealthy |
+| `snapshots[].captureHealth.warnings` | string[] | yes within `captureHealth` | what else failed to load (broken images, failed scripts and other requests), the baseline's starting with `baseline: `: shown, never unhealthy on their own |
 | `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is read with `pageShift` and `dom`: the padded band at the bottom is the new height, not where the change is (a banner inserted near the top grows the page too), so `pageShift` places the change, `dom.summary` says what changed, and an identical DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that differ between machines), not content added or removed. A width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |
 
 ### Schema versioning

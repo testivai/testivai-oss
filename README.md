@@ -42,7 +42,7 @@ If an AI agent (Claude Code, Cursor, Copilot, …) writes your UI code, someone 
 
 - **No account, no API key, no network** — an agent can run it inside any sandbox without you provisioning secrets.
 - **Machine-readable output** — every run writes `visual-report/results.json` (a [semver-governed schema](./docs/how-it-works.md)) with per-snapshot diff percentages and DOM change summaries, so an agent can read the result and self-correct.
-- **Noise-aware verdicts** — the DOM and computed-style checks tell the agent whether a pixel diff is *likely render noise* (identical DOM, styles compared and identical, a small and scattered diff), a *concentrated or large diff* (identical DOM and styles, but the diff sits in one area or covers over 1% of pixels: a bad capture or a change the style check does not cover), a *style-only change* (identical DOM, restyled elements), a *real structural change* (`2 added, 1 removed`), or *styles not compared* (identical DOM, but no style data to compare, so a stylesheet-only change is not ruled out). It doesn't chase anti-aliasing ghosts, and it doesn't label a diff it couldn't check as noise.
+- **Noise-aware verdicts** — the DOM and computed-style checks tell the agent whether a pixel diff is *likely render noise* (identical DOM, styles compared and identical, a small and scattered diff), a *concentrated or large diff* (identical DOM and styles, but the diff sits in one area or covers over 1% of pixels: a bad capture or a change the style check does not cover), a *style-only change* (identical DOM, restyled elements), a *real structural change* (`2 added, 1 removed`), *styles not compared* (identical DOM, but no style data to compare, so a stylesheet-only change is not ruled out), or an *unhealthy capture* (a web font or stylesheet failed to load, so the image is not the page as built: never noise, never a baseline). It doesn't chase anti-aliasing ghosts, and it doesn't label a diff it couldn't check as noise.
 - **Explanations, bring-your-own-model** — the MCP `explain_snapshot` tool hands your agent layered evidence (which selectors shifted vs changed, whole-page shift detection, style-only changes) and your model writes the narrative: *"card #2 shifted +24px — likely the banner injected above it."* No hosted AI service in the loop.
 - **Human approval stays in the PR** — the agent iterates locally; you approve baselines with one `/testivai approve` comment.
 
@@ -68,6 +68,9 @@ screenshots automatically), then read `visual-report/results.json`.
 - `status: "changed"` with `dom.noiseHint: true` and `dom.styleCheck`
   `"unavailable"` or missing → styles not compared: could be render noise or a
   stylesheet-only change. Don't treat it as noise: look at the diff image before approving.
+- `captureHealth.unhealthy` set → unhealthy capture: a web font or stylesheet
+  failed to load (`captureHealth.reasons` says which). Never noise: report what
+  failed and fix it; never approve it as a baseline.
 - Never run `testivai approve` yourself — baseline approval is a human decision.
 ```
 

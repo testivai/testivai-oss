@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The PR comment reads capture health from `results.json` (`@testivai/witness` schema 2.6.0 `captureHealth`): when a web font or stylesheet failed to load in the current capture or the baseline, the snapshot reads **Unhealthy capture** with what failed, in plain words ("web font 'Fancy' failed to load, so the page rendered with a fallback font", "stylesheet example.com/css/site.css returned 404"), before any environment reading and never as "likely render noise"; an unhealthy baseline reads "the baseline was captured with a failed stylesheet (…). Re-baseline from a healthy run." on every compare against it. A passed snapshot with an unhealthy capture gets a line of its own, a new one says so on its line ("do not approve it as the baseline"), and broken images and failed scripts are shown as **Capture warnings** without changing the reading. Results without `captureHealth`, or with healthy captures on both sides, give the same comment as before
+- `approve@v1`: the reply names each approved capture that was unhealthy, from its `metadata.json` in the downloaded report, and says to re-run and approve a healthy capture
+- `review@v1`: the triage rubric (bundled in `dist/review.cjs`) gets a row for unhealthy captures: a glitch of the capture or a broken asset, never approved as a baseline; a bug when the change under test touched the asset that failed
+
 ## [1.5.0] - 2026-10-19
 
 ### Added

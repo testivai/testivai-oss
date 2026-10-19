@@ -70,6 +70,10 @@ Element maps (`elements.json`) come from the Playwright JS/TS, WebdriverIO, Sele
 
 The Playwright JS/TS, WebdriverIO and Selenium (JS) adapters and the `testivai witness <url>` crawler also write `temp/<name>/metadata.json` with an `environment` block: the OS (and the Linux distro), the browser and its version, the test framework, the adapter and how it took the screenshot (`full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `viewport:webdriver`), what the page was rendered with (viewport, device scale, color scheme, reduced motion, locale, time zone, measured in the page), the CI provider and runner image, a container, and `TESTIVAI_ENV_LABEL`. Approving a capture freezes its block into the baseline's `metadata.json`. The Python, Ruby and Java adapters do not record it yet; their captures compare as before. `npx testivai env` prints this machine's part of the block (`--fonts` adds a fingerprint of the installed fonts). The full field list is in the [Extension API](./extension-api.md#capture-provenance-environment-in-metadatajson).
 
+### What a capture records about what loaded
+
+The Playwright JS/TS adapter and the `testivai witness <url>` crawler also record `health` in the same `metadata.json`: what failed to load when the page was captured, read in the page right after the screenshot. Web fonts (still loading, or a font face that failed), stylesheets that did not load, images that finished without pixels, and requests that answered 400 or more (Resource Timing, Chromium 109+), each URL as host and path only. The crawler also adds what it saw on the network, cross-origin requests included. Approving a capture freezes its health into the baseline's `metadata.json`. The WebdriverIO, Selenium, Python, Ruby and Java adapters do not record it yet: their captures are "not checked", and compare as before. The shape is in the [Extension API](./extension-api.md#capture-health-health-in-metadatajson).
+
 ---
 
 ## Diff Algorithm
@@ -97,7 +101,7 @@ The threshold is configurable:
 }
 ```
 
-`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) **and** whose diff is not concentrated in one area pass too (it never passes a diff whose styles were not compared or changed, or whose regions all fit in a box covering at most a third of the page); with `shiftTolerance` set, diffs made only of small pure element shifts pass. No criterion passes a snapshot whose dimensions changed (`sizeMismatch`), whatever its pixel count. A DOM change never decides the status on its own: the pixels do, and the report says when a passed snapshot's DOM differs (nothing visible changed, or within a tolerance). Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
+`threshold` controls per-pixel color sensitivity. The **pass criteria** decide what happens when pixels do differ, and none of them is on until you configure it: diffs within `maxDiffPercent` / `maxDiffPixels` report as passed; with `noiseAutoPass` enabled, diffs within `noiseMaxDiffPercent` whose DOM is identical **and** whose computed styles were compared and match (`dom.styleCheck: "match"`) **and** whose diff is not concentrated in one area pass too (it never passes a diff whose styles were not compared or changed, or whose regions all fit in a box covering at most a third of the page); with `shiftTolerance` set, diffs made only of small pure element shifts pass. No criterion passes a snapshot whose dimensions changed (`sizeMismatch`), whatever its pixel count, or an unhealthy capture whose pixels differ (`captureHealth.unhealthy`, below). A DOM change never decides the status on its own: the pixels do, and the report says when a passed snapshot's DOM differs (nothing visible changed, or within a tolerance). Auto-passed snapshots keep their diff image and carry `autoPassed: "threshold" | "noise" | "shift"` in `results.json`, so tolerance never hides information.
 
 ### When pixels differ and the DOM is identical
 
@@ -123,6 +127,21 @@ When the baseline and the current capture both recorded their environment, the c
 | `"warn"` (default) | Never changes a status: the report, MCP and the PR comment say what changed. |
 | `"separate"` | The adapters key each snapshot by environment, `<name>__<browser>__<platform>`, so each browser and OS gates against its own baselines. Never keyed by version. Only baselines of an environment this run captured can be reported missing. |
 | `"strict"` | A snapshot whose rendering environment changed is `changed`, whatever its pixels say (`environment.policy: "strict"`, exit 1 with `--fail-on-diff`). Approve it to re-baseline in the new environment. |
+
+### When a capture is unhealthy
+
+A web font that failed to load renders the page in a fallback font, and the DOM and the computed styles stay the same: the style check compares the *declared* `font-family`, not the font that drew the text. The diff is then a few glyphs spread over the page, the shape render noise takes, so before capture health it read "likely render noise" and `noiseAutoPass` passed it. A stylesheet that answered 404 does the same to everything it styled.
+
+When either side recorded `health`, the compare judges it (`captureHealth` in `results.json`):
+
+| What failed to load | Reading |
+|---|---|
+| Web fonts still loading, a font face that failed, a stylesheet that failed, or a stylesheet or font request that answered 400 or more | **Unhealthy capture**, with the reasons in plain words ("web font 'Fancy' failed to load, so the page rendered with a fallback font", "stylesheet example.com/css/site.css returned 404"). Never render noise: `dom.noiseHint` is false and no pass criterion applies while pixels differ, so the snapshot stays `changed`. It is a glitch of the capture or a broken asset: fix the page, the server or the test and re-run; never approve it as a baseline. |
+| The baseline was captured unhealthy | **Unhealthy capture** on every compare against it: "the baseline was captured with a failed stylesheet (…); re-baseline from a healthy run". |
+| Broken images, failed scripts or other requests | A **warning** shown with the snapshot; it changes no reading. A broken image shows as a changed region where it sits. |
+| Nothing failed, or health not recorded on either side | Nothing changes: the readings above apply as before. |
+
+A snapshot whose pixels did not change still passes when a side is unhealthy, and the report, the PR comment and the MCP verdicts still say so. Unhealthy and rendering drift can both be true: the report says both, unhealthy first. `testivai approve` warns when the capture it promotes is unhealthy, and so does the reply of the approve action. How to keep captures healthy: [Stable baselines — Capture health](./guides/stable-baselines.md#capture-health).
 
 ---
 

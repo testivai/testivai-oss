@@ -360,7 +360,10 @@ export async function watchNetwork(client: any): Promise<NetworkWatch> {
   const seen = (id: unknown, url?: unknown, type?: unknown): Seen | undefined => {
     if (typeof id !== 'string') return undefined;
     let request = requests.get(id);
-    if (!request && typeof url === 'string') requests.set(id, (request = { url }));
+    if (!request && typeof url === 'string') {
+      request = { url };
+      requests.set(id, request);
+    }
     if (request && typeof type === 'string' && !request.type) request.type = type;
     return request;
   };

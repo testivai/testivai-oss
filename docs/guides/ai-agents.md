@@ -62,6 +62,11 @@ Then read `visual-report/results.json` and act on each snapshot:
   → styles not compared: could be render noise or a stylesheet-only change.
   Do not call it noise; look at the diff image and check it against your
   edit before reporting it.
+- `captureHealth.unhealthy` set → unhealthy capture: a web font or
+  stylesheet failed to load (`captureHealth.reasons` says which), so the
+  image is not the page as built. Never call it noise. If your edit broke
+  that asset (a moved font, a renamed stylesheet), fix it; otherwise tell
+  the human what failed. It must never become a baseline.
 - `status: "new"` → new page/snapshot; tell the human baselines need
   approving.
 - Never run `testivai approve` yourself — baseline approval is a human

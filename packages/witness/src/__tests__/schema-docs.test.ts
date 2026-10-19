@@ -53,6 +53,29 @@ describe('results.json schema documents', () => {
     }
   });
 
+  it('the capture-health fields (schema 2.6.0) are documented in all three', () => {
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('"captureHealth"');
+      expect(doc).toContain('"unhealthy"');
+    }
+    for (const field of [
+      '`snapshots[].captureHealth`',
+      '`snapshots[].captureHealth.candidate` / `.baseline`',
+      '`snapshots[].captureHealth.unhealthy`',
+      '`snapshots[].captureHealth.reasons`',
+      '`snapshots[].captureHealth.warnings`',
+    ]) {
+      expect(extensionApi).toContain(`| ${field} |`);
+    }
+  });
+
+  it('the metadata.json health block is documented for community adapters', () => {
+    expect(extensionApi).toMatch(/### Capture health: `health` in metadata\.json/);
+    for (const field of ['fonts.status', 'fonts.failed[]', 'stylesheets.failed', 'images.broken', 'resources.status']) {
+      expect(extensionApi).toContain(`\`${field}\``);
+    }
+  });
+
   it('the metadata.json environment block every adapter writes is documented for community adapters', () => {
     expect(extensionApi).toMatch(/### Capture provenance: `environment` in metadata\.json/);
     for (const field of ['os.platform', 'browser.name', 'adapter.captureMethod', 'render.deviceScaleFactor']) {

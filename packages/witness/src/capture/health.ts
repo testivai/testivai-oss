@@ -328,7 +328,8 @@ export function mergeResourceFailures(health: CaptureHealth, failures: ResourceF
   for (const failure of failures) {
     const url = hostPath(failure.url);
     if (!url) continue;
-    const group = failed[failure.type] ?? (failed[failure.type] = { count: 0, entries: [] });
+    const group = failed[failure.type] ?? { count: 0, entries: [] };
+    failed[failure.type] = group;
     const entry: ResourceFailures['entries'][number] = { url, status: failure.status };
     if (failure.status === 0 && failure.error) entry.error = failure.error.slice(0, HEALTH_LIMITS.text);
     const known = group.entries.findIndex((e) => e.url === url);
