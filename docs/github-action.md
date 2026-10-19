@@ -465,9 +465,59 @@ repository variables. So it guards against publishing by accident; it is not
 an access control (anyone with write access can already read, and copy, the
 code).
 
+### Unreleased: the action can turn Pages on
+
+Not in a release yet: until it is, step 1 of the setup below is the
+admin's.
+
+Turning Pages on takes a repository admin or maintainer, and so does GitHub's
+API for it: creating a site needs the **Administration** permission, and the
+job's `GITHUB_TOKEN` cannot have it, whatever the workflow's `permissions:`
+say. Given a token that can, in `enable-pages-token`, the action does it
+itself, once: a publish that finds no Pages site at all creates one with the
+source **GitHub Actions** (`actions/configure-pages` with `enablement: true`)
+and publishes to it in the same run. It never changes an existing site's
+settings: a repository that has a site, a branch-based one included, keeps it
+as it is, and the job log says why nothing is published where it does not
+allow it.
+
+| Repository | `enable-pages` | With no Pages site yet |
+|---|---|---|
+| public | `true` (default) or `always` | The site is created, then published to. |
+| private or internal | `true` (default) | Not created; the job log says so. A new site is public unless the organization has private Pages (GitHub Enterprise Cloud), so it is an admin's call: turn Pages on, or set `always`. |
+| private or internal | `always` | The site is created. On a plan without Pages for private repositories that fails and the job log says so. The [table above](#who-can-open-the-reports) still decides whether anything is published to it. |
+| any | `false` | Not created. |
+
+The token is a fine-grained personal access token of an admin or maintainer with
+**Administration** and **Pages** write on this repository, a classic one with
+the `repo` scope, or a GitHub App token with `administration: write` and
+`pages: write`. Store it as a secret on the `github-pages` environment, which
+only admins can configure (Settings → Environments; create it if it is not
+there yet), and pass it next to the other inputs:
+
+```yaml
+        with:
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+          enable-pages-token: ${{ secrets.TESTIVAI_PAGES_TOKEN }}
+```
+
+Only the step that creates the site gets it, and only on a publish that finds
+none. Remove it once Pages is on: while it is set, a publish after an admin
+turns Pages off turns it back on. If creating the site fails (the token
+cannot, or the plan has no Pages here), the publish goes on as without it:
+nothing is published, the job log says the attempt failed, and GitHub's error
+is in the **Enable GitHub Pages** step.
+
+| Input | Default | |
+|---|---|---|
+| `enable-pages` | `true` | `true`: create a site for a public repository that has none; `always`: for a private or internal one too; `false`: never. Needs `enable-pages-token`. |
+| `enable-pages-token` | `''` | A token that can create the site (above). Without it nothing is enabled. |
+
 ### Setup
 
-1. An admin sets Settings → Pages → Source to **GitHub Actions**.
+1. An admin sets Settings → Pages → Source to **GitHub Actions**. (Unreleased:
+   or, with `enable-pages-token`, [the action does it](#unreleased-the-action-can-turn-pages-on)
+   on its first publish.)
 2. Add a workflow; `workflows:` names your visual test workflow (the one with
    the `testivai/testivai-oss@v1` reporter step), by its `name:`:
 

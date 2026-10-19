@@ -32,6 +32,7 @@ var publish_exports = {};
 __export(publish_exports, {
   build: () => build,
   finish: () => finish,
+  lookup: () => lookup,
   parseComment: () => parseComment,
   parseInclude: () => parseInclude,
   parseRunsPerPr: () => parseRunsPerPr
@@ -3077,6 +3078,67 @@ async function finishPublish(api, options) {
   return { verified, siteUrl: state.siteUrl };
 }
 
+// src/publish/enable.ts
+var ENABLE_STEP_NAME = "Enable GitHub Pages";
+function parseEnablePages(value) {
+  const v = value.trim().toLowerCase();
+  if (v === "true" || v === "false" || v === "always") return v;
+  throw new Error(`enable-pages must be true, false or always, not ${JSON.stringify(value)}`);
+}
+function decideEnablePages(input) {
+  const { pagesFound, repoVisibility, mode } = input;
+  if (mode === "false") return { enable: false, reason: "enable-pages is false: the action does not turn GitHub Pages on." };
+  if (pagesFound === "true") {
+    return { enable: false, reason: "This repository has a GitHub Pages site: enable-pages leaves its settings as they are." };
+  }
+  if (pagesFound === "unknown") {
+    return { enable: false, reason: "The GitHub Pages settings could not be read, so enable-pages turns nothing on." };
+  }
+  if (repoVisibility === "public") {
+    return { enable: true, reason: `This repository has no GitHub Pages site: the step "${ENABLE_STEP_NAME}" creates one, with the source "GitHub Actions" (enable-pages).` };
+  }
+  const repository = repoVisibility ? `This ${repoVisibility} repository` : "This repository";
+  if (mode === "always") {
+    return {
+      enable: true,
+      reason: `${repository} has no GitHub Pages site: the step "${ENABLE_STEP_NAME}" creates one, with the source "GitHub Actions" (enable-pages: always). The new site is public unless the organization has private Pages (GitHub Enterprise Cloud), and reports go on a public site only with ${CONSENT_VARIABLE}=true.`
+    };
+  }
+  return {
+    enable: false,
+    notice: true,
+    reason: `${repository} has no GitHub Pages site, and enable-pages creates one only for a public repository: a new site is public unless the organization has private Pages (GitHub Enterprise Cloud). An admin can turn Pages on under Settings \u2192 Pages, with the source "GitHub Actions", or set enable-pages: always.`
+  };
+}
+async function lookupPages(api, mode) {
+  let pagesFound;
+  let error;
+  try {
+    pagesFound = (await api.pages()).found ? "true" : "false";
+  } catch (e) {
+    pagesFound = "unknown";
+    error = e instanceof Error ? e.message : String(e);
+  }
+  const repoVisibility = pagesFound === "false" ? (await api.repo()).visibility : void 0;
+  const decision = decideEnablePages({ pagesFound, repoVisibility, mode });
+  return { pagesFound, ...decision, ...error ? { reason: `${decision.reason} GitHub said: ${error}` } : {} };
+}
+function enablementNote(outcome) {
+  if (outcome === "success") {
+    return {
+      level: "notice",
+      message: `enable-pages: this repository had no GitHub Pages site, so the step "${ENABLE_STEP_NAME}" created one, with the source "GitHub Actions". Pages is on now; enable-pages-token can be removed, or a publish after Pages is turned off would turn it back on.`
+    };
+  }
+  if (outcome === "failure") {
+    return {
+      level: "warning",
+      message: `enable-pages: creating the GitHub Pages site was attempted and failed; GitHub's error is in the log of the step "${ENABLE_STEP_NAME}". enable-pages-token needs Administration and Pages write on this repository (the job's GITHUB_TOKEN cannot have them), and a private repository needs a plan with GitHub Pages.`
+    };
+  }
+  return void 0;
+}
+
 // src/publish.ts
 function parseRunsPerPr(value) {
   const n = Number(value);
@@ -3103,6 +3165,8 @@ async function build({ github, context, core, env }) {
   const siteDir = path2.join(root, "site");
   const stateFile = path2.join(root, "state.json");
   const include = parseInclude(env);
+  const enabled = enablementNote(env.ENABLE_OUTCOME);
+  if (enabled) core[enabled.level](enabled.message);
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || "testivai-visual-report",
     runsPerPr,
@@ -3137,10 +3201,19 @@ async function finish({ github, context, core, env }) {
   });
   core.setOutput("page-url", siteUrl);
 }
+async function lookup({ github, context, core, env }) {
+  const mode = parseEnablePages(env.ENABLE_PAGES ?? "true");
+  const result = await lookupPages(octokitApi(github, context.repo.owner, context.repo.repo), mode);
+  core.setOutput("pages-found", result.pagesFound);
+  core.setOutput("enable", result.enable ? "true" : "false");
+  if (result.notice) core.notice(result.reason);
+  else core.info(result.reason);
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   build,
   finish,
+  lookup,
   parseComment,
   parseInclude,
   parseRunsPerPr

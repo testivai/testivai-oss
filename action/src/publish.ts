@@ -1,7 +1,9 @@
 /**
- * The publish action's two github-script steps (publish/action.yml), bundled
- * as dist/publish.cjs.
+ * The publish action's github-script steps (publish/action.yml), bundled as
+ * dist/publish.cjs.
  *
+ * lookup (only with enable-pages-token): read the Pages settings and decide
+ * whether the next step creates a site where there is none (enable.ts).
  * build: decide from the repository's Pages settings, build the site into
  * $RUNNER_TEMP/testivai-pages/site and record what was published next to it.
  * finish (after actions/deploy-pages): check the site answers and add the
@@ -13,6 +15,7 @@ import * as path from 'path';
 import { resolveUpsertMarker } from './comment';
 import { octokitApi, type OctokitLike } from './publish/api';
 import { buildSite, finishPublish, type Log, type PublishState } from './publish/build';
+import { enablementNote, lookupPages, parseEnablePages } from './publish/enable';
 import { resolveStatusContext } from './status';
 
 interface Core extends Log {
@@ -57,6 +60,9 @@ export async function build({ github, context, core, env }: { github: OctokitLik
 
   const include = parseInclude(env);
 
+  const enabled = enablementNote(env.ENABLE_OUTCOME);
+  if (enabled) core[enabled.level](enabled.message);
+
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || 'testivai-visual-report',
     runsPerPr,
@@ -91,4 +97,13 @@ export async function finish({ github, context, core, env }: { github: OctokitLi
     log: core,
   });
   core.setOutput('page-url', siteUrl);
+}
+
+export async function lookup({ github, context, core, env }: { github: OctokitLike; context: Context; core: Core; env: Env }): Promise<void> {
+  const mode = parseEnablePages(env.ENABLE_PAGES ?? 'true');
+  const result = await lookupPages(octokitApi(github, context.repo.owner, context.repo.repo), mode);
+  core.setOutput('pages-found', result.pagesFound);
+  core.setOutput('enable', result.enable ? 'true' : 'false');
+  if (result.notice) core.notice(result.reason);
+  else core.info(result.reason);
 }

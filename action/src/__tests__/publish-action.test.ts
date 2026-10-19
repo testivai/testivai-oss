@@ -16,6 +16,7 @@ import * as path from 'path';
 import { strToU8, zipSync } from 'fflate';
 import { parse } from 'yaml';
 import { FORK_MARKER } from '../publish/comments';
+import { ENABLE_STEP_NAME } from '../publish/enable';
 
 interface Step {
   name?: string;
@@ -23,6 +24,7 @@ interface Step {
   if?: string;
   uses?: string;
   run?: string;
+  'continue-on-error'?: boolean;
   env?: Record<string, string>;
   with?: Record<string, string>;
 }
@@ -30,6 +32,7 @@ interface Step {
 const PUBLISH_DIR = path.resolve(__dirname, '..', '..', '..', 'publish');
 const ACTION = parse(fs.readFileSync(path.join(PUBLISH_DIR, 'action.yml'), 'utf8')) as {
   name: string;
+  description: string;
   inputs: Record<string, { required?: boolean; default?: string; description: string }>;
   outputs: Record<string, { value: string; description: string }>;
   runs: { using: string; steps: Step[] };
@@ -83,25 +86,25 @@ describe('inputs and outputs', () => {
     // The address the finish step linked (the deploy's, as https), else the build's;
     // never deploy-pages' page_url as is, which GitHub gives as http for github.io.
     expect(ACTION.outputs['page-url'].value).toBe('${{ steps.finish.outputs.page-url || steps.build.outputs.page-url }}');
-    expect(byId('finish')).toBe(steps[3]);
+    expect(byId('finish')).toBe(steps[steps.length - 1]);
   });
 });
 
 describe('steps', () => {
   it('builds, uploads, deploys, then adds the links: the last three only when the build published', () => {
     expect(ACTION.runs.using).toBe('composite');
-    expect(steps.map((s) => s.uses)).toEqual(['actions/github-script@v9', 'actions/upload-pages-artifact@v5', 'actions/deploy-pages@v5', 'actions/github-script@v9']);
-    expect(steps[0].id).toBe('build');
-    expect(steps[0].if).toBeUndefined();
-    for (const s of steps.slice(1)) expect(s.if).toBe("steps.build.outputs.published == 'true'");
-    expect(byId('deploy')).toBe(steps[2]);
-    expect(steps[1].with?.path).toBe('${{ steps.build.outputs.site-dir }}');
+    const publishing = steps.slice(steps.indexOf(byId('build')));
+    expect(publishing.map((s) => s.uses)).toEqual(['actions/github-script@v9', 'actions/upload-pages-artifact@v5', 'actions/deploy-pages@v5', 'actions/github-script@v9']);
+    expect(publishing[0].if).toBeUndefined();
+    for (const s of publishing.slice(1)) expect(s.if).toBe("steps.build.outputs.published == 'true'");
+    expect(byId('deploy')).toBe(publishing[2]);
+    expect(publishing[1].with?.path).toBe('${{ steps.build.outputs.site-dir }}');
   });
 
   it('never checks out or runs code: every step is a pinned action, none a shell command', () => {
     for (const s of steps) {
       expect(s.run).toBeUndefined();
-      expect(s.uses).toMatch(/^actions\/(github-script|upload-pages-artifact|deploy-pages)@v\d+$/);
+      expect(s.uses).toMatch(/^actions\/(github-script|configure-pages|upload-pages-artifact|deploy-pages)@v\d+$/);
     }
   });
 
@@ -114,6 +117,74 @@ describe('steps', () => {
 
   it('deploys with the job token (OIDC), never the token input', () => {
     expect(byId('deploy').with?.token).toBeUndefined();
+  });
+});
+
+describe('enabling Pages (enable-pages)', () => {
+  const at = (id: string) => steps.indexOf(byId(id));
+
+  it('enable-pages defaults to true, and enable-pages-token to none: without a token nothing is enabled', () => {
+    expect(ACTION.inputs['enable-pages'].default).toBe('true');
+    expect(ACTION.inputs['enable-pages-token'].default).toBe('');
+  });
+
+  it('says it enables once, only where no site exists, never changes an existing one (branch-based included), and public repositories only unless always', () => {
+    for (const text of [ACTION.inputs['enable-pages'].description, ACTION.description]) {
+      expect(text).toMatch(/once/);
+      expect(text).toMatch(/no (GitHub )?Pages site/);
+      expect(text).toMatch(/branch-based/);
+      expect(text).toMatch(/never/);
+    }
+    expect(ACTION.inputs['enable-pages'].description).toMatch(/public/);
+    expect(ACTION.inputs['enable-pages'].description).toMatch(/always/);
+  });
+
+  it('says the job token cannot create a site, and what token can', () => {
+    const text = ACTION.inputs['enable-pages-token'].description;
+    expect(text).toContain('GITHUB_TOKEN');
+    expect(text).toMatch(/Administration/);
+    expect(text).toMatch(/Pages/);
+    expect(text).toMatch(/secret/);
+  });
+
+  it('looks the site up first, only when enable-pages is not false and a token is given', () => {
+    const lookup = byId('lookup');
+    expect(at('lookup')).toBe(0);
+    expect(lookup.uses).toBe('actions/github-script@v9');
+    expect(lookup.if).toBe("inputs.enable-pages != 'false' && inputs.enable-pages-token != ''");
+    expect(lookup.env?.ENABLE_PAGES).toBe('${{ inputs.enable-pages }}');
+  });
+
+  it('enables with configure-pages only when the lookup found no site (a 404) and allowed it, carries on if that fails, and comes before the build, upload and deploy', () => {
+    const enable = byId('enable');
+    expect(enable.name).toBe(ENABLE_STEP_NAME);
+    expect(enable.uses).toBe('actions/configure-pages@v6');
+    expect(enable.if).toBe("steps.lookup.outputs.pages-found == 'false' && steps.lookup.outputs.enable == 'true'");
+    expect(enable['continue-on-error']).toBe(true);
+    expect(String(enable.with?.enablement)).toBe('true');
+    expect(enable.with?.token).toBe('${{ inputs.enable-pages-token }}');
+    // Nothing else: no static site generator to configure, nothing written to the workspace.
+    expect(Object.keys(enable.with ?? {}).sort()).toEqual(['enablement', 'token']);
+    expect(at('lookup')).toBeLessThan(at('enable'));
+    expect(at('enable')).toBeLessThan(at('build'));
+    expect(at('build')).toBeLessThan(at('deploy'));
+  });
+
+  it('gives enable-pages-token to the enablement step only', () => {
+    for (const s of steps.filter((x) => x.id !== 'enable')) {
+      expect(JSON.stringify({ with: s.with, env: s.env })).not.toContain('enable-pages-token');
+    }
+  });
+
+  it('builds after the enablement, whatever its outcome, and tells the build how it went; the later steps go by that one build', () => {
+    const build = byId('build');
+    expect(build.if).toBeUndefined();
+    expect(build.env?.ENABLE_OUTCOME).toBe('${{ steps.enable.outcome }}');
+    for (const s of steps.slice(at('build') + 1)) {
+      expect(s.if).toBe("steps.build.outputs.published == 'true'");
+      expect(JSON.stringify(s)).not.toMatch(/steps\.(lookup|enable)\./);
+    }
+    expect(ACTION.outputs.published.value).toBe('${{ steps.build.outputs.published }}');
   });
 });
 
@@ -147,14 +218,19 @@ const RESULTS = {
   snapshots: [{ name: 'home', status: 'changed', diffPercent: 1, diffCount: 1, totalPixels: 100, currentPath: 'images/home/current.png' }],
 };
 
-/** A repository with Pages on, and one fork pull request with one run. */
-function fakeGithub(pages: 'on' | 'off') {
+/**
+ * A repository with Pages on ('on'; 'branch' builds from a branch), off (a
+ * 404), or whose Pages settings cannot be read ('error'), and one fork pull
+ * request with one run.
+ */
+function fakeGithub(pages: 'on' | 'off' | 'branch' | 'error', visibility: 'public' | 'private' = 'public') {
   const posted: Array<{ route: string; params: Record<string, any> }> = [];
   const routes: Record<string, (p: Record<string, any>) => unknown> = {
-    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: 'public', default_branch: 'main' }),
+    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility, default_branch: 'main' }),
     'GET /repos/{owner}/{repo}/pages': () => {
       if (pages === 'off') throw Object.assign(new Error('Not Found'), { status: 404 });
-      return { build_type: 'workflow', public: true, html_url: 'https://testivai.github.io/testivai-example/' };
+      if (pages === 'error') throw Object.assign(new Error('Server Error'), { status: 502 });
+      return { build_type: pages === 'branch' ? 'legacy' : 'workflow', public: true, html_url: 'https://testivai.github.io/testivai-example/' };
     },
     'GET /repos/{owner}/{repo}/pulls': () => [
       { number: 15, title: 'Typo', user: { login: 'someone' }, head: { ref: 'patch-1', sha: 'd'.repeat(40), repo: { id: 9, full_name: 'someone/testivai-example' } } },
@@ -193,16 +269,20 @@ function fakeGithub(pages: 'on' | 'off') {
 function fakeCore() {
   const outputs: Record<string, string> = {};
   const notices: string[] = [];
+  const warnings: string[] = [];
+  const infos: string[] = [];
   return {
     outputs,
     notices,
+    warnings,
+    infos,
     core: {
       setOutput: (k: string, v: string) => {
         outputs[k] = v;
       },
-      info: () => {},
+      info: (m: string) => infos.push(m),
       notice: (m: string) => notices.push(m),
-      warning: () => {},
+      warning: (m: string) => warnings.push(m),
       setFailed: (m: string) => {
         throw new Error(`setFailed: ${m}`);
       },
@@ -243,7 +323,83 @@ describe('the scripts load dist/publish.cjs and run', () => {
     'inputs.github-token': 'unused',
     'inputs.include-dir': '',
     'inputs.include-name': '',
+    'inputs.enable-pages': 'true',
+    'steps.enable.outcome': 'skipped',
     ...over,
+  });
+
+  it("lookup: pages-found 'false' and enable 'true' for a public repository with no Pages site", async () => {
+    const { github, posted } = fakeGithub('off');
+    const { core, outputs } = fakeCore();
+
+    await runScript(byId('lookup'), values(), { github, context, core });
+
+    expect(outputs).toEqual({ 'pages-found': 'false', enable: 'true' });
+    // The lookup only reads: the site is created by the enablement step.
+    expect(posted).toHaveLength(0);
+  });
+
+  it("lookup: pages-found 'true' and nothing enabled where a site exists, a branch-based one included", async () => {
+    for (const pages of ['on', 'branch'] as const) {
+      const { github } = fakeGithub(pages);
+      const { core, outputs } = fakeCore();
+
+      await runScript(byId('lookup'), values({ 'inputs.enable-pages': 'always' }), { github, context, core });
+
+      expect(outputs).toEqual({ 'pages-found': 'true', enable: 'false' });
+    }
+  });
+
+  it("lookup: pages-found 'unknown' on another error from the Pages API, and nothing enabled", async () => {
+    const { github } = fakeGithub('error');
+    const { core, outputs, infos } = fakeCore();
+
+    await runScript(byId('lookup'), values(), { github, context, core });
+
+    expect(outputs).toEqual({ 'pages-found': 'unknown', enable: 'false' });
+    expect(infos.join('\n')).toContain('Server Error');
+  });
+
+  it('lookup: a private repository with no site is enabled only with enable-pages: always, with a notice otherwise', async () => {
+    const plain = fakeCore();
+    await runScript(byId('lookup'), values(), { github: fakeGithub('off', 'private').github, context, core: plain.core });
+    expect(plain.outputs).toEqual({ 'pages-found': 'false', enable: 'false' });
+    expect(plain.notices[0]).toMatch(/enable-pages: always/);
+
+    const always = fakeCore();
+    await runScript(byId('lookup'), values({ 'inputs.enable-pages': 'always' }), { github: fakeGithub('off', 'private').github, context, core: always.core });
+    expect(always.outputs).toEqual({ 'pages-found': 'false', enable: 'true' });
+  });
+
+  it('lookup: refuses an enable-pages other than true, false or always', async () => {
+    await expect(runScript(byId('lookup'), values({ 'inputs.enable-pages': 'yes' }), { github: fakeGithub('off').github, context, core: fakeCore().core })).rejects.toThrow(
+      /enable-pages/,
+    );
+  });
+
+  it('build: after a failed enablement, publishes nothing, keeps the not-enabled notice, and says the enablement was attempted and failed', async () => {
+    const { github } = fakeGithub('off');
+    const { core, outputs, notices, warnings } = fakeCore();
+
+    await runScript(byId('build'), values({ 'steps.enable.outcome': 'failure' }), { github, context, core });
+
+    expect(outputs.published).toBe('false');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/not enabled/);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/failed/);
+    expect(warnings[0]).toContain(ENABLE_STEP_NAME);
+  });
+
+  it('build: after the enablement created the site, publishes to it and says it was created', async () => {
+    const { github } = fakeGithub('on');
+    const { core, outputs, notices } = fakeCore();
+
+    await runScript(byId('build'), values({ 'steps.enable.outcome': 'success' }), { github, context, core });
+
+    expect(outputs.published).toBe('true');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/created/);
   });
 
   it('build: publishes nothing, with a notice, where Pages is off', async () => {
@@ -269,7 +425,7 @@ describe('the scripts load dist/publish.cjs and run', () => {
     expect(path.relative(temp, outputs['state-file']).startsWith('..')).toBe(false);
     expect(path.relative(outputs['site-dir'], outputs['state-file']).startsWith('..')).toBe(true);
 
-    const finish = steps[3];
+    const finish = byId('finish');
     await runScript(
       finish,
       values({
@@ -339,7 +495,7 @@ describe('the scripts load dist/publish.cjs and run', () => {
     await runScript(byId('build'), values(), { github, context, core });
 
     await expect(
-      runScript(steps[3], values({ 'inputs.comment': 'yes', 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': '' }), {
+      runScript(byId('finish'), values({ 'inputs.comment': 'yes', 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': '' }), {
         github,
         context,
         core,

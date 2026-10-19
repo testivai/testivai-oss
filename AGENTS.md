@@ -160,8 +160,9 @@ CI — GitHub Actions
 | `src/status.ts` | Determines pass/fail commit status |
 | `src/types.ts` | Shared TypeScript interfaces |
 | `src/review.ts` | The review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment |
-| `src/publish.ts` | The publish action's two github-script steps: `build` (decide, build the site) and `finish` (after the deploy: check it answers, add the links) |
+| `src/publish.ts` | The publish action's github-script steps: `lookup` (enable-pages: is there a Pages site, and may the next step create one), `build` (decide, build the site) and `finish` (after the deploy: check it answers, add the links) |
 | `src/publish/pages.ts` | Whether to publish, from the repository's Pages settings; a non-public repository with a public site needs `TESTIVAI_PUBLIC_REPORTS=true` |
+| `src/publish/enable.ts` | `enable-pages`: create a site only where GitHub reports none (a 404), for a public repository unless `always`; never changes an existing one |
 | `src/publish/plan.ts` | Which runs go on the site: each open pull request's last runs (forks included) and the default branch's latest, under a size budget; folders named from numbers only |
 | `src/publish/archive.ts` | Reads an untrusted report ZIP: only results.json, the run stamp and the PNGs, inflated in slices with caps |
 | `src/publish/png.ts` | `checkPng`: a PNG of sane dimensions, or refused |
@@ -180,7 +181,7 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `action.yml` | Composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`; never checks out code |
+| `action.yml` | Composite action: github-script lookup → `actions/configure-pages@v6` (both only with `enable-pages-token`, to create a missing site) → github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`; never checks out code |
 
 ### GitHub Action approver (`approve/`)
 

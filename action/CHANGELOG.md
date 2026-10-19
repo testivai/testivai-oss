@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `publish@v1`: `enable-pages` and `enable-pages-token` let the action turn GitHub Pages on itself, once: a publish that finds no Pages site at all (`GET /pages` answers 404) creates one with the source "GitHub Actions" (`actions/configure-pages@v6` with `enablement: true`) and publishes to it in the same run. Creating a site needs the Administration permission, which the job's `GITHUB_TOKEN` can never have, so it happens only with `enable-pages-token` (an admin's personal access token with Administration and Pages write, or a GitHub App token with `administration: write` and `pages: write`); without one nothing changes. An existing site's settings are never changed, a branch-based one included, and a lookup error other than 404 enables nothing. Only a public repository gets a site by default, since a new site is public unless the organization has private Pages; `enable-pages: always` allows a private or internal one, where `TESTIVAI_PUBLIC_REPORTS` still decides whether anything is published, and `false` turns it off. A failed attempt (the token cannot, or no Pages on the plan) leaves the publish as it was: nothing published, the usual notice, and a warning that names the step with GitHub's error. Setup: [the action can turn Pages on](../docs/github-action.md#unreleased-the-action-can-turn-pages-on)
+
 ## [1.5.0] - 2026-10-19
 
 ### Added

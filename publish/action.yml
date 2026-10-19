@@ -6,10 +6,13 @@ description: >
   the default branch, each page rebuilt from its run's results and
   screenshots. The site is rebuilt from scratch every time, so a closed pull
   request's reports go with the next publish. Who can open the site is
-  GitHub's setting: it publishes only where an admin set Settings → Pages →
-  Source to "GitHub Actions", and a private repository's reports go on a
-  public site only with TESTIVAI_PUBLIC_REPORTS=true. It never checks out or
-  runs the pull request's code.
+  GitHub's setting: it publishes only where Settings → Pages → Source is
+  "GitHub Actions", and a private repository's reports go on a public site
+  only with TESTIVAI_PUBLIC_REPORTS=true. An admin sets the source, or, given
+  enable-pages-token, the action creates the site once, on a publish that
+  finds no Pages site at all (public repositories only, unless enable-pages
+  is always). It never changes an existing site's settings, a branch-based
+  one included. It never checks out or runs the pull request's code.
 author: 'TestivAI'
 
 branding:
@@ -87,6 +90,32 @@ inputs:
     required: false
     default: 'true'
 
+  enable-pages:
+    description: >
+      true (the default): when this repository is public and has no GitHub
+      Pages site at all, create one, once, with the source "GitHub Actions",
+      and publish to it in the same run. It needs enable-pages-token; without
+      one nothing is enabled. always: a private or internal repository too
+      (its new site is public unless the organization has private Pages, and
+      reports go on a public site only with TESTIVAI_PUBLIC_REPORTS=true).
+      false: never. A site that exists, a branch-based one included, is never
+      changed: the action creates one only where GitHub reports no Pages site.
+    required: false
+    default: 'true'
+
+  enable-pages-token:
+    description: >
+      A token that can create this repository's Pages site, for
+      enable-pages, from a secret: a fine-grained personal access token of an
+      admin with Administration and Pages write on this repository, a classic
+      one with the repo scope, or a GitHub App token with administration
+      write and pages write. The job's GITHUB_TOKEN cannot: GitHub gives it no
+      Administration permission. Only the enablement step gets it, and only
+      on a publish that finds no Pages site. Remove it once Pages is on: while
+      it is set, a publish after Pages is turned off turns it back on.
+    required: false
+    default: ''
+
 outputs:
   published:
     description: "'true' when the site was built and deployed, 'false' when the repository's settings say not to."
@@ -101,6 +130,34 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # enable-pages, only with a token that can create a site: reads the Pages
+    # settings; pages-found is 'false' only when GitHub answers 404.
+    - name: Look up the GitHub Pages site
+      id: lookup
+      if: inputs.enable-pages != 'false' && inputs.enable-pages-token != ''
+      uses: actions/github-script@v9
+      env:
+        TESTIVAI_PUBLISH_LIB: ${{ github.action_path }}/../action/dist/publish.cjs
+        ENABLE_PAGES: ${{ inputs.enable-pages }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const publish = require(process.env.TESTIVAI_PUBLISH_LIB);
+          await publish.lookup({ github, context, core, env: process.env });
+
+    # Creates a site with the source "GitHub Actions" where there is none.
+    # configure-pages creates one only when its own lookup finds none too, so
+    # an existing site is never changed. A failure (the token cannot, or no
+    # Pages on this plan) leaves the build to say Pages is off.
+    - name: Enable GitHub Pages
+      id: enable
+      if: steps.lookup.outputs.pages-found == 'false' && steps.lookup.outputs.enable == 'true'
+      continue-on-error: true
+      uses: actions/configure-pages@v6
+      with:
+        enablement: true
+        token: ${{ inputs.enable-pages-token }}
+
     # Reads the Pages settings, then (when they allow it) downloads each
     # report and rebuilds its page from results.json and the PNGs only.
     - name: Build the reports site
@@ -108,6 +165,7 @@ runs:
       uses: actions/github-script@v9
       env:
         TESTIVAI_PUBLISH_LIB: ${{ github.action_path }}/../action/dist/publish.cjs
+        ENABLE_OUTCOME: ${{ steps.enable.outcome }}
         ARTIFACT_NAME: ${{ inputs.artifact-name }}
         RUNS_PER_PR: ${{ inputs.runs-per-pr }}
         PUBLIC_REPORTS: ${{ inputs.public-reports }}

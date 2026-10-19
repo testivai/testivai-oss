@@ -130,6 +130,27 @@ describe('GitHub Pages setup docs', () => {
     expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
   });
 
+  it('documents every input the action has', () => {
+    const section = DOC.slice(DOC.indexOf('## Reports on GitHub Pages'), DOC.indexOf('\n## ', DOC.indexOf('## Reports on GitHub Pages') + 1));
+    for (const input of INPUTS) expect(section).toContain(`| \`${input}\` |`);
+  });
+
+  it('says enabling Pages takes a token GITHUB_TOKEN cannot be, once, and never changes an existing site', () => {
+    const start = DOC.indexOf('### Unreleased: the action can turn Pages on');
+    expect(start).toBeGreaterThan(-1);
+    const section = DOC.slice(start, DOC.indexOf('\n### ', start + 1));
+    expect(section).toContain('enable-pages-token');
+    expect(section).toMatch(/GITHUB_TOKEN`?\s+cannot/);
+    expect(section).toMatch(/Administration/);
+    expect(section).toMatch(/once/);
+    expect(section).toMatch(/branch-based/);
+    expect(section).toMatch(/never\s+changes?/);
+    expect(section).toContain('`always`');
+    // Setup step 1 points to it.
+    const setup = DOC.slice(DOC.indexOf('### Setup', DOC.indexOf('## Reports on GitHub Pages')));
+    expect(setup.slice(0, setup.indexOf('```'))).toContain('#unreleased-the-action-can-turn-pages-on');
+  });
+
   it('is linked from the README', () => {
     expect(read('README.md')).toContain('docs/github-action.md#reports-on-github-pages');
   });
