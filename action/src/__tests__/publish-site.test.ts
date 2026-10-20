@@ -293,9 +293,25 @@ describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
 
   it('builds a report without thumbs exactly as before: the same files, byte for byte', () => {
     // fixtures/publish-site-no-thumbnails.html is this page as main built it
-    // before thumbnails (ed73679). A change to the report template changes it
-    // too: regenerate it from that change's output, never from this one.
-    const before = fs.readFileSync(path.join(__dirname, 'fixtures', 'publish-site-no-thumbnails.html'), 'utf-8');
+    // before thumbnails (ed73679), rendered with TZ=UTC and the en-US locale.
+    // The page shows the run's time with toLocaleString() (template.ts), which
+    // follows the time zone and locale of the machine that builds it, so that
+    // one value is what the same call gives here, escaped the way the template
+    // escapes it; every other byte must match. A change to the report
+    // template's output changes this page too: regenerate the fixture from
+    // that change's own output, never from this one.
+    const timeLine = (text: string) => `<div class="timestamp">${text}</div>`;
+    const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'publish-site-no-thumbnails.html'), 'utf-8');
+    const fixtureTime = timeLine('10/18/2026, 10:04:00 AM'); // 2026-10-18T10:04:00.000Z in UTC, en-US
+    expect(fixture.split(fixtureTime)).toHaveLength(2);
+    const here = new Date('2026-10-18T10:04:00.000Z')
+      .toLocaleString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    const before = fixture.replace(fixtureTime, () => timeLine(here));
     const images = {
       'images/home/baseline.png': PNG,
       'images/home/current.png': PNG,
