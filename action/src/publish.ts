@@ -66,7 +66,7 @@ export async function build({ github, context, core, env }: { github: OctokitLik
 
   const include = parseInclude(env);
   // The folder publish/action.yml restores and saves with actions/cache.
-  const cacheDir = parseCache(env.CACHE ?? 'true') ? env.CACHE_DIR?.trim() || path.join(root, 'cache') : undefined;
+  const cacheDir = parseCache(env.CACHE ?? 'false') ? env.CACHE_DIR?.trim() || path.join(root, 'cache') : undefined;
 
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || 'testivai-visual-report',

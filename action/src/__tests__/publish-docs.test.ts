@@ -130,16 +130,29 @@ describe('GitHub Pages setup docs', () => {
     expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
   });
 
-  it('documents the report cache, unreleased: what it saves, what it checks, its trust boundary and how to turn it off', () => {
+  it('documents the report cache, unreleased: what it saves, what it checks, its trust boundary and how to turn it on', () => {
     const start = DOC.indexOf('#### Unreleased: reports reused between publishes');
     expect(start).toBeGreaterThan(DOC.indexOf('### Limits'));
     const section = DOC.slice(start, DOC.indexOf('\n## ', start));
     expect(section).toMatch(/downloads only the runs it has not built before; the rest come\s+from the Actions cache/);
     expect(section).toMatch(/SHA-256/);
     expect(section).toMatch(/byte\s+for\s+byte/);
-    expect(section).toContain('`cache: false`');
+    expect(section).toContain('`cache: true`');
+    expect(section).toMatch(/off by default/);
     expect(section).toMatch(/unpacks/);
-    expect(ACTION.inputs.cache.default).toBe('true');
+    expect(section).toMatch(/`pages: write`/);
+    expect(section).toMatch(/\| `cache` \| `false` \|/);
+    expect(ACTION.inputs.cache.default).toBe('false');
+  });
+
+  it('documents what the report cache costs: a new full copy per changed publish, until GitHub evicts it', () => {
+    const start = DOC.indexOf('#### Unreleased: reports reused between publishes');
+    const section = DOC.slice(start, DOC.indexOf('\n## ', start)).replace(/\s+/g, ' ');
+    expect(section).toMatch(/new full copy/);
+    expect(section).toMatch(/900 MB/);
+    expect(section).toMatch(/7 days/);
+    expect(section).toMatch(/evict/);
+    expect(section).toMatch(/other caches/);
   });
 
   it('is linked from the README', () => {

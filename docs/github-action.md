@@ -667,15 +667,22 @@ the "downloads every published report again" limit above.
 - A cache that cannot be restored or saved never fails the publish. GitHub
   gives `pull_request_target` runs, and `workflow_run` runs a fork's pull
   request started, a read-only cache: those publishes read it and save nothing.
-- `actions/cache` unpacks an entry before the action checks it, and a workflow
-  on the default branch that GitHub gives a writable cache (one a push, schedule
-  or `workflow_dispatch` starts) can save one under any key. If code you do not
-  trust can run in such a workflow, set `cache: false` (input below): every
-  publish then downloads every report, as before.
+- The cache is off by default; `cache: true` (input below) turns it on.
+  `actions/cache` unpacks an entry before the action checks it, in the publish
+  job, which holds `pages: write` and `id-token: write`, and a workflow on the
+  default branch that GitHub gives a writable cache (one a push, schedule or
+  `workflow_dispatch` starts) can save one under any key. Turn it on only where
+  no code you do not trust can run in such a workflow. Off, every publish
+  downloads every report, as before.
+- Each publish that changes the set of reports saves a new full copy of the
+  folder (up to the site's 900 MB budget). Old copies go only when GitHub
+  evicts them: an entry unused for 7 days, or the least recently used ones once
+  the repository is over its cache limit. On a busy repository it can push out
+  other caches.
 
 | Input | Default | |
 |---|---|---|
-| `cache` | `true` | `false` downloads every report on every publish, and neither reads nor writes the Actions cache. |
+| `cache` | `false` | `true` keeps each downloaded report in the Actions cache, so the next publish downloads only the runs it has not built before. `false` downloads every report on every publish, and neither reads nor writes the Actions cache. |
 
 ## Caveats
 

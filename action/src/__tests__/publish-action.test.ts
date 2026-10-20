@@ -148,7 +148,22 @@ describe('the report cache (actions/cache)', () => {
   it('runs only with the cache on, and saves only when the build changed what the cache holds', () => {
     expect(restore().if).toBe("inputs.cache == 'true'");
     expect(save().if).toBe("inputs.cache == 'true' && steps.build.outputs.cache-save == 'true'");
-    expect(ACTION.inputs.cache.default).toBe('true');
+  });
+
+  it('is off unless the workflow turns it on: actions/cache unpacks an entry before any check, in a job that can deploy Pages', () => {
+    expect(ACTION.inputs.cache.default).toBe('false');
+    const description = ACTION.inputs.cache.description.replace(/\s+/g, ' ');
+    expect(description).toMatch(/^false \(the default\)/);
+    expect(description).toMatch(/unpacks an entry before/);
+    expect(description).toMatch(/pages: write/);
+  });
+
+  it('says what the cache costs: a full copy per changed publish, kept until GitHub evicts it', () => {
+    const description = ACTION.inputs.cache.description.replace(/\s+/g, ' ');
+    expect(description).toMatch(/new full copy/);
+    expect(description).toMatch(/7 days/);
+    expect(description).toMatch(/evict/);
+    expect(description).toMatch(/other caches/);
   });
 
   it('never fails the publish: a cache that cannot be restored or saved is only a warning', () => {
@@ -435,6 +450,21 @@ describe('the scripts load dist/publish.cjs and run', () => {
       const { github, downloads } = countingDownloads(fakeGithub('on').github);
       const { core, outputs } = fakeCore();
       await runScript(byId('build'), values({ 'inputs.cache': 'false' }), { github, context, core });
+
+      expect(downloads).toEqual([40]);
+      expect(outputs['cache-save']).toBe('false');
+    }
+    expect(fs.existsSync(path.join(temp, 'testivai-pages', 'cache'))).toBe(false);
+  });
+
+  it('build: without the cache setting, downloads every report and keeps none (the cache is opt-in)', async () => {
+    const build = byId('build');
+    const { CACHE: _cache, ...env } = build.env ?? {};
+    expect(process.env.CACHE).toBeUndefined();
+    for (let i = 0; i < 2; i++) {
+      const { github, downloads } = countingDownloads(fakeGithub('on').github);
+      const { core, outputs } = fakeCore();
+      await runScript({ ...build, env }, values(), { github, context, core });
 
       expect(downloads).toEqual([40]);
       expect(outputs['cache-save']).toBe('false');

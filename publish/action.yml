@@ -38,8 +38,8 @@ inputs:
   runs-per-pr:
     description: >
       How many of each open pull request's latest runs to publish, 1 to 10.
-      A publish downloads the ones it has not built before (the rest come
-      from the Actions cache, see cache); lower it for a repository with many
+      Every publish downloads them all again (with cache: true, only the
+      ones it has not built before), so lower it for a repository with many
       open pull requests.
     required: false
     default: '3'
@@ -90,17 +90,22 @@ inputs:
 
   cache:
     description: >
-      true (the default) keeps each report ZIP it downloads in the Actions
-      cache, so the next publish downloads only the runs it has not built
-      before. A ZIP from the cache is used only when its SHA-256 is the digest
-      GitHub lists for the artifact, and every page is rebuilt from it as from
-      a download. actions/cache unpacks an entry before that check, and a
-      workflow on the default branch that GitHub gives a writable cache (one
-      a push, schedule or workflow_dispatch starts) can save one: where code
-      you do not trust runs in such a workflow, set false, and every publish
-      downloads every report.
+      false (the default) downloads every report on every publish. true keeps
+      each report ZIP it downloads in the Actions cache, so the next publish
+      downloads only the runs it has not built before. A ZIP from the cache is
+      used only when its SHA-256 is the digest GitHub lists for the artifact,
+      and every page is rebuilt from it as from a download. But actions/cache
+      unpacks an entry before that check, in this job, which holds
+      pages: write and id-token: write, and a workflow on the default branch
+      that GitHub gives a writable cache (one a push, schedule or
+      workflow_dispatch starts) can save one: turn it on only where no code
+      you do not trust runs in such a workflow. Each publish that changes the
+      set of reports saves a new full copy of the folder (up to the site's
+      900 MB budget), and old copies go only when GitHub evicts them (unused
+      for 7 days, or the least recently used once the repository is over its
+      cache limit), so on a busy repository it can push out other caches.
     required: false
-    default: 'true'
+    default: 'false'
 
 outputs:
   published:

@@ -3239,7 +3239,7 @@ async function build({ github, context, core, env }) {
   const siteDir = path3.join(root, "site");
   const stateFile = path3.join(root, "state.json");
   const include = parseInclude(env);
-  const cacheDir = parseCache(env.CACHE ?? "true") ? env.CACHE_DIR?.trim() || path3.join(root, "cache") : void 0;
+  const cacheDir = parseCache(env.CACHE ?? "false") ? env.CACHE_DIR?.trim() || path3.join(root, "cache") : void 0;
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || "testivai-visual-report",
     runsPerPr,
