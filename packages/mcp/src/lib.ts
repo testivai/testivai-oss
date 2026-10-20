@@ -490,11 +490,13 @@ function unhealthyVerdict(snapshot: SnapshotResult): string | null {
   const reading = captureHealthReading(snapshot.captureHealth);
   if (!reading) return null;
   if (snapshot.status === 'new') return `new snapshot — unhealthy capture: ${reading.detail}; ${reading.next}`;
+  const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
   if (snapshot.status === 'passed') {
     const who = reading.side === 'both' ? 'neither image shows' : reading.side === 'baseline' ? 'the baseline does not show' : 'the current capture does not show';
-    return `passed — no visual change, but ${who} the page as built (unhealthy capture: ${reading.detail}); ${reading.next}`;
+    // A tolerance passes an unhealthy capture only when both sides failed the same way.
+    const how = snapshot.autoPassed ? `auto-passed by the '${snapshot.autoPassed}' criterion (${pct})` : 'no visual change';
+    return `passed — ${how}, but ${who} the page as built (unhealthy capture: ${reading.detail}); ${reading.next}`;
   }
-  const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
   let env = '';
   const change = snapshotEnvironmentChange(snapshot);
   if (change && isRenderingDrift(snapshot)) env = `; rendering drift too: ${change} since the baseline, with the DOM and computed styles matching`;
@@ -783,7 +785,13 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   const guidance: string[] = [];
   // An unhealthy capture first: what it shows is not the page as built.
   const unhealthy = captureHealthReading(snapshot.captureHealth);
-  if (unhealthy) {
+  if (unhealthy?.sameOnBothSides) {
+    // The baseline failed the same way, so the failure is not the change under test.
+    guidance.push(
+      `Unhealthy capture, the same on both sides: ${unhealthy.detail}. ` +
+        `Neither image shows the page as built, but both are missing the same assets, so the diff compares like with like: ${unhealthy.next}.`,
+    );
+  } else if (unhealthy) {
     guidance.push(
       `Unhealthy capture: ${unhealthy.detail}. The capture does not show the page as built, so this diff is not render noise and says nothing reliable about the page: ` +
         `${unhealthy.next}. If the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path), it is a bug in that change.`,

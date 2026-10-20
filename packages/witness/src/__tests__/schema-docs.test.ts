@@ -71,6 +71,14 @@ describe('results.json schema documents', () => {
     }
   });
 
+  it('captureHealth.sameOnBothSides (schema 2.8.0) is documented in all three, with the tolerances it keeps', () => {
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('"sameOnBothSides"');
+      expect(doc).toMatch(/`sameOnBothSides`[\s\S]*`maxDiffPercent`[\s\S]*`shiftTolerance`/);
+    }
+    expect(extensionApi).toMatch(/\| `snapshots\[\]\.captureHealth\.sameOnBothSides` \| `true` \| optional \| emitted from schema 2\.8\.0 /);
+  });
+
   it('the metadata.json health block is documented for community adapters', () => {
     expect(extensionApi).toMatch(/### Capture health: `health` in metadata\.json/);
     for (const field of ['fonts.status', 'fonts.failed[]', 'stylesheets.failed', 'images.broken', 'resources.status']) {

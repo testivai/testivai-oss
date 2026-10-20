@@ -191,7 +191,7 @@ describe('compareAll with capture provenance', () => {
 
     generateReport({ projectRoot: root, autoOpen: false });
     const written = JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8'));
-    expect(written.version).toBe('2.7.0');
+    expect(written.version).toBe('2.8.0');
     // The two browsers share no field (the Firefox capture records no
     // headless flag), so there is no browser section.
     expect(written.environment).toEqual({

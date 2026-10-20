@@ -20,11 +20,18 @@
  * broken image that matters from a tracking pixel needs its position compared
  * with the diff's regions (a follow-up).
  *
+ * An unhealthy capture is never render noise, and no pass criterion passes
+ * one whose pixels differ, with one exception: when both sides failed in
+ * exactly the same way (a permanently broken asset, `sameOnBothSides`), the
+ * pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still
+ * apply, because both images miss the same assets. Noise auto-pass never does.
+ *
  * Deterministic and read from results.json fields only (`captureHealth`), so
  * the report, @testivai/mcp and the GitHub Action agree. No Node dependencies.
  */
 
 import type { CaptureHealth, ResourceFailures } from '../capture/health';
+import { HEALTH_LIMITS } from '../capture/health-limits';
 import type { SnapshotCaptureHealth } from './results';
 
 export interface HealthAssessment {
@@ -136,6 +143,49 @@ export function assessHealth(health: CaptureHealth): HealthAssessment {
   return { unhealthy: problems.size > 0, problems: [...problems], reasons, warnings };
 }
 
+/** One failed request, as compared between the two sides: host and path, and the status (the error text varies run to run). */
+const requestKey = (e: ResourceFailures['entries'][number]) => `${e.url}\u0000${e.status}`;
+
+/** The sorted keys of a list, or null when the list may have been cut (a count above its entries, or a list at the cap). */
+function completeKeys<T>(items: T[], total: number, key: (item: T) => string): string[] | null {
+  if (items.length !== total || items.length >= HEALTH_LIMITS.list) return null;
+  return items.map(key).sort();
+}
+
+const sameKeys = (a: string[] | null, b: string[] | null) => a !== null && b !== null && a.length === b.length && a.every((k, i) => k === b[i]);
+
+/**
+ * Whether two captures failed in exactly the same way, on everything that can
+ * make a capture unhealthy: the same web font faces (family, weight, style),
+ * the same stylesheets, and the same stylesheet and font requests (host and
+ * path, and status). A permanently broken asset (a font that 404s on every
+ * run) then shows in both images alike, so the diff compares like with like.
+ *
+ * Never the same when web fonts were still loading on either side (what
+ * rendered depends on timing), when the two sides could not see the same
+ * things (Font Loading API or request statuses available on one side only),
+ * or when a list may have been cut at HEALTH_LIMITS.list: what is not
+ * recorded cannot be proven the same. Broken images and failed scripts and
+ * other requests are warnings and do not count.
+ */
+export function sameHealthFailures(a: CaptureHealth, b: CaptureHealth): boolean {
+  if (a.fonts.status === 'loading' || b.fonts.status === 'loading') return false;
+  if (a.fonts.status !== b.fonts.status || a.resources.status !== b.resources.status) return false;
+  const fontKey = (f: CaptureHealth['fonts']['failed'][number]) => `${f.family}\u0000${f.weight}\u0000${f.style}`;
+  const fonts = (h: CaptureHealth) => completeKeys(h.fonts.failed, h.fonts.failed.length, fontKey);
+  const sheets = (h: CaptureHealth) => completeKeys(h.stylesheets.urls, h.stylesheets.failed, (u) => u);
+  const requests = (h: CaptureHealth, type: 'css' | 'font') => {
+    const group = h.resources.failed[type] ?? { count: 0, entries: [] };
+    return completeKeys(group.entries, group.count, requestKey);
+  };
+  return (
+    sameKeys(fonts(a), fonts(b)) &&
+    sameKeys(sheets(a), sheets(b)) &&
+    sameKeys(requests(a, 'css'), requests(b, 'css')) &&
+    sameKeys(requests(a, 'font'), requests(b, 'font'))
+  );
+}
+
 /** Prefix of a reason or warning that is the baseline's, in results.json. */
 export const BASELINE_HEALTH_PREFIX = 'baseline: ';
 
@@ -144,6 +194,9 @@ export const BASELINE_HEALTH_PREFIX = 'baseline: ';
  * side is unhealthy, and the reasons and warnings (the baseline's marked
  * "baseline: "), the current capture's first. Undefined when neither side
  * recorded health: not checked, which is neither healthy nor unhealthy.
+ * `sameOnBothSides: true` (schema 2.8.0) when both sides are unhealthy with
+ * the same failures (sameHealthFailures): the pass tolerances then still
+ * apply, noise auto-pass never does.
  */
 export function snapshotCaptureHealth(baseline: CaptureHealth | null, candidate: CaptureHealth | null): SnapshotCaptureHealth | undefined {
   if (!baseline && !candidate) return undefined;
@@ -155,6 +208,7 @@ export function snapshotCaptureHealth(baseline: CaptureHealth | null, candidate:
     ...(candidate ? { candidate } : {}),
     ...(baseline ? { baseline } : {}),
     unhealthy,
+    ...(unhealthy === 'both' && baseline && candidate && sameHealthFailures(baseline, candidate) ? { sameOnBothSides: true as const } : {}),
     reasons: [...(c?.reasons ?? []), ...fromBaseline(b?.reasons ?? [])],
     warnings: [...(c?.warnings ?? []), ...fromBaseline(b?.warnings ?? [])],
   };
@@ -162,12 +216,23 @@ export function snapshotCaptureHealth(baseline: CaptureHealth | null, candidate:
 
 /** The fields of a snapshot result the health rules read. */
 export interface HealthSnapshotInput {
-  captureHealth?: Pick<SnapshotCaptureHealth, 'unhealthy'> | null;
+  captureHealth?: Pick<SnapshotCaptureHealth, 'unhealthy' | 'sameOnBothSides'> | null;
 }
 
 /** Whether either side of the snapshot was captured unhealthy. */
 export function isUnhealthyCapture(snapshot: HealthSnapshotInput): boolean {
   return Boolean(snapshot.captureHealth?.unhealthy);
+}
+
+/**
+ * Whether the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance)
+ * may judge the snapshot: always for a healthy or unrecorded one, and for an
+ * unhealthy one only when both sides failed the same way (sameOnBothSides).
+ * Noise auto-pass never judges an unhealthy one: see isUnhealthyCapture.
+ */
+export function healthAllowsTolerances(snapshot: HealthSnapshotInput): boolean {
+  if (!isUnhealthyCapture(snapshot)) return true;
+  return snapshot.captureHealth?.unhealthy === 'both' && snapshot.captureHealth.sameOnBothSides === true;
 }
 
 /** What to do about an unhealthy current capture. */
@@ -177,8 +242,14 @@ export const UNHEALTHY_CAPTURE_NEXT =
 /** What to do about an unhealthy baseline. */
 export const UNHEALTHY_BASELINE_NEXT = 're-baseline from a healthy run';
 
+/** What to do when both sides failed the same way (sameOnBothSides). */
+export const SAME_FAILURES_NEXT =
+  'the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run';
+
 export interface CaptureHealthReading {
   side: 'candidate' | 'baseline' | 'both';
+  /** Present (true) when both sides failed the same way: the tolerances still apply, noise auto-pass never does. */
+  sameOnBothSides?: true;
   /** The reasons, in plain words: the current capture's, then the baseline called out. */
   detail: string;
   /** What to do next. */
@@ -209,6 +280,10 @@ function sideAssessment(health: SnapshotCaptureHealth, side: 'candidate' | 'base
 export function captureHealthReading(health: SnapshotCaptureHealth | null | undefined): CaptureHealthReading | null {
   if (!health?.unhealthy) return null;
   const side = health.unhealthy;
+  if (side === 'both' && health.sameOnBothSides === true) {
+    const detail = `${sideAssessment(health, 'candidate').reasons.join('; ')}; the baseline was captured with the same failures`;
+    return { side, sameOnBothSides: true, detail, next: SAME_FAILURES_NEXT };
+  }
   const parts: string[] = [];
   if (side !== 'baseline') parts.push(sideAssessment(health, 'candidate').reasons.join('; '));
   if (side !== 'candidate') {

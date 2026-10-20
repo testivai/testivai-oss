@@ -133,7 +133,7 @@ var TRIAGE_PROMPT = {
       "",
       "| explain_snapshot shows | What it means |",
       "|---|---|",
-      '| captureHealth.unhealthy set (the verdict says "unhealthy capture") | A web font or stylesheet failed to load, or fonts were still loading, in the current capture or the baseline (captureHealth.reasons says what), so that image does not show the page as built and its diff is never render noise: an unhealthy capture is a glitch of the capture or a broken asset; fix the page, the server or the test; never approve it as a baseline. It is a glitch unless the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path): then it is a bug. When the baseline is the unhealthy side, the next step is to re-baseline from a healthy run. captureHealth.warnings (broken images, failed scripts) make no capture unhealthy: weigh a broken image where it sits in the diff. |',
+      '| captureHealth.unhealthy set (the verdict says "unhealthy capture") | A web font or stylesheet failed to load, or fonts were still loading, in the current capture or the baseline (captureHealth.reasons says what), so that image does not show the page as built and its diff is never render noise: an unhealthy capture is a glitch of the capture or a broken asset; fix the page, the server or the test; never approve it as a baseline. It is a glitch unless the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path): then it is a bug. When the baseline is the unhealthy side, the next step is to re-baseline from a healthy run. When captureHealth.sameOnBothSides is true, the baseline failed the same way: the diff compares like with like and the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) applied, never noise auto-pass; judge the diff itself, and name the broken asset as something to fix. captureHealth.warnings (broken images, failed scripts) make no capture unhealthy: weigh a broken image where it sits in the diff. |',
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       "| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |",
       '| environment.renderingDelta non-empty, DOM unchanged and styleCheck "match" (rendering drift) | The environment the snapshot was captured in changed since the baseline (the verdict names what: a browser build, OS or distro, device scale, capture method) and the page did not: a glitch of the environment, not render noise. If the change under test itself changed the environment (a Playwright or browser upgrade, a new CI image), it is an intended change. Either way the next step is to re-baseline from this environment once the images match apart from rendering; if they differ in more than rendering, judge that difference on its own. |',
@@ -178,7 +178,7 @@ var TRIAGE_PROMPT = {
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 
-// ../packages/witness/src/capture/health.ts
+// ../packages/witness/src/capture/health-limits.ts
 var HEALTH_LIMITS = {
   /** Entries kept per list. */
   list: 10,
@@ -187,6 +187,8 @@ var HEALTH_LIMITS = {
   /** Longest family, weight, style or error text accepted. */
   text: 200
 };
+
+// ../packages/witness/src/capture/health.ts
 var HEALTH_PROBE_EXPRESSION = `(function () {
   var LIMIT = ${HEALTH_LIMITS.list};
   var MAX = ${HEALTH_LIMITS.url};

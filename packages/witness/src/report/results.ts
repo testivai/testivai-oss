@@ -95,7 +95,9 @@ export interface SnapshotResult {
    * whose styles were not compared or changed, or whose regions all sit in
    * one area, is never auto-passed as noise), or 'shift' (every region is a pure
    * element shift within shiftTolerance px). Never present when
-   * `captureHealth.unhealthy` is set (schema 2.7.0). The diff image is still
+   * `captureHealth.unhealthy` is set (schema 2.7.0), except 'threshold' or
+   * 'shift' with `captureHealth.sameOnBothSides` (schema 2.8.0); never
+   * 'noise' then. The diff image is still
    * written — auto-passes stay auditable.
    */
   autoPassed?: 'threshold' | 'noise' | 'shift';
@@ -139,6 +141,14 @@ export interface SnapshotCaptureHealth {
   baseline?: import('../capture/health').CaptureHealth;
   /** Which side is unhealthy, or null when neither recorded side is. */
   unhealthy: 'candidate' | 'baseline' | 'both' | null;
+  /**
+   * Schema 2.8.0: present (true) only when both sides are unhealthy with the
+   * same failures (the same web font faces, stylesheets, and stylesheet and
+   * font requests; never while fonts were still loading, never when a list
+   * was cut). The pass tolerances (maxDiffPercent, maxDiffPixels,
+   * shiftTolerance) then still apply; noise auto-pass never does.
+   */
+  sameOnBothSides?: true;
   /** Why, in plain words; the baseline's start with "baseline: ". Empty when not unhealthy. */
   reasons: string[];
   /** What else failed to load (broken images, failed scripts and other requests): shown, never unhealthy on its own. */

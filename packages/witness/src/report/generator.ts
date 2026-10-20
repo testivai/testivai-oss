@@ -47,7 +47,10 @@ export interface GenerateReportOptions {
  * @returns The report data
  */
 /**
- * results.json schema version. 2.7.0 adds capture health: per-snapshot
+ * results.json schema version. 2.8.0 adds `captureHealth.sameOnBothSides`:
+ * true when both sides are unhealthy with the same failures (a permanently
+ * broken asset), and the pass tolerances (maxDiffPercent, maxDiffPixels,
+ * shiftTolerance) then still apply; noise auto-pass never does. 2.7.0 added capture health: per-snapshot
  * `captureHealth` (what failed to load in the baseline and the current
  * capture, which side is unhealthy, and why in plain words), present when
  * either side recorded `health` in its metadata.json. 2.6.0 added per-snapshot
@@ -67,7 +70,7 @@ export interface GenerateReportOptions {
  * diff bounding boxes), `masks[]` (applied masks with their source — the
  * audit trail), and `maskWarnings[]`. All additive.
  */
-export const RESULTS_SCHEMA_VERSION = '2.7.0';
+export const RESULTS_SCHEMA_VERSION = '2.8.0';
 
 /**
  * Write results.json for an already-computed set of snapshot results.

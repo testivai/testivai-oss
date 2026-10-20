@@ -652,7 +652,8 @@ function unhealthyVerdict(snapshot: SnapshotResult): string {
   if (snapshot.status === 'new') then = `This is a first capture: ${reading.next}.`;
   else if (snapshot.status === 'passed') {
     const who = reading.side === 'both' ? 'neither image shows' : reading.side === 'baseline' ? 'the baseline does not show' : 'the current capture does not show';
-    then = `It passed, but ${who} the page as built: ${reading.next}.`;
+    const passed = snapshot.autoPassed ? `It auto-passed by the '${snapshot.autoPassed}' criterion` : 'It passed';
+    then = `${passed}, but ${who} the page as built: ${reading.next}.`;
   } else then = `${capitalize(reading.next)}.`;
   let env = '';
   const change = snapshotEnvironmentChange(snapshot);

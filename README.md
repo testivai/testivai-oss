@@ -70,7 +70,9 @@ screenshots automatically), then read `visual-report/results.json`.
   stylesheet-only change. Don't treat it as noise: look at the diff image before approving.
 - `captureHealth.unhealthy` set → unhealthy capture: a web font or stylesheet
   failed to load (`captureHealth.reasons` says which). Never noise: report what
-  failed and fix it; never approve it as a baseline.
+  failed and fix it; never approve it as a baseline. With
+  `captureHealth.sameOnBothSides: true` the baseline failed the same way, so
+  the pass tolerances still applied: judge the diff, and report the broken asset.
 - Never run `testivai approve` yourself — baseline approval is a human decision.
 ```
 

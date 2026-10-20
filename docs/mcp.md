@@ -406,7 +406,7 @@ After changing UI code, run the visual tests, then read visual-report/results.js
 - status "changed" + dom.noiseHint true + dom.styleCheck "match", diffPercent at most 1, and no regions or regions spread out (their combined bounding box covers more than a third of the page, totalPixels) → likely render noise; mention, don't block
 - status "changed" + dom.noiseHint true + dom.styleCheck "match" otherwise (every region within a box of at most a third of the page, or diffPercent over 1) → not noise: a bad capture or a change the style check does not cover (size, overflow, transform, images…); look at the diff before approving
 - status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
-- captureHealth.unhealthy set → unhealthy capture: a web font or stylesheet failed to load (captureHealth.reasons); never noise; fix what failed, never approve it as a baseline
+- captureHealth.unhealthy set → unhealthy capture: a web font or stylesheet failed to load (captureHealth.reasons); never noise; fix what failed, never approve it as a baseline. captureHealth.sameOnBothSides true → the baseline failed the same way, so the tolerances still applied; judge the diff, report the broken asset
 - status "new" → no baseline yet; tell the human
 Never run `testivai approve` yourself — approval is a human decision.
 ```

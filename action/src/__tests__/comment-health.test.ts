@@ -96,6 +96,34 @@ describe('the PR comment with capture health', () => {
     );
   });
 
+  const SAME_NEXT =
+    'The same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run.';
+
+  it('the same failures on both sides, above the tolerance: the tolerances still apply, never noise', () => {
+    const comment = buildComment(results(changed('home', { dom: noHint, captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED) })));
+    expect(comment).toContain(
+      `> **Unhealthy capture** — stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures. ${SAME_NEXT}`,
+    );
+    expect(comment).not.toMatch(/likely render noise/);
+  });
+
+  it('the same failures on both sides, auto-passed by a tolerance: the criterion named', () => {
+    const comment = buildComment(
+      results({
+        name: 'home',
+        status: 'passed',
+        diffPercent: 0.15,
+        autoPassed: 'threshold',
+        dom: noHint,
+        captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED),
+      }),
+    );
+    expect(comment).toContain(
+      "> **Unhealthy capture** — `home` auto-passed by the 'threshold' criterion, but neither image shows the page as built: " +
+        `stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures. ${SAME_NEXT}`,
+    );
+  });
+
   it('a new snapshot with an unhealthy capture: said on its line, do not approve it', () => {
     const comment = buildComment(results({ name: 'fresh', status: 'new', captureHealth: snapshotCaptureHealth(null, CSS_FAILED) }));
     expect(comment).toContain('- `fresh` — **unhealthy capture**: stylesheet example.com/css/site.css returned 404; do not approve it as the baseline');

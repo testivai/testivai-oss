@@ -40,8 +40,7 @@ module.exports = __toCommonJS(approve_exports);
 var fs2 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 
-// ../packages/witness/src/capture/health.ts
-var RESOURCE_TYPES = ["css", "font", "img", "script", "other"];
+// ../packages/witness/src/capture/health-limits.ts
 var HEALTH_LIMITS = {
   /** Entries kept per list. */
   list: 10,
@@ -50,6 +49,9 @@ var HEALTH_LIMITS = {
   /** Longest family, weight, style or error text accepted. */
   text: 200
 };
+
+// ../packages/witness/src/capture/health.ts
+var RESOURCE_TYPES = ["css", "font", "img", "script", "other"];
 var HEALTH_PROBE_EXPRESSION = `(function () {
   var LIMIT = ${HEALTH_LIMITS.list};
   var MAX = ${HEALTH_LIMITS.url};

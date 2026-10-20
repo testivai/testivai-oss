@@ -1,7 +1,8 @@
 /**
- * Capture health in the PR comment (results.json 2.7.0 `captureHealth`):
- * the "Unhealthy capture" reading, said before any environment reading, an
- * unhealthy passed or new snapshot, and the warnings. The words come from
+ * Capture health in the PR comment (results.json 2.7.0 `captureHealth`, 2.8.0
+ * `sameOnBothSides`): the "Unhealthy capture" reading, said before any
+ * environment reading, an unhealthy passed or new snapshot, and the
+ * warnings. The words come from
  * @testivai/witness report/health.ts, so the comment, the HTML report and
  * @testivai/mcp agree.
  */
@@ -25,14 +26,16 @@ export function captureWarningsHint(snapshot: SnapshotResult): string {
   return `> Capture warnings — ${shown}.\n\n`;
 }
 
-/** One line per passed snapshot with an unhealthy capture: nothing changed visibly, but the capture is not the page as built. */
+/** One line per passed snapshot with an unhealthy capture: nothing changed visibly, or a tolerance passed it (same failures on both sides), but the capture is not the page as built. */
 export function unhealthyPassedLines(snapshots: SnapshotResult[]): string {
   const lines: string[] = [];
   for (const snapshot of snapshots.filter((s) => s.status === 'passed')) {
     const reading = captureHealthReading(snapshot.captureHealth);
     if (!reading) continue;
     const who = reading.side === 'both' ? 'neither image shows' : reading.side === 'baseline' ? 'the baseline does not show' : 'the current capture does not show';
-    lines.push(`> **Unhealthy capture** — \`${snapshot.name}\` passed, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.\n\n`);
+    // A tolerance passes an unhealthy capture only when both sides failed the same way.
+    const passed = snapshot.autoPassed ? `auto-passed by the '${snapshot.autoPassed}' criterion` : 'passed';
+    lines.push(`> **Unhealthy capture** — \`${snapshot.name}\` ${passed}, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.\n\n`);
   }
   return lines.slice(0, 10).join('');
 }

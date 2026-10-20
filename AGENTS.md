@@ -123,7 +123,7 @@ CI — GitHub Actions
 | `src/capture/environment.ts` | Capture provenance: the `environment` block every adapter records in metadata.json |
 | `src/report/environment.ts` | What changed since the baseline (`delta`, `renderingDelta`), `isRenderingDrift()`, shared wording |
 | `src/capture/health.ts` | Capture health: `HEALTH_PROBE_EXPRESSION` (what failed to load, read in the page after the capture), `parseHealth`, network-side evidence |
-| `src/report/health.ts` | When a capture is unhealthy (`assessHealth`), `captureHealth` per snapshot, the "Unhealthy capture" wording |
+| `src/report/health.ts` | When a capture is unhealthy (`assessHealth`), `captureHealth` per snapshot, when both sides failed the same way (`sameHealthFailures`: the tolerances still apply), the "Unhealthy capture" wording |
 | `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
 | `src/report/template.ts` | Self-contained HTML template for the report; escapes every value it shows; `snapshotAnchorId()` gives each snapshot a link target (`#snap-<name>`) |
@@ -220,7 +220,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.7.0",
+  "version": "2.8.0",
   "timestamp": "<ISO>",
   "summary": { "total": 5, "passed": 1, "changed": 4, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
@@ -290,6 +290,17 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
                          "warnings": [],
                          "candidate": { "fonts": { "status": "loaded",
                                                    "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] } } }
+    },
+    {
+      "name": "broken-font",
+      "status": "passed",
+      "diffPercent": 0.04,
+      "autoPassed": "threshold",
+      "dom": { "changed": false, "noiseHint": false, "summary": null, "styleCheck": "match" },
+      "captureHealth": { "unhealthy": "both", "sameOnBothSides": true,
+                         "reasons": ["web font 'Fancy' failed to load, so the page rendered with a fallback font",
+                                     "baseline: web font 'Fancy' failed to load, so the page rendered with a fallback font"],
+                         "warnings": [] }
     }
   ]
 }
@@ -334,6 +345,12 @@ passes, and the warning is still shown); an unhealthy baseline is called out on 
 compare against it (re-baseline from a healthy run); unhealthy and rendering drift can both
 be true, unhealthy first. Broken images and failed scripts are warnings only. An adapter
 that does not run the probe writes no `health`: not checked, never healthy.
+`sameOnBothSides` (schema 2.8.0) is `true` only when both sides are unhealthy with the
+same failures (the same font faces, stylesheets, and stylesheet and font requests by host,
+path and status; never while fonts were still loading, never when a list was cut:
+`sameHealthFailures`), a permanently broken asset: `maxDiffPercent`, `maxDiffPixels` and
+`shiftTolerance` then still apply (`autoPassed` `"threshold"` or `"shift"` with
+`unhealthy` set), `noiseAutoPass` never does, and it is still never worded as noise.
 
 `sizeMismatch` (schema 2.4.0) is present when the current capture's dimensions differ
 from the baseline's. The two are padded to max width × max height before diffing and
