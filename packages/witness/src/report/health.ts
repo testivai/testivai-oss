@@ -140,7 +140,7 @@ export function assessHealth(health: CaptureHealth): HealthAssessment {
 export const BASELINE_HEALTH_PREFIX = 'baseline: ';
 
 /**
- * The per-snapshot `captureHealth` (schema 2.6.0): both recorded blocks, which
+ * The per-snapshot `captureHealth` (schema 2.7.0): both recorded blocks, which
  * side is unhealthy, and the reasons and warnings (the baseline's marked
  * "baseline: "), the current capture's first. Undefined when neither side
  * recorded health: not checked, which is neither healthy nor unhealthy.

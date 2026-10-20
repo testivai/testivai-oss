@@ -50,7 +50,7 @@ const snap = (name: string, extra: Partial<SnapshotResult> = {}): SnapshotResult
 
 const report = (...snapshots: SnapshotResult[]): string => {
   const data: ReportData = {
-    version: '2.6.0',
+    version: '2.7.0',
     timestamp: '2026-10-19T00:00:00.000Z',
     summary: {
       total: snapshots.length,

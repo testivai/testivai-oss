@@ -1,5 +1,5 @@
 /**
- * Capture health in the PR comment (results.json 2.6.0 `captureHealth`):
+ * Capture health in the PR comment (results.json 2.7.0 `captureHealth`):
  * the "Unhealthy capture" reading, said before any environment reading, an
  * unhealthy passed or new snapshot, and the warnings. The words come from
  * @testivai/witness report/health.ts, so the comment, the HTML report and

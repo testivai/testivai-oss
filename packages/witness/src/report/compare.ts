@@ -22,6 +22,7 @@ import { type EnvironmentPolicy, readEnvironment } from '../capture/environment'
 import { parseHealth } from '../capture/health';
 import { diffEnvironments } from './environment';
 import { isUnhealthyCapture, snapshotCaptureHealth } from './health';
+import { type RgbaImage, renderThumbnail, thumbnailArea } from './thumbnail';
 import {
   attributeRegions,
   compareStyleHashes,
@@ -177,7 +178,7 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
     // For simplicity and zero-dep, we do a byte-level comparison first,
     // then fall back to diff engine for actual pixel data.
     const captureMeta = readTempMaskMetadata(projectRoot, name);
-    const result = compareBuffers(
+    const { result, pixels } = compareBuffers(
       baselineBuffer,
       tempBuffer,
       name,
@@ -274,10 +275,29 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
       applyPassCriteria(result, passCriteria);
     }
 
+    // The thumbnail is for a snapshot someone has to look at: only once the
+    // status is final, and only for 'changed' (never passed or new).
+    if (result.status === 'changed' && pixels) {
+      writeThumbnail(result, pixels, snapshotImagesDir, name);
+    }
+
     results.push(result);
   }
 
   return results;
+}
+
+/**
+ * Write thumb.png (baseline | current | diff of the changed area, see
+ * report/thumbnail.ts) and record `thumbPath`. Nothing when the diff has no
+ * differing pixel to show.
+ */
+function writeThumbnail(result: SnapshotResult, pixels: ComparedPixels, snapshotImagesDir: string, name: string): void {
+  const area = thumbnailArea(result.regions, pixels.diff);
+  if (!area) return;
+  const strip = renderThumbnail(pixels, area);
+  fs.writeFileSync(path.join(snapshotImagesDir, 'thumb.png'), encodePng(Buffer.from(strip.data.buffer), strip.width, strip.height));
+  result.thumbPath = `images/${name}/thumb.png`;
 }
 
 /**
@@ -431,6 +451,16 @@ interface CompareMaskContext {
   regionOptions?: RegionOptions;
 }
 
+/**
+ * The decoded images of a comparison, kept for the thumbnail: each capture
+ * at its own size, and the diff on the canvas (max width × max height).
+ */
+interface ComparedPixels {
+  baseline: RgbaImage;
+  current: RgbaImage;
+  diff: RgbaImage;
+}
+
 function compareBuffers(
   baselineBuffer: Buffer,
   candidateBuffer: Buffer,
@@ -438,7 +468,7 @@ function compareBuffers(
   snapshotImagesDir: string,
   threshold: number,
   maskContext: CompareMaskContext = { configMasks: [], callMasks: [] },
-): SnapshotResult {
+): { result: SnapshotResult; pixels?: ComparedPixels } {
   // Quick byte-level comparison — identical files need no decoding
   if (baselineBuffer.equals(candidateBuffer)) {
     const result: SnapshotResult = {
@@ -466,7 +496,7 @@ function compareBuffers(
         if (warnings.length > 0) result.maskWarnings = warnings;
       }
     }
-    return result;
+    return { result };
   }
 
   try {
@@ -538,18 +568,20 @@ function compareBuffers(
     if (diffResult.regions) result.regions = diffResult.regions;
     if (maskRects.length > 0) result.masks = maskRects;
     if (maskWarnings.length > 0) result.maskWarnings = maskWarnings;
-    return result;
+    return { result, pixels: { baseline, current: candidate, diff: { data: diffOutput, width, height } } };
   } catch (_err) {
     // PNG decode failed (corrupt file, unexpected format) — report as changed
     // without a diff image so the user can investigate manually
     return {
-      name,
-      status: 'changed',
-      diffPercent: 100,
-      diffCount: 0,
-      totalPixels: 0,
-      baselinePath: `images/${name}/baseline.png`,
-      currentPath: `images/${name}/current.png`,
+      result: {
+        name,
+        status: 'changed',
+        diffPercent: 100,
+        diffCount: 0,
+        totalPixels: 0,
+        baselinePath: `images/${name}/baseline.png`,
+        currentPath: `images/${name}/current.png`,
+      },
     };
   }
 }

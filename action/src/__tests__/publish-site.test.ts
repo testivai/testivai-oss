@@ -10,6 +10,8 @@
  * 404 page explains a link to a report that is no longer published.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type { ReportArchive } from '../publish/archive';
 import type { PlannedRun, PlanPr, SitePlan } from '../publish/plan';
 import { buildIndexPages, buildRunReport, type RunOutcome, type SiteFile, type SiteInfo } from '../publish/site';
@@ -23,6 +25,18 @@ const SITE: SiteInfo = {
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 5, 0, 0, 0, 2, 0xd0, 8, 6, 0, 0, 0, 0, 0, 0, 0]);
 const HTML_AS_PNG = new TextEncoder().encode('<script>alert(1)</script>');
+
+/** A PNG header (signature and IHDR) of that size: all checkPng reads. */
+function pngHeader(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(PNG);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+}
+
+/** A thumb as witness writes it: at most THUMBNAIL_LIMITS (800×400). */
+const THUMB = pngHeader(800, 400);
 
 function plannedRun(over: Partial<PlannedRun> = {}): PlannedRun {
   return {
@@ -247,6 +261,126 @@ describe('buildRunReport', () => {
       expect(html).not.toContain('<script>alert(1)');
       expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;/current.png');
     });
+  });
+});
+
+describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
+  const PAGE = 'pr/14/39150236166-1/index.html';
+
+  it('publishes a thumb that is a PNG at images/<n>/thumb.png, like the other images', () => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' }), changed('checkout', { thumbPath: 'images/checkout/thumb.png' })]), {
+        'images/home/current.png': PNG,
+        'images/home/thumb.png': THUMB,
+        'images/checkout/thumb.png': THUMB,
+      }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')?.data).toBe(THUMB);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(THUMB);
+    // The run's data says which thumbs were published (the PR comment reads it).
+    expect(outcome.ok && outcome.data.snapshots.map((s) => s.thumbPath)).toEqual(['images/0/thumb.png', 'images/1/thumb.png']);
+    // The report page itself does not show it.
+    expect(htmlAt(files, PAGE)).not.toContain('thumb.png');
+  });
+
+  it('leaves out a thumb that is not a PNG, and names it on the page', () => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' })]), { 'images/home/current.png': PNG, 'images/home/thumb.png': HTML_AS_PNG }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')).toBeUndefined();
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/current.png')).toBeDefined();
+    expect(outcome.ok && outcome.omittedImages).toEqual(['images/home/thumb.png (not a PNG)']);
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+    expect(htmlAt(files, PAGE)).toMatch(/report-notice warning">1 image was left out[^<]*images\/home\/thumb\.png \(not a PNG\)/);
+  });
+
+  it.each([
+    ['a pixel too wide', 801, 400],
+    ['a pixel too tall', 800, 401],
+    ['the size of a page', 1280, 720],
+  ])('leaves out a thumb over the 800×400 of a thumbnail (%s), and publishes the rest of the report', (_, width, height) => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' }), changed('checkout', { thumbPath: 'images/checkout/thumb.png' })]), {
+        'images/home/current.png': PNG,
+        'images/home/diff.png': PNG,
+        'images/home/thumb.png': pngHeader(width, height),
+        'images/checkout/thumb.png': THUMB,
+      }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')).toBeUndefined();
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/current.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/diff.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(THUMB);
+    expect(outcome.ok && outcome.data.snapshots[1].thumbPath).toBe('images/1/thumb.png');
+    expect(outcome.ok && outcome.omittedImages).toEqual([`images/home/thumb.png (a PNG of ${width}×${height} pixels, over the 800×400 of a thumbnail)`]);
+    expect(htmlAt(files, PAGE)).toMatch(/report-notice warning">1 image was left out[^<]*images\/home\/thumb\.png \(a PNG of/);
+  });
+
+  it('takes no thumb from a path that names another kind of image', () => {
+    const { files, outcome } = build(archiveOf(results([changed('home', { thumbPath: 'images/home/diff.png' })]), { 'images/home/diff.png': PNG }));
+
+    expect(files.map((f) => f.path).sort()).toEqual(['pr/14/39150236166-1/images/0/diff.png', PAGE]);
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+  });
+
+  it('builds a report without thumbs exactly as before: the same files, byte for byte', () => {
+    // fixtures/publish-site-no-thumbnails.html is this page as the report
+    // template built it before thumbnails: main at ed73679, regenerated with
+    // capture health's template changes (feat/capture-health at 8b30ccc,
+    // before main's thumbnails were merged in), rendered with TZ=UTC and the
+    // en-US locale.
+    // The page shows the run's time with toLocaleString() (template.ts), which
+    // follows the time zone and locale of the machine that builds it, so that
+    // one value is what the same call gives here, escaped the way the template
+    // escapes it; every other byte must match. A change to the report
+    // template's output changes this page too: regenerate the fixture from
+    // that change's own output, never from this one.
+    const timeLine = (text: string) => `<div class="timestamp">${text}</div>`;
+    const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'publish-site-no-thumbnails.html'), 'utf-8');
+    const fixtureTime = timeLine('10/18/2026, 10:04:00 AM'); // 2026-10-18T10:04:00.000Z in UTC, en-US
+    expect(fixture.split(fixtureTime)).toHaveLength(2);
+    const here = new Date('2026-10-18T10:04:00.000Z')
+      .toLocaleString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    const before = fixture.replace(fixtureTime, () => timeLine(here));
+    const images = {
+      'images/home/baseline.png': PNG,
+      'images/home/current.png': PNG,
+      'images/home/diff.png': PNG,
+      'images/checkout/step 2/current.png': PNG,
+      'images/signup/current.png': PNG,
+    };
+    const snapshots = [
+      changed('home'),
+      changed('checkout/step 2'),
+      { name: 'signup', status: 'new', diffPercent: 0, diffCount: 0, totalPixels: 0, currentPath: 'images/signup/current.png' },
+    ];
+    const archive = archiveOf(
+      results(snapshots, { summary: { total: 3, passed: 0, changed: 2, newSnapshots: 1, missing: 0 } }),
+      images,
+      { runId: '39150236166', runAttempt: 1, sha: 'x' },
+    );
+
+    const { files } = build(archive);
+
+    expect(files.map((f) => f.path).sort()).toEqual([
+      'pr/14/39150236166-1/images/0/baseline.png',
+      'pr/14/39150236166-1/images/0/current.png',
+      'pr/14/39150236166-1/images/0/diff.png',
+      'pr/14/39150236166-1/images/1/current.png',
+      'pr/14/39150236166-1/images/2/current.png',
+      PAGE,
+    ]);
+    for (const f of files) if (f.path.endsWith('.png')) expect(f.data).toBe(PNG);
+    expect(htmlAt(files, PAGE)).toBe(before);
   });
 });
 

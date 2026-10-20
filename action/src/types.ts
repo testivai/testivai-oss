@@ -51,6 +51,12 @@ export interface SnapshotResult {
   /** Optional in newer witness versions for 'new' snapshots. */
   currentPath?: string;
   diffPath?: string;
+  /**
+   * witness schema 2.6.0+: thumb.png, the changed area of the baseline, the
+   * current capture and the diff side by side (`changed` snapshots only). The
+   * comment shows it only once publish@v1 has published it (CommentLinks).
+   */
+  thumbPath?: string;
   /** Present when the adapter captured DOM alongside the screenshot. */
   dom?: SnapshotDomSignal;
   /** witness 1.5+: whole-page uniform displacement (injected-banner signature). */
@@ -80,7 +86,7 @@ export interface SnapshotResult {
     policy?: 'strict';
   };
   /**
-   * witness schema 2.6.0+: capture health, when the baseline or the current
+   * witness schema 2.7.0+: capture health, when the baseline or the current
    * capture recorded what failed to load. An unhealthy side (a web font or
    * stylesheet that failed) is never render noise: it reads "Unhealthy capture".
    */

@@ -56,6 +56,14 @@ export interface SnapshotResult {
   /** Relative path to diff image (if any) */
   diffPath?: string;
   /**
+   * Relative path to the thumbnail (schema 2.6.0): the changed area of the
+   * baseline, the current capture and the diff side by side, at most 800×400
+   * px (report/thumbnail.ts). Only for 'changed' snapshots with a diff image
+   * that has a differing pixel; never for passed (auto-passed included) or
+   * new ones.
+   */
+  thumbPath?: string;
+  /**
    * DOM-level signal. Present only when both baseline and candidate
    * captured DOM HTML alongside the screenshot.
    */
@@ -87,7 +95,7 @@ export interface SnapshotResult {
    * whose styles were not compared or changed, or whose regions all sit in
    * one area, is never auto-passed as noise), or 'shift' (every region is a pure
    * element shift within shiftTolerance px). Never present when
-   * `captureHealth.unhealthy` is set (schema 2.6.0). The diff image is still
+   * `captureHealth.unhealthy` is set (schema 2.7.0). The diff image is still
    * written — auto-passes stay auditable.
    */
   autoPassed?: 'threshold' | 'noise' | 'shift';
@@ -115,7 +123,7 @@ export interface SnapshotResult {
    */
   environment?: SnapshotEnvironment;
   /**
-   * Capture health (schema 2.6.0): present when the baseline or the current
+   * Capture health (schema 2.7.0): present when the baseline or the current
    * capture recorded what failed to load (metadata.json `health`). An
    * unhealthy side is never render noise: `dom.noiseHint` is false and no
    * pass criterion applies while pixels differ. See report/health.ts.

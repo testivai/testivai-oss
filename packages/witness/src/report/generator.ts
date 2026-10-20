@@ -47,10 +47,13 @@ export interface GenerateReportOptions {
  * @returns The report data
  */
 /**
- * results.json schema version. 2.6.0 adds capture health: per-snapshot
+ * results.json schema version. 2.7.0 adds capture health: per-snapshot
  * `captureHealth` (what failed to load in the baseline and the current
  * capture, which side is unhealthy, and why in plain words), present when
- * either side recorded `health` in its metadata.json. 2.5.0 added capture provenance: per-snapshot
+ * either side recorded `health` in its metadata.json. 2.6.0 added per-snapshot
+ * `thumbPath`: thumb.png, the changed area of the baseline, the current
+ * capture and the diff side by side (at most 800×400 px), for 'changed'
+ * snapshots. 2.5.0 added capture provenance: per-snapshot
  * `environment` (what changed between the environment the baseline was
  * captured in and the current capture's: `delta`, `renderingDelta`, both
  * blocks when they differ, and `policy: "strict"` when that policy made the
@@ -64,7 +67,7 @@ export interface GenerateReportOptions {
  * diff bounding boxes), `masks[]` (applied masks with their source — the
  * audit trail), and `maskWarnings[]`. All additive.
  */
-export const RESULTS_SCHEMA_VERSION = '2.6.0';
+export const RESULTS_SCHEMA_VERSION = '2.7.0';
 
 /**
  * Write results.json for an already-computed set of snapshot results.

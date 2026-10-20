@@ -178,7 +178,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.6.0",         // results.json SCHEMA version
+  "version": "2.7.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 7,
@@ -257,6 +257,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "baselinePath": "images/nav-redesign/baseline.png",
       "currentPath":  "images/nav-redesign/current.png",
       "diffPath":     "images/nav-redesign/diff.png",
+      "thumbPath":    "images/nav-redesign/thumb.png", // changed only: the changed area, baseline | current | diff
       "dom": {
         "changed": true,
         "summary": {
@@ -378,6 +379,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].baselinePath` | string | optional | relative path under `<reportDir>/`; absent for `new` |
 | `snapshots[].currentPath` | string | optional | relative path under `<reportDir>/` |
 | `snapshots[].diffPath` | string | optional | present whenever the two PNGs differ byte-wise and decode: `changed`, auto-passed, or a `passed` snapshot with no pixel above `threshold`; absent for byte-identical passes, `new`, and a `changed` snapshot whose PNG failed to decode |
+| `snapshots[].thumbPath` | string | optional | emitted from schema 2.6.0, for a `changed` snapshot only (never `passed`, auto-passed or `new`, and not for one whose PNG failed to decode or whose diff has no differing pixel): `images/<name>/thumb.png`, the changed area of the baseline, the current capture and the diff side by side, 2 px apart, at most 800×400 px (downscaled by area average, never upscaled). The area is the union of the up to three largest `regions` by area, padded 24 px and kept inside the diff canvas; without regions, a full-width band of 400 rows from the first differing row. With `sizeMismatch` it is on the padded canvas, and rows or columns a capture does not have are drawn as padding (grey). The HTML report does not show it; `publish@v1` publishes it and puts it in the pull request comment |
 | `snapshots[].dom` | object | optional | only present when DOM was captured on both sides and the PNGs differ byte-wise (`changed`, auto-passed, or `passed` with no pixel above `threshold`) |
 | `snapshots[].dom.changed` | boolean | yes within `dom` | true if structural DOM diff detected |
 | `snapshots[].dom.summary` | object &#124; null | yes within `dom` | null when `changed` is false |
@@ -390,14 +392,14 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].pageShift` | object | optional | whole-page uniform displacement: `{ dy, belowY, count }`. Requires element maps on both sides |
 | `snapshots[].masks` | array | optional | masks applied to this comparison, resolved to pixels: `{ x, y, width, height, source }`. Present when non-empty |
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
-| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. Never present when `captureHealth.unhealthy` is set: from schema 2.6.0 no criterion passes an unhealthy capture whose pixels differ. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
+| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. Never present when `captureHealth.unhealthy` is set: from schema 2.7.0 no criterion passes an unhealthy capture whose pixels differ. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
 | `snapshots[].environment` | object | optional | emitted from schema 2.5.0 when the baseline and the current capture both recorded an `environment` in their metadata.json (one side unrecorded is unknown, not a change) |
 | `snapshots[].environment.delta` | string[] | yes within `environment` | every field that differs, as sorted dotted paths (`browser.version`); empty when the environments match |
 | `snapshots[].environment.renderingDelta` | string[] | yes within `environment` | the subset that can change rendering (see "Capture provenance"). Pixels differ, `dom.changed` false, `dom.styleCheck: "match"`, a diff not concentrated in one area and a non-empty `renderingDelta` is **rendering drift**: the environment changed, not the page (`isRenderingDrift` from `@testivai/witness/report`). Never word it as render noise |
 | `snapshots[].environment.baseline` / `.candidate` | object | optional | both recorded blocks; present when `delta` is non-empty |
 | `snapshots[].environment.policy` | `"strict"` | optional | present when `environmentPolicy: "strict"` made the snapshot `changed` because `renderingDelta` is non-empty, whatever its pixels (a byte-identical capture included, with `diffPercent` 0). Under `"warn"` (default) and `"separate"`, the environment never changes a status |
-| `snapshots[].captureHealth` | object | optional | emitted from schema 2.6.0 when the baseline or the current capture recorded `health` in its metadata.json (see "Capture health"); absent when neither did (not checked). Present on `new` snapshots too, for the first capture |
+| `snapshots[].captureHealth` | object | optional | emitted from schema 2.7.0 when the baseline or the current capture recorded `health` in its metadata.json (see "Capture health"); absent when neither did (not checked). Present on `new` snapshots too, for the first capture |
 | `snapshots[].captureHealth.candidate` / `.baseline` | object | optional | each side's recorded `health` block; absent for a side that recorded none |
 | `snapshots[].captureHealth.unhealthy` | enum &#124; null | yes within `captureHealth` | `candidate` &#124; `baseline` &#124; `both` &#124; `null`. When set, the reading is **Unhealthy capture**, never render noise: `dom.noiseHint` is false and no pass criterion applies while pixels differ (`status` stays `changed`); a zero-pixel diff still passes by the existing rules, and the warning is still shown. An unhealthy baseline is called out on every compare against it (re-baseline from a healthy run). Both this and rendering drift can be true: unhealthy is said first |
 | `snapshots[].captureHealth.reasons` | string[] | yes within `captureHealth` | why, in plain words ("web font 'Fancy' failed to load, so the page rendered with a fallback font", "stylesheet example.com/css/site.css returned 404"); the baseline's start with `baseline: `. Empty when not unhealthy |

@@ -60,6 +60,7 @@ function valid(): Record<string, any> {
         baselinePath: 'images/home/baseline.png',
         currentPath: 'images/home/current.png',
         diffPath: 'images/home/diff.png',
+        thumbPath: 'images/home/thumb.png',
         baselineApprovedAt: '2026-10-01T00:00:00.000Z',
         dom: {
           changed: true,
@@ -138,6 +139,7 @@ describe('parseReportData', () => {
         delete s.baselinePath;
         delete s.currentPath;
         delete s.diffPath;
+        delete s.thumbPath;
       }
       expect(parsed.data).toEqual(withoutPaths);
     } finally {
@@ -162,7 +164,7 @@ describe('parseReportData', () => {
     expect(parsed.data.snapshots[0].environment).toEqual(data.snapshots[0].environment);
   });
 
-  it('keeps the capture health (schema 2.6.0) exactly', () => {
+  it('keeps the capture health (schema 2.7.0) exactly', () => {
     const data = valid();
     const parsed = parseReportData(data);
     if (!parsed.ok) throw new Error(parsed.reason);
@@ -186,7 +188,15 @@ describe('parseReportData', () => {
       expect(s.baselinePath).toBeUndefined();
       expect(s.currentPath).toBeUndefined();
       expect(s.diffPath).toBeUndefined();
+      expect(s.thumbPath).toBeUndefined();
     }
+  });
+
+  it('accepts a thumbnail path as text (schema 2.6.0), and still never takes it from the file', () => {
+    const parsed = parseReportData(withValue('snapshots.0.thumbPath', 'images/home/thumb.png'));
+
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.data.snapshots[0].thumbPath).toBeUndefined();
   });
 
   it('drops fields it does not know, at every level', () => {
@@ -245,6 +255,9 @@ describe('parseReportData', () => {
     ['a page shift as text', withValue('snapshots.0.pageShift', { dy: '4', belowY: 1, count: 1 }), /pageShift/],
     ['a size that is not positive', withValue('snapshots.0.sizeMismatch', { baseline: { width: 0, height: 1 }, candidate: { width: 1, height: 1 } }), /sizeMismatch/],
     ['an approval date that is not text', withValue('snapshots.0.baselineApprovedAt', 5), /baselineApprovedAt/],
+    ['a thumbnail path that is not text', withValue('snapshots.0.thumbPath', 42), /snapshots\[0\]\.thumbPath/],
+    ['a thumbnail path that is an object', withValue('snapshots.0.thumbPath', { src: 'x' }), /snapshots\[0\]\.thumbPath/],
+    ['a thumbnail path that is null', withValue('snapshots.0.thumbPath', null), /snapshots\[0\]\.thumbPath/],
     ['a missing baseline that is not text', withValue('missingBaselines', [null]), /missingBaselines/],
     ['an environment delta that is not a list', withValue('snapshots.0.environment.delta', 'browser.version'), /environment\.delta/],
     ['an environment field name that is not text', withValue('snapshots.0.environment.renderingDelta', [1]), /renderingDelta/],

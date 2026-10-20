@@ -1,5 +1,5 @@
 /**
- * The PR comment with capture health (results.json 2.6.0 `captureHealth`).
+ * The PR comment with capture health (results.json 2.7.0 `captureHealth`).
  * An unhealthy capture reads "Unhealthy capture" with what failed, before
  * any environment reading, never "likely render noise"; an unhealthy
  * baseline is called out on every compare against it; passed and new

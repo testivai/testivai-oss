@@ -1,5 +1,5 @@
 /**
- * @testivai/mcp with capture health (results.json 2.6.0 `captureHealth`).
+ * @testivai/mcp with capture health (results.json 2.7.0 `captureHealth`).
  * The agent-facing verdicts, explain_snapshot and the triage rubric must say
  * "unhealthy capture" for a capture whose web fonts or stylesheets failed to
  * load, before any other reading, never "likely render noise"; an unhealthy
@@ -100,7 +100,7 @@ describe('explain_snapshot with capture health', () => {
     fs.mkdirSync(path.join(root, 'visual-report'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'visual-report', 'results.json'),
-      JSON.stringify({ version: '2.6.0', timestamp: 't', summary: { total: snapshots.length, passed: 0, changed: snapshots.length, newSnapshots: 0 }, snapshots }),
+      JSON.stringify({ version: '2.7.0', timestamp: 't', summary: { total: snapshots.length, passed: 0, changed: snapshots.length, newSnapshots: 0 }, snapshots }),
     );
   };
 

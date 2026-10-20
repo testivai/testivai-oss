@@ -10,8 +10,10 @@
  * - each field must have its type (a finite number, text, a known value),
  *   within size limits, or the whole file is rejected with the field's path;
  * - fields it does not know are dropped, at every level;
- * - image paths (`baselinePath`, `currentPath`, `diffPath`) are never taken
- *   from the file: the caller adds them for the images it actually has.
+ * - image paths (`baselinePath`, `currentPath`, `diffPath`, `thumbPath`) are
+ *   never taken from the file: the caller adds them for the images it
+ *   actually has. A `thumbPath` (schema 2.6.0) that is there must be text,
+ *   or the file is rejected like for any other field.
  *
  * Its own module with no Node dependencies, so the GitHub Action can bundle
  * it without the rest of the report code.
@@ -193,10 +195,13 @@ function readSnapshot(value: unknown, path: string): SnapshotResult {
   optional(snapshot, 'sizeMismatch', s, path, readSizeMismatch);
   optional(snapshot, 'environment', s, path, readSnapshotEnvironment);
   optional(snapshot, 'captureHealth', s, path, readCaptureHealth);
+  // Checked, never kept: like the other image paths, the caller sets it for
+  // a thumbnail it actually has (schema 2.6.0).
+  if (s.thumbPath !== undefined) text(s.thumbPath, at(path, 'thumbPath'));
   return snapshot;
 }
 
-/** A snapshot's capture health (schema 2.6.0); each recorded block goes through parseHealth. */
+/** A snapshot's capture health (schema 2.7.0); each recorded block goes through parseHealth. */
 function readCaptureHealth(value: unknown, path: string): SnapshotCaptureHealth {
   const h = record(value, path);
   const block = (v: unknown, p: string): CaptureHealth => parseHealth(v) ?? fail(p, 'expected a capture health block');

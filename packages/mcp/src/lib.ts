@@ -80,7 +80,7 @@ export interface SnapshotResult {
    */
   environment?: EnvironmentInfo;
   /**
-   * results.json 2.6.0+: capture health, when the baseline or the current
+   * results.json 2.7.0+: capture health, when the baseline or the current
    * capture recorded what failed to load. An unhealthy side (a web font or
    * stylesheet that failed) is never render noise: the verdict says
    * "unhealthy capture" before anything else.
@@ -717,7 +717,7 @@ export interface SnapshotExplanation {
     /** Structural evidence from the DOM pair. */
     dom: DomInfo | null;
     /**
-     * Capture health (results.json 2.6.0+): what failed to load in each
+     * Capture health (results.json 2.7.0+): what failed to load in each
      * capture, which side is unhealthy and why. Null when neither side
      * recorded health (not checked).
      */

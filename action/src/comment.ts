@@ -32,7 +32,20 @@ export interface CommentLinks {
    * marker so a later update can check the comment is still about that run.
    */
   runKey?: string;
+  /**
+   * Published thumbnails (thumb.png: baseline | current | diff of the changed
+   * area) of changed snapshots, by snapshot name. At most
+   * MAX_COMMENT_THUMBNAILS are shown, only with `reportUrl`, and only an
+   * https URL inside the report URL is used.
+   */
+  thumbnails?: Array<{ name: string; url: string }>;
 }
+
+/** The most thumbnails one comment shows. */
+export const MAX_COMMENT_THUMBNAILS = 5;
+
+/** How many of the snapshots with a thumbnail are expanded (`<details open>`), so the pictures show without a click. */
+const OPEN_WITH_THUMBNAIL = 3;
 
 const RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
 
@@ -80,6 +93,31 @@ function snapshotUrl(reportUrl: string, name: string): string {
 /** Escape a URL for an HTML attribute in the comment. */
 function attr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+/** Escape text (a snapshot name, which comes from the pull request) for an HTML attribute: markup, quotes and control characters. */
+function attrText(value: string): string {
+  return value
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * The thumbnail URL for each snapshot name: only with a report URL, and only
+ * an https URL that passes safeReportUrl and lies inside the report URL.
+ */
+function thumbnailUrls(reportUrl: string | undefined, thumbnails: CommentLinks['thumbnails']): Map<string, string> {
+  const urls = new Map<string, string>();
+  if (!reportUrl) return urls;
+  for (const t of thumbnails ?? []) {
+    const url = safeReportUrl(t.url);
+    if (url?.startsWith(reportUrl) && !urls.has(t.name)) urls.set(t.name, url);
+  }
+  return urls;
 }
 
 /**
@@ -274,6 +312,7 @@ export function buildComment(
 ): string {
   const { summary, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
+  const thumbnails = thumbnailUrls(reportUrl, links.thumbnails);
 
   // Header summary line
   const summaryLine = [
@@ -323,17 +362,27 @@ ${summaryLine} — **${summary.total} total**
   const changedSnapshots = snapshots.filter(s => s.status === 'changed');
   if (changedSnapshots.length > 0) {
     comment += '#### Changed Snapshots\n\n';
+    let shown = 0;
     for (const snapshot of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot);
       const domHint = renderSnapshotHints(snapshot);
       const size = snapshot.sizeMismatch ? ` · ${formatSizeMismatch(snapshot.sizeMismatch)}` : '';
       // On the row itself, so it works without expanding the details.
       const open = reportUrl ? ` · <a href="${attr(snapshotUrl(reportUrl, snapshot.name))}">open in report</a>` : '';
+      // The published thumbnail (baseline | current | diff of the changed
+      // area) leads the details, linked to the snapshot's card; the first
+      // few with one are expanded so the pictures show without a click.
+      const thumb = reportUrl && shown < MAX_COMMENT_THUMBNAILS ? thumbnails.get(snapshot.name) : undefined;
+      if (thumb) shown++;
+      const picture = thumb && reportUrl
+        ? `<a href="${attr(snapshotUrl(reportUrl, snapshot.name))}"><img src="${attr(thumb)}" alt="${attrText(`${snapshot.name}: baseline, current, diff`)}"></a>\n\n`
+        : '';
+      const expanded = thumb && shown <= OPEN_WITH_THUMBNAIL ? ' open' : '';
 
-      comment += `<details>
+      comment += `<details${expanded}>
 <summary><code>${snapshot.name}</code> — ${diffPercent}% different${size}${open}</summary>
 
-${domHint}
+${picture}${domHint}
 \`\`\`
 /testivai approve ${snapshot.name}
 \`\`\`

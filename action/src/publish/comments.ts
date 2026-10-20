@@ -7,11 +7,14 @@
  * cannot comment, so for a fork with no reporter comment the publish posts
  * its own, built only from numbers and its own links: a fork controls the
  * text in its results (snapshot names, the reasons a report was refused),
- * and none of it goes into a comment the bot posts.
+ * and none of it goes into a comment the bot posts, so it shows no
+ * thumbnail either. Nor does the reporter's comment, rebuilt on a fork's pull
+ * request (a pull_request_target run can comment): the fork chose those PNGs,
+ * so thumbnails go only into a branch pull request's rebuilt comment.
  */
 
 import type { ReportData, ReportSummary } from '../../../packages/witness/src/report/results';
-import { buildComment, buildEmptyComment, readRunKey } from '../comment';
+import { buildComment, buildEmptyComment, MAX_COMMENT_THUMBNAILS, readRunKey } from '../comment';
 import type { ResultsData } from '../types';
 
 /** Marks the comment the publish posts on a fork's pull request. */
@@ -46,14 +49,23 @@ function runIdOf(key: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-export function commentFor(published: PublishedPr, comments: ExistingComment[], marker: string): CommentAction {
+export interface CommentOptions {
+  /**
+   * Show the published thumbnails (default true). Off for a private site:
+   * GitHub fetches a comment's images through its own proxy, without the
+   * reader's sign-in, so a private site's image would show broken.
+   */
+  thumbnails?: boolean;
+}
+
+export function commentFor(published: PublishedPr, comments: ExistingComment[], marker: string, options: CommentOptions = {}): CommentAction {
   const reporter = comments.find((c) => c.body.includes(marker) && readRunKey(c.body) !== undefined);
-  if (reporter) return updateReporterComment(published, reporter, marker);
+  if (reporter) return updateReporterComment(published, reporter, marker, options.thumbnails !== false);
   if (!published.fork) return { kind: 'none', why: `no TestivAI comment for run ${published.runId} on the pull request` };
   return forkComment(published, comments);
 }
 
-function updateReporterComment(published: PublishedPr, comment: ExistingComment, marker: string): CommentAction {
+function updateReporterComment(published: PublishedPr, comment: ExistingComment, marker: string, withThumbnails: boolean): CommentAction {
   const runKey = readRunKey(comment.body) as string;
   const described = runIdOf(runKey);
   if (described !== published.runId) {
@@ -63,13 +75,31 @@ function updateReporterComment(published: PublishedPr, comment: ExistingComment,
     return { kind: 'none', why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey };
+  const links = { reportUrl: published.url, runKey, thumbnails: withThumbnails ? publishedThumbnails(published) : [] };
   const body =
     data.snapshots.length === 0
       ? buildEmptyComment(published.artifactUrl, marker, links)
       : buildComment(data as unknown as ResultsData, published.artifactUrl, marker, links);
   if (body === comment.body) return { kind: 'none', why: 'the comment already links the report' };
   return { kind: 'update', id: comment.id, body };
+}
+
+/**
+ * The thumbnails the comment shows: the first MAX_COMMENT_THUMBNAILS changed
+ * snapshots, in results order, whose thumb.png the site published. site.ts
+ * sets `thumbPath` to images/<index>/thumb.png only for a thumb it published
+ * (parseReportData never takes one from results.json), and the URL is built
+ * from the run's page URL and that index only. None for a fork's pull
+ * request: its run chose the images, and the comment is the bot's.
+ */
+export function publishedThumbnails(published: PublishedPr): Array<{ name: string; url: string }> {
+  if (published.fork || !published.outcome.ok) return [];
+  const thumbnails: Array<{ name: string; url: string }> = [];
+  published.outcome.data.snapshots.forEach((s, i) => {
+    if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== 'changed' || s.thumbPath !== `images/${i}/thumb.png`) return;
+    thumbnails.push({ name: s.name, url: `${published.url}images/${i}/thumb.png` });
+  });
+  return thumbnails;
 }
 
 function forkComment(published: PublishedPr, comments: ExistingComment[]): CommentAction {

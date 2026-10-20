@@ -159,7 +159,11 @@ async function main(): Promise<void> {
       fs.writeFileSync(to, f.data);
     }
     const expectedImages = data.snapshots.reduce((n, s) => n + [s.baselinePath, s.currentPath, s.diffPath].filter(Boolean).length, 0);
-    assert.strictEqual(files.filter((f) => f.path.endsWith('.png')).length, expectedImages, 'every image of the report is published');
+    // The changed snapshot's thumbnail is published too, for the PR comment; the page does not show it.
+    const thumbIndex = data.snapshots.findIndex((s) => s.thumbPath);
+    assert.deepStrictEqual(data.snapshots.filter((s) => s.thumbPath).map((s) => s.name), ['home'], 'only the changed snapshot has a thumbnail');
+    assert.strictEqual(files.filter((f) => f.path.endsWith('.png')).length, expectedImages + 1, 'every image of the report is published, the thumbnail included');
+    assert.ok(files.some((f) => f.path === `pr/14/1001-1/images/${thumbIndex}/thumb.png`), 'the thumbnail is at its numbered path');
 
     // 3. In a browser.
     server = await serve(siteDir, repo);
@@ -187,6 +191,13 @@ async function main(): Promise<void> {
     assert.ok(await page.locator('#zoomOverlay.active').count(), 'zoom opens');
     assert.match((await page.getAttribute('#zoomImg', 'src')) ?? '', /images\/\d+\/\w+\.png$/);
     assert.deepStrictEqual(await problems(), [], 'no CSP violation or script error on the run page');
+    const thumbSize = await page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      return [img.naturalWidth, img.naturalHeight];
+    }, `images/${thumbIndex}/thumb.png`);
+    assert.ok(thumbSize[0] > 0 && thumbSize[0] <= 800 && thumbSize[1] > 0 && thumbSize[1] <= 400, `the thumbnail is served and decodes within 800×400 (${thumbSize.join('×')})`);
 
     // The policy is enforced, not just present.
     const fetched = await page.evaluate(() => fetch('https://example.com/collect').then(() => 'sent', () => 'blocked'));

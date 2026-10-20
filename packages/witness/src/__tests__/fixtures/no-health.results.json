@@ -1,5 +1,5 @@
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "summary": {
     "total": 8,
     "passed": 3,
@@ -183,7 +183,8 @@
         },
         "noiseHint": false,
         "styleCheck": "match"
-      }
+      },
+      "thumbPath": "images/structural/thumb.png"
     },
     {
       "name": "style-only",
@@ -227,7 +228,8 @@
             "body > main > div.card"
           ]
         }
-      }
+      },
+      "thumbPath": "images/style-only/thumb.png"
     },
     {
       "name": "styles-not-compared",
@@ -249,7 +251,8 @@
         "summary": null,
         "noiseHint": true,
         "styleCheck": "unavailable"
-      }
+      },
+      "thumbPath": "images/styles-not-compared/thumb.png"
     },
     {
       "name": "taller",
@@ -290,7 +293,8 @@
         "summary": null,
         "noiseHint": true,
         "styleCheck": "match"
-      }
+      },
+      "thumbPath": "images/taller/thumb.png"
     }
   ],
   "missingBaselines": [],

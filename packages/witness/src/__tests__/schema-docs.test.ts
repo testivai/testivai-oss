@@ -53,11 +53,13 @@ describe('results.json schema documents', () => {
     }
   });
 
-  it('the capture-health fields (schema 2.6.0) are documented in all three', () => {
+  it('the capture-health fields (schema 2.7.0) are documented in all three', () => {
     for (const doc of [claude, extensionApi]) {
       expect(doc).toContain('"captureHealth"');
       expect(doc).toContain('"unhealthy"');
     }
+    expect(claude).toMatch(/`captureHealth` \(schema 2\.7\.0\)/);
+    expect(extensionApi).toMatch(/\| `snapshots\[\]\.captureHealth` \| object \| optional \| emitted from schema 2\.7\.0 /);
     for (const field of [
       '`snapshots[].captureHealth`',
       '`snapshots[].captureHealth.candidate` / `.baseline`',
@@ -74,6 +76,14 @@ describe('results.json schema documents', () => {
     for (const field of ['fonts.status', 'fonts.failed[]', 'stylesheets.failed', 'images.broken', 'resources.status']) {
       expect(extensionApi).toContain(`\`${field}\``);
     }
+  });
+
+  it('the thumbnail path (schema 2.6.0) is documented in all three', () => {
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('"thumbPath"');
+    }
+    expect(claude).toMatch(/`thumbPath` \(schema 2\.6\.0\)/);
+    expect(extensionApi).toContain('| `snapshots[].thumbPath` |');
   });
 
   it('the metadata.json environment block every adapter writes is documented for community adapters', () => {

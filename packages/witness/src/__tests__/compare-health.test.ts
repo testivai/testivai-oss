@@ -235,8 +235,9 @@ describe('compareAll with capture health', () => {
     const { timestamp: _timestamp, ...rest } = data;
     const golden = fs
       .readFileSync(path.join(__dirname, 'fixtures', 'no-health.results.json'), 'utf-8')
-      // The schema version is the one field that moves with the release.
-      .replace('"version": "2.5.0"', `"version": "${RESULTS_SCHEMA_VERSION}"`);
+      // The schema version is the one field that moves with the release. The
+      // golden is main's output before capture health (with thumbPath, 2.6.0).
+      .replace(/"version": "[0-9.]+"/, `"version": "${RESULTS_SCHEMA_VERSION}"`);
     expect(`${JSON.stringify(rest, null, 2)}\n`).toBe(golden);
   });
 });
