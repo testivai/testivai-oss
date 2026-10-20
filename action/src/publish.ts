@@ -6,16 +6,20 @@
  * $RUNNER_TEMP/testivai-pages/site and record what was published next to it.
  * finish (after actions/deploy-pages): check the site answers and add the
  * report links to the pull requests.
+ * The job summary (publish/summary.ts) says what was published, from finish,
+ * or why nothing was, from build.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { resolveUpsertMarker } from './comment';
+import { type SummaryCore, writeJobSummary } from './job-summary';
 import { octokitApi, type OctokitLike } from './publish/api';
 import { buildSite, finishPublish, type Log, type PublishState } from './publish/build';
+import { publishSummary } from './publish/summary';
 import { resolveStatusContext } from './status';
 
-interface Core extends Log {
+interface Core extends Log, SummaryCore {
   setOutput: (name: string, value: string) => void;
 }
 
@@ -69,6 +73,8 @@ export async function build({ github, context, core, env }: { github: OctokitLik
   if (!result.published) {
     core.notice(result.reason);
     core.setOutput('published', 'false');
+    // The reason on the run page too: the steps after this one do not run.
+    await writeJobSummary(core, publishSummary({ published: false, reason: result.reason }));
     return;
   }
   fs.writeFileSync(stateFile, JSON.stringify(result.state));
@@ -91,4 +97,6 @@ export async function finish({ github, context, core, env }: { github: OctokitLi
     log: core,
   });
   core.setOutput('page-url', siteUrl);
+  // What was published, at the address the comments link, once it is live.
+  await writeJobSummary(core, publishSummary({ published: true, siteUrl, ...(state.site ? { site: state.site } : {}) }));
 }
