@@ -8,7 +8,9 @@
  * its own, built only from numbers and its own links: a fork controls the
  * text in its results (snapshot names, the reasons a report was refused),
  * and none of it goes into a comment the bot posts, so it shows no
- * thumbnail either: those go only into the reporter's rebuilt comment.
+ * thumbnail either. Nor does the reporter's comment, rebuilt on a fork's pull
+ * request (a pull_request_target run can comment): the fork chose those PNGs,
+ * so thumbnails go only into a branch pull request's rebuilt comment.
  */
 
 import type { ReportData, ReportSummary } from '../../../packages/witness/src/report/results';
@@ -87,10 +89,11 @@ function updateReporterComment(published: PublishedPr, comment: ExistingComment,
  * snapshots, in results order, whose thumb.png the site published. site.ts
  * sets `thumbPath` to images/<index>/thumb.png only for a thumb it published
  * (parseReportData never takes one from results.json), and the URL is built
- * from the run's page URL and that index only.
+ * from the run's page URL and that index only. None for a fork's pull
+ * request: its run chose the images, and the comment is the bot's.
  */
 export function publishedThumbnails(published: PublishedPr): Array<{ name: string; url: string }> {
-  if (!published.outcome.ok) return [];
+  if (published.fork || !published.outcome.ok) return [];
   const thumbnails: Array<{ name: string; url: string }> = [];
   published.outcome.data.snapshots.forEach((s, i) => {
     if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== 'changed' || s.thumbPath !== `images/${i}/thumb.png`) return;

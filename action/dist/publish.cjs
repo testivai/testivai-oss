@@ -1420,7 +1420,7 @@ function updateReporterComment(published, comment, marker, withThumbnails) {
   return { kind: "update", id: comment.id, body };
 }
 function publishedThumbnails(published) {
-  if (!published.outcome.ok) return [];
+  if (published.fork || !published.outcome.ok) return [];
   const thumbnails = [];
   published.outcome.data.snapshots.forEach((s, i2) => {
     if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== "changed" || s.thumbPath !== `images/${i2}/thumb.png`) return;

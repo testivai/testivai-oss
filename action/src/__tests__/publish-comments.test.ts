@@ -324,4 +324,30 @@ describe('publishedThumbnails: the thumbs the comment shows', () => {
     expect(action.kind).toBe('create');
     expect(action.kind === 'create' && action.body).not.toMatch(/<img|thumb\.png/);
   });
+
+  it("puts no image in the reporter's rebuilt comment on a fork's pull request (pull_request_target): the fork chose those PNGs", () => {
+    const p = { ...withThumbs([{ name: 'a', status: 'changed', thumb: true }]), fork: true };
+    const data = (p.outcome as { data: ReportData }).data;
+    const reporter = reporterComment('39150236166-1', { body: buildComment(data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind).toBe('update');
+    if (action.kind !== 'update') return;
+    expect(action.id).toBe(77);
+    expect(action.body).not.toMatch(/<img|thumb\.png/);
+    // The links are added as before.
+    expect(action.body).toBe(buildComment(data as never, ZIP, UPSERT_MARKER, { reportUrl: URL, runKey: '39150236166-1' }));
+    expect(action.body).toContain(`[Open the visual report](${URL})`);
+    expect(publishedThumbnails(p)).toEqual([]);
+  });
+
+  it("still shows them on a branch pull request's rebuilt comment", () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind === 'update' && action.body).toContain(`<img src="${URL}images/0/thumb.png"`);
+  });
 });

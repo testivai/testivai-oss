@@ -437,9 +437,10 @@ itself, baseline | current | diff side by side (`thumb.png`, at most
 when it adds the links, so the reporter's own comment is as before until
 then. The first five changed snapshots with a thumbnail get one, and the
 first three of those are expanded so it shows without a click. A fork's
-pull request gets none (the publish's own comment there is numbers and links
-only), and neither does a private Pages site: GitHub fetches a comment's
-images without the reader's sign-in, so they could not load.
+pull request gets none, whichever comment the links go into: the fork's run
+chose those images (and the publish's own comment there is numbers and links
+only). Neither does a private Pages site: GitHub fetches a comment's images
+without the reader's sign-in, so they could not load.
 
 ```html
 <details open>
