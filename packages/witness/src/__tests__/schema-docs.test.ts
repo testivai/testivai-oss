@@ -53,6 +53,31 @@ describe('results.json schema documents', () => {
     }
   });
 
+  it('the capture-health fields (schema 2.7.0) are documented in all three', () => {
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('"captureHealth"');
+      expect(doc).toContain('"unhealthy"');
+    }
+    expect(claude).toMatch(/`captureHealth` \(schema 2\.7\.0\)/);
+    expect(extensionApi).toMatch(/\| `snapshots\[\]\.captureHealth` \| object \| optional \| emitted from schema 2\.7\.0 /);
+    for (const field of [
+      '`snapshots[].captureHealth`',
+      '`snapshots[].captureHealth.candidate` / `.baseline`',
+      '`snapshots[].captureHealth.unhealthy`',
+      '`snapshots[].captureHealth.reasons`',
+      '`snapshots[].captureHealth.warnings`',
+    ]) {
+      expect(extensionApi).toContain(`| ${field} |`);
+    }
+  });
+
+  it('the metadata.json health block is documented for community adapters', () => {
+    expect(extensionApi).toMatch(/### Capture health: `health` in metadata\.json/);
+    for (const field of ['fonts.status', 'fonts.failed[]', 'stylesheets.failed', 'images.broken', 'resources.status']) {
+      expect(extensionApi).toContain(`\`${field}\``);
+    }
+  });
+
   it('the thumbnail path (schema 2.6.0) is documented in all three', () => {
     for (const doc of [claude, extensionApi]) {
       expect(doc).toContain('"thumbPath"');

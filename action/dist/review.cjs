@@ -69,6 +69,8 @@ var REVIEW_PROMPT = {
     "3. For each snapshot, explain in one short paragraph WHAT changed (name the selectors),",
     "   WHY it likely happened (use pageShift/shift classifications \u2014 e.g. content injected above),",
     "   and which case it is:",
+    "   - an unhealthy capture (the verdict says so: a web font or stylesheet failed to load in the current capture or the baseline):",
+    "     never noise; fix what failed (the page, the server or the test) and re-run, and never approve it as a baseline,",
     "   - likely render noise (identical DOM and computed styles match, and the diff is small and scattered; still not proof),",
     "   - rendering drift (identical DOM and computed styles match, and the environment changed since the baseline:",
     "     a browser build, OS or distro, device scale or capture method; the verdict names it): the machine changed, not the page,",
@@ -94,7 +96,7 @@ var REVIEW_PROMPT = {
 var shellArg = (s) => /^[\w./@%+=:,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 function nextStepsFor(baselinesDir = ".testivai/baselines") {
   const dir = shellArg(baselinesDir.replace(/[`\r\n]/g, "") || ".");
-  return `for an intended change, approve it once the human agrees (\`/testivai approve <name>\` on the pull request, or \`npx testivai approve <name>\` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on; for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`;
+  return `for an intended change, approve it once the human agrees (\`/testivai approve <name>\` on the pull request, or \`npx testivai approve <name>\` locally); for a bug, what to fix; for a possible bug, what to check; for a glitch, re-run the tests or replace the baseline from a capture two runs agree on (for an unhealthy capture, fix what failed to load first; an unhealthy baseline is re-baselined from a healthy run); for a missing baseline, approving does nothing (it only promotes a new capture): an intended removal deletes its baseline directory (for example \`git rm -r ${dir}/<name>\`) in the same change, and a bug restores the test or its capture.`;
 }
 var quoteLines = (value) => value.trim().split(/\r?\n/).map((line) => line.trim() ? `> ${line.trim()}` : ">").join("\n");
 var TRIAGE_PROMPT = {
@@ -131,6 +133,7 @@ var TRIAGE_PROMPT = {
       "",
       "| explain_snapshot shows | What it means |",
       "|---|---|",
+      '| captureHealth.unhealthy set (the verdict says "unhealthy capture") | A web font or stylesheet failed to load, or fonts were still loading, in the current capture or the baseline (captureHealth.reasons says what), so that image does not show the page as built and its diff is never render noise: an unhealthy capture is a glitch of the capture or a broken asset; fix the page, the server or the test; never approve it as a baseline. It is a glitch unless the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path): then it is a bug. When the baseline is the unhealthy side, the next step is to re-baseline from a healthy run. captureHealth.warnings (broken images, failed scripts) make no capture unhealthy: weigh a broken image where it sits in the diff. |',
       '| dom.changed true, or styleCheck "mismatch" | The page really changed, so this is never a glitch: decide between intended change, bug and possible bug. A DOM change can restyle elements too (a class change); judge the elements styleChanges lists. |',
       "| pageShift | Content was inserted or removed above pageShift.belowY and the moved elements are unchanged: triage what was inserted or removed, not what moved. |",
       '| environment.renderingDelta non-empty, DOM unchanged and styleCheck "match" (rendering drift) | The environment the snapshot was captured in changed since the baseline (the verdict names what: a browser build, OS or distro, device scale, capture method) and the page did not: a glitch of the environment, not render noise. If the change under test itself changed the environment (a Playwright or browser upgrade, a new CI image), it is an intended change. Either way the next step is to re-baseline from this environment once the images match apart from rendering; if they differ in more than rendering, judge that difference on its own. |',
@@ -174,6 +177,127 @@ var TRIAGE_PROMPT = {
 // ../packages/witness/src/baselines/store.ts
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
+
+// ../packages/witness/src/capture/health.ts
+var HEALTH_LIMITS = {
+  /** Entries kept per list. */
+  list: 10,
+  /** Characters kept of a URL (host and path). */
+  url: 200,
+  /** Longest family, weight, style or error text accepted. */
+  text: 200
+};
+var HEALTH_PROBE_EXPRESSION = `(function () {
+  var LIMIT = ${HEALTH_LIMITS.list};
+  var MAX = ${HEALTH_LIMITS.url};
+  var out = {};
+  var base;
+  try { base = document.baseURI || undefined; } catch (e) {}
+  function where(href) {
+    try {
+      var u = new URL(String(href), base);
+      if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'file:') return (u.host + u.pathname).slice(0, MAX);
+      return u.protocol;
+    } catch (e) { return ''; }
+  }
+  var sheetHrefs = {};
+  function kindOf(url, initiator) {
+    if (initiator === 'fetch' || initiator === 'xmlhttprequest' || initiator === 'beacon') return 'other';
+    if (initiator === 'link' && sheetHrefs[url]) return 'css';
+    var m = /\\.([a-z0-9]+)$/i.exec(url);
+    var ext = m ? m[1].toLowerCase() : '';
+    if (/^(woff2?|ttf|otf|eot)$/.test(ext)) return 'font';
+    if (ext === 'css') return 'css';
+    if (/^(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/.test(ext)) return 'img';
+    if (/^m?js$/.test(ext)) return 'script';
+    if (ext) return 'other';
+    if (initiator === 'img' || initiator === 'image' || initiator === 'input') return 'img';
+    if (initiator === 'script') return 'script';
+    return 'other';
+  }
+  try {
+    var set = document.fonts;
+    if (set && typeof set.status === 'string' && typeof set.forEach === 'function') {
+      var faces = [];
+      set.forEach(function (face) {
+        if (face && face.status === 'error' && faces.length < LIMIT) {
+          faces.push({
+            family: String(face.family).replace(/^\\s*["']|["']\\s*$/g, '').slice(0, MAX),
+            weight: String(face.weight).slice(0, MAX),
+            style: String(face.style).slice(0, MAX)
+          });
+        }
+      });
+      out.fonts = { status: set.status === 'loaded' ? 'loaded' : 'loading', failed: faces };
+    } else {
+      out.fonts = { status: 'unavailable', failed: [] };
+    }
+  } catch (e) { out.fonts = { status: 'unavailable', failed: [] }; }
+  var statusByUrl = {};
+  try {
+    var timed = typeof performance !== 'undefined' && performance && typeof performance.getEntriesByType === 'function' ? performance.getEntriesByType('resource') : [];
+    for (var t = 0; t < timed.length; t++) {
+      if (typeof timed[t].responseStatus === 'number') statusByUrl[timed[t].name] = timed[t].responseStatus;
+    }
+  } catch (e) {}
+  try {
+    var links = document.querySelectorAll('link[rel]');
+    var sheetsFailed = 0, sheetUrls = [];
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var rel = ' ' + String(link.getAttribute('rel') || '').toLowerCase().replace(/\\s+/g, ' ') + ' ';
+      if (rel.indexOf(' stylesheet ') === -1) continue;
+      if (link.getAttribute('href')) sheetHrefs[where(link.href)] = true;
+      if (rel.indexOf(' alternate ') !== -1) continue;
+      if (link.disabled || !link.getAttribute('href')) continue;
+      if (!link.sheet || statusByUrl[link.href] >= 400) {
+        sheetsFailed++;
+        if (sheetUrls.length < LIMIT) sheetUrls.push(where(link.href));
+      }
+    }
+    out.stylesheets = { failed: sheetsFailed, urls: sheetUrls };
+  } catch (e) {}
+  try {
+    var imgs = document.images, broken = 0, imageUrls = [];
+    for (var j = 0; j < imgs.length; j++) {
+      var img = imgs[j];
+      var src = img.currentSrc || img.src || '';
+      if (!src) continue;
+      if (img.complete && img.naturalWidth === 0) {
+        broken++;
+        if (imageUrls.length < LIMIT) imageUrls.push(where(src));
+      }
+    }
+    out.images = { broken: broken, urls: imageUrls };
+  } catch (e) {}
+  try {
+    var timing = typeof PerformanceResourceTiming !== 'undefined' ? PerformanceResourceTiming : null;
+    var perf = typeof performance !== 'undefined' ? performance : null;
+    if (!timing || !timing.prototype || !('responseStatus' in timing.prototype) || !perf || typeof perf.getEntriesByType !== 'function') {
+      out.resources = { status: 'unavailable', failed: {} };
+    } else {
+      var failed = {}, seen = {};
+      var entries = perf.getEntriesByType('resource');
+      for (var k = 0; k < entries.length; k++) {
+        var entry = entries[k];
+        var status = entry.responseStatus;
+        if (typeof status !== 'number' || status < 400) continue;
+        var url = where(entry.name);
+        if (entry.initiatorType === 'other' && url.indexOf('/') === url.length - 12 && url.slice(-12) === '/favicon.ico') continue;
+        var type = kindOf(url, entry.initiatorType);
+        if (seen[type + ' ' + url]) continue;
+        seen[type + ' ' + url] = true;
+        var group = failed[type] || (failed[type] = { count: 0, entries: [] });
+        group.count++;
+        if (group.entries.length < LIMIT) group.entries.push({ url: url, status: status });
+      }
+      out.resources = { status: 'checked', failed: failed };
+    }
+  } catch (e) { out.resources = { status: 'unavailable', failed: {} }; }
+  return out;
+})()`;
+
+// ../packages/witness/src/baselines/store.ts
 function resolveBaselinesDir(projectRoot, override) {
   let dir = override;
   if (!dir) {

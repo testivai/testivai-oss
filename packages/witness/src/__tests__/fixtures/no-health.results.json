@@ -1,0 +1,331 @@
+{
+  "version": "2.6.0",
+  "summary": {
+    "total": 8,
+    "passed": 3,
+    "changed": 4,
+    "newSnapshots": 1,
+    "missing": 0
+  },
+  "snapshots": [
+    {
+      "name": "drift",
+      "status": "passed",
+      "diffPercent": 0.15,
+      "diffCount": 30,
+      "totalPixels": 20000,
+      "baselinePath": "images/drift/baseline.png",
+      "currentPath": "images/drift/current.png",
+      "diffPath": "images/drift/diff.png",
+      "regions": [],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [
+          "browser.version"
+        ],
+        "renderingDelta": [
+          "browser.version"
+        ],
+        "baseline": {
+          "os": {
+            "platform": "linux",
+            "release": "6.8.0",
+            "arch": "x64",
+            "distro": "ubuntu 24.04"
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "130.0.6723.58",
+            "headless": true
+          },
+          "framework": {
+            "name": "playwright",
+            "version": "1.48.2",
+            "language": "typescript",
+            "runner": "@playwright/test"
+          },
+          "adapter": {
+            "name": "@testivai/witness-playwright",
+            "version": "2.0.5",
+            "captureMethod": "full-page:cdp"
+          },
+          "render": {
+            "viewport": {
+              "width": 1280,
+              "height": 720
+            },
+            "deviceScaleFactor": 1
+          }
+        },
+        "candidate": {
+          "os": {
+            "platform": "linux",
+            "release": "6.8.0",
+            "arch": "x64",
+            "distro": "ubuntu 24.04"
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "141.0.7390.37",
+            "headless": true
+          },
+          "framework": {
+            "name": "playwright",
+            "version": "1.48.2",
+            "language": "typescript",
+            "runner": "@playwright/test"
+          },
+          "adapter": {
+            "name": "@testivai/witness-playwright",
+            "version": "2.0.5",
+            "captureMethod": "full-page:cdp"
+          },
+          "render": {
+            "viewport": {
+              "width": 1280,
+              "height": 720
+            },
+            "deviceScaleFactor": 1
+          }
+        }
+      },
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      },
+      "autoPassed": "noise"
+    },
+    {
+      "name": "first-capture",
+      "status": "new",
+      "diffPercent": 0,
+      "diffCount": 0,
+      "totalPixels": 0,
+      "currentPath": "images/first-capture/current.png"
+    },
+    {
+      "name": "identical",
+      "status": "passed",
+      "diffPercent": 0,
+      "diffCount": 0,
+      "totalPixels": 0,
+      "baselinePath": "images/identical/baseline.png",
+      "currentPath": "images/identical/current.png",
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      }
+    },
+    {
+      "name": "noise",
+      "status": "passed",
+      "diffPercent": 0.15,
+      "diffCount": 30,
+      "totalPixels": 20000,
+      "baselinePath": "images/noise/baseline.png",
+      "currentPath": "images/noise/current.png",
+      "diffPath": "images/noise/diff.png",
+      "regions": [],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      },
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      },
+      "autoPassed": "noise"
+    },
+    {
+      "name": "structural",
+      "status": "changed",
+      "diffPercent": 24,
+      "diffCount": 4800,
+      "totalPixels": 20000,
+      "baselinePath": "images/structural/baseline.png",
+      "currentPath": "images/structural/current.png",
+      "diffPath": "images/structural/diff.png",
+      "regions": [
+        {
+          "x": 20,
+          "y": 20,
+          "width": 120,
+          "height": 40,
+          "diffPixels": 4800,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > div.card",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      },
+      "dom": {
+        "changed": true,
+        "summary": {
+          "added": 1,
+          "removed": 0,
+          "attributeChanges": 0,
+          "textChanges": 1
+        },
+        "noiseHint": false,
+        "styleCheck": "match"
+      },
+      "thumbPath": "images/structural/thumb.png"
+    },
+    {
+      "name": "style-only",
+      "status": "changed",
+      "diffPercent": 24,
+      "diffCount": 4800,
+      "totalPixels": 20000,
+      "baselinePath": "images/style-only/baseline.png",
+      "currentPath": "images/style-only/current.png",
+      "diffPath": "images/style-only/diff.png",
+      "regions": [
+        {
+          "x": 20,
+          "y": 20,
+          "width": 120,
+          "height": 40,
+          "diffPixels": 4800,
+          "diffPercent": 100,
+          "elements": [
+            {
+              "selector": "body > main > div.card",
+              "role": "changed"
+            }
+          ],
+          "classification": "change"
+        }
+      ],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      },
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": false,
+        "styleCheck": "mismatch",
+        "styleChanges": {
+          "count": 1,
+          "elements": [
+            "body > main > div.card"
+          ]
+        }
+      },
+      "thumbPath": "images/style-only/thumb.png"
+    },
+    {
+      "name": "styles-not-compared",
+      "status": "changed",
+      "diffPercent": 0.15,
+      "diffCount": 30,
+      "totalPixels": 20000,
+      "baselinePath": "images/styles-not-compared/baseline.png",
+      "currentPath": "images/styles-not-compared/current.png",
+      "diffPath": "images/styles-not-compared/diff.png",
+      "regions": [],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      },
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "unavailable"
+      },
+      "thumbPath": "images/styles-not-compared/thumb.png"
+    },
+    {
+      "name": "taller",
+      "status": "changed",
+      "diffPercent": 28.57142857142857,
+      "diffCount": 8000,
+      "totalPixels": 28000,
+      "baselinePath": "images/taller/baseline.png",
+      "currentPath": "images/taller/current.png",
+      "diffPath": "images/taller/diff.png",
+      "sizeMismatch": {
+        "baseline": {
+          "width": 200,
+          "height": 100
+        },
+        "candidate": {
+          "width": 200,
+          "height": 140
+        }
+      },
+      "regions": [
+        {
+          "x": 0,
+          "y": 100,
+          "width": 200,
+          "height": 40,
+          "diffPixels": 8000,
+          "diffPercent": 100
+        }
+      ],
+      "baselineApprovedAt": "2026-10-01T00:00:00.000Z",
+      "environment": {
+        "delta": [],
+        "renderingDelta": []
+      },
+      "dom": {
+        "changed": false,
+        "summary": null,
+        "noiseHint": true,
+        "styleCheck": "match"
+      },
+      "thumbPath": "images/taller/thumb.png"
+    }
+  ],
+  "missingBaselines": [],
+  "environment": {
+    "os": {
+      "platform": "linux",
+      "release": "6.8.0",
+      "arch": "x64",
+      "distro": "ubuntu 24.04"
+    },
+    "browser": {
+      "name": "chromium",
+      "headless": true
+    },
+    "framework": {
+      "name": "playwright",
+      "version": "1.48.2",
+      "language": "typescript",
+      "runner": "@playwright/test"
+    },
+    "adapter": {
+      "name": "@testivai/witness-playwright",
+      "version": "2.0.5",
+      "captureMethod": "full-page:cdp"
+    },
+    "render": {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "deviceScaleFactor": 1
+    }
+  }
+}

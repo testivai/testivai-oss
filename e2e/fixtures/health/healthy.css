@@ -1,0 +1,2 @@
+@font-face { font-family: "Fancy"; src: url("/fonts/fancy.ttf") format("truetype"); }
+body { font-family: "Fancy", serif; }

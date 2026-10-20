@@ -310,6 +310,57 @@ costs four captures and keeps the last, rather than looping. This runs on
 every capture and does not depend on `stabilize`. `TESTIVAI_DEBUG=true` logs
 when captures differed.
 
+## Capture health
+
+A capture can be taken of a page that did not fully load: a web font failed
+and the text fell back to a system font, a stylesheet answered 404, a CDN was
+rate-limiting the CI runner. The DOM is the same and the computed styles
+match (they record the *declared* font), so on its own such a diff looked like
+render noise. The Playwright JS/TS adapter and `testivai witness <url>`
+therefore record, right after each screenshot, what failed to load:
+
+- web fonts: `document.fonts.status`, and every font face that failed;
+- stylesheets: every `<link rel="stylesheet">` that did not load;
+- images: every `<img>` that finished without pixels;
+- requests that answered 400 or more (stylesheets, fonts, images, scripts,
+  others), recorded as host and path, never the query string. The crawler
+  also adds what it saw on the network, cross-origin requests included.
+
+A capture is **unhealthy** when web fonts were still loading, a font face
+failed, a stylesheet failed, or a stylesheet request failed (a failed font
+file counts when its face failed too: a face whose first `src` fails and
+whose next one loads renders as built, so that is a warning). The
+report, the PR comment and the MCP verdicts then read **Unhealthy capture**
+with what failed, never "likely render noise", and no pass criterion
+(`noiseAutoPass`, `maxDiffPercent`, `shiftTolerance`) passes it while its pixels
+differ. An unhealthy baseline is called out on every compare against it.
+Broken images, failed scripts and requests a script made (a `fetch()` of a
+`.css` file is not a stylesheet the page applied) are warnings: shown, but
+they do not make a capture unhealthy on their own.
+
+Fixes, in the order they usually help:
+
+1. **Serve the fonts and assets in CI.** A font from a CDN that blocks or
+   rate-limits CI runners fails there and nowhere else: self-host it, or
+   serve it from the app under test.
+2. **Preload the fonts the page needs**, so they load before first paint:
+   `<link rel="preload" href="/fonts/brand.woff2" as="font" type="font/woff2" crossorigin>`.
+3. **Wait for fonts before capturing.** `stabilize` (on by default) already
+   waits for `document.fonts.ready`; with it off, wait yourself:
+   `await page.evaluate(() => document.fonts.ready)`.
+4. **Check the test's routes and mocks.** A `page.route()` that answers asset
+   requests with 404 breaks the capture the same way.
+5. **Re-baseline an unhealthy baseline from a healthy run.** `testivai approve`
+   warns when the capture it promotes is unhealthy; approve again once a run
+   captures the page healthy.
+
+The WebdriverIO, Selenium, Python, Ruby and Java adapters do not record
+capture health yet; their captures read "not checked", never healthy or
+unhealthy. One limit in Chromium: a stylesheet that answers 404 still gets an
+empty sheet, so the in-page check sees it only through the request's status,
+which a cross-origin request reports only with `Timing-Allow-Origin`. The
+crawler's network watch sees it either way.
+
 ## Repository size — what baselines actually cost
 
 Baselines are PNGs committed to your repository, so it's fair to ask what that

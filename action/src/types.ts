@@ -85,6 +85,12 @@ export interface SnapshotResult {
     candidate?: import('../../packages/witness/src/capture/environment').CaptureEnvironment;
     policy?: 'strict';
   };
+  /**
+   * witness schema 2.7.0+: capture health, when the baseline or the current
+   * capture recorded what failed to load. An unhealthy side (a web font or
+   * stylesheet that failed) is never render noise: it reads "Unhealthy capture".
+   */
+  captureHealth?: import('../../packages/witness/src/report/results').SnapshotCaptureHealth;
 }
 
 export interface Summary {

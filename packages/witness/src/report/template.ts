@@ -21,6 +21,7 @@ import {
   snapshotEnvironmentChange,
 } from './environment';
 import { snapshotAnchorId } from './anchor';
+import { captureHealthReading } from './health';
 
 export { snapshotAnchorId };
 
@@ -213,6 +214,9 @@ export function renderHtml(data: ReportData, options: RenderOptions = {}): strin
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
     .verdict.v-new { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-pass { background: var(--passed-bg); color: var(--passed); border: 1px solid color-mix(in srgb, var(--passed) 30%, transparent); }
+    /* Unhealthy capture: a font, stylesheet or other asset failed to load; never the noise style */
+    .verdict.v-unhealthy { background: var(--changed-bg); color: var(--changed); border: 1px dashed color-mix(in srgb, var(--changed) 55%, transparent); }
+    .health-hint { font-size: 12px; color: var(--new); margin-top: 6px; }
     .verdict code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
 
     /* DOM / style signal */
@@ -337,7 +341,7 @@ export function renderHtml(data: ReportData, options: RenderOptions = {}): strin
     <div class="oss-notice">
       <h4>Pixel-exact mode</h4>
       <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
-      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out. A capture whose web fonts or stylesheets failed to load reads <strong>Unhealthy capture</strong>, never noise.</p>
       <p>To reduce noise:<br>
         • Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
         • For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>
@@ -571,7 +575,9 @@ function autoPassNote(snapshot: SnapshotResult): string {
  */
 function renderAnalysis(snapshot: SnapshotResult): string {
   const verdict = renderVerdict(snapshot);
-  const layers = [renderDomHint(snapshot), renderEnvironment(snapshot), renderRegions(snapshot), renderMasks(snapshot)].filter(Boolean).join('');
+  const layers = [renderDomHint(snapshot), renderHealthWarnings(snapshot), renderEnvironment(snapshot), renderRegions(snapshot), renderMasks(snapshot)]
+    .filter(Boolean)
+    .join('');
   if (!verdict && !layers) return '';
 
   return `
@@ -600,6 +606,10 @@ function renderAnalysis(snapshot: SnapshotResult): string {
  * warning too: a bad capture, or a change the style check does not cover.
  */
 function renderVerdict(snapshot: SnapshotResult): string {
+  // An unhealthy capture outranks every other reading: what it shows is not
+  // the page as built, so the layers below describe a broken capture.
+  const unhealthy = unhealthyVerdict(snapshot);
+  if (unhealthy) return unhealthy;
   if (snapshot.status === 'new') return baseVerdict(snapshot);
   const change = snapshotEnvironmentChange(snapshot);
   if (change && snapshot.environment?.policy === 'strict') {
@@ -626,6 +636,40 @@ function renderVerdict(snapshot: SnapshotResult): string {
     return base.replace(/<\/span><\/div>$/, `${note}</span></div>`);
   }
   return base;
+}
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * "Unhealthy capture" when either side is unhealthy (report/health.ts), with
+ * an environment change after it: unhealthy first, rendering drift too when
+ * both are true. Empty otherwise.
+ */
+function unhealthyVerdict(snapshot: SnapshotResult): string {
+  const reading = captureHealthReading(snapshot.captureHealth);
+  if (!reading) return '';
+  let then: string;
+  if (snapshot.status === 'new') then = `This is a first capture: ${reading.next}.`;
+  else if (snapshot.status === 'passed') {
+    const who = reading.side === 'both' ? 'neither image shows' : reading.side === 'baseline' ? 'the baseline does not show' : 'the current capture does not show';
+    then = `It passed, but ${who} the page as built: ${reading.next}.`;
+  } else then = `${capitalize(reading.next)}.`;
+  let env = '';
+  const change = snapshotEnvironmentChange(snapshot);
+  if (change && snapshot.status === 'changed') {
+    if (snapshot.environment?.policy === 'strict') env = ` Environment changed too (strict policy) — ${change} since the baseline.`;
+    else if (isRenderingDrift(snapshot)) env = ` Rendering drift too — the environment changed since the baseline (${change}), with the DOM and computed styles identical; judge it once the capture is healthy.`;
+    else env = ` The environment also changed since the baseline (${change}), which can add rendering differences of its own.`;
+  }
+  return `<div class="verdict v-unhealthy"><span>Unhealthy capture — ${escapeHtml(reading.detail)}. ${escapeHtml(then)}${escapeHtml(env)}</span></div>`;
+}
+
+/** What else failed to load (broken images, failed scripts): a layer, never a verdict. */
+function renderHealthWarnings(snapshot: SnapshotResult): string {
+  const warnings = snapshot.captureHealth?.warnings ?? [];
+  if (warnings.length === 0) return '';
+  return `
+      <div class="health-hint">Capture warnings — ${escapeHtml(warnings.join('; '))}</div>`;
 }
 
 /** The verdict without the environment: what the page-side layers say. */

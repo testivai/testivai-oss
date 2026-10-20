@@ -182,6 +182,18 @@ describe('openPage', () => {
     expect(tabOf(opened as { targetId: string }).href).toBe('about:blank');
   });
 
+  it('runs the prepare hook before the page is requested, so it sees every request the page makes', async () => {
+    const seen: Array<{ href: string; requested?: string }> = [];
+    const page = await openPage(9222, URL, VIEWPORT, (client) => {
+      const tab = [...mockBrowser.tabs.values()][0];
+      expect(client).toBeDefined();
+      seen.push({ href: tab.href, requested: tab.requested });
+    });
+
+    expect(seen).toEqual([{ href: 'about:blank', requested: undefined }]);
+    expect(tabOf(page)).toMatchObject({ href: URL, readyState: 'complete' });
+  });
+
   it('closes the tab again when it cannot be prepared', async () => {
     mockBrowser.failEnable = true;
 

@@ -328,8 +328,11 @@ describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
   });
 
   it('builds a report without thumbs exactly as before: the same files, byte for byte', () => {
-    // fixtures/publish-site-no-thumbnails.html is this page as main built it
-    // before thumbnails (ed73679), rendered with TZ=UTC and the en-US locale.
+    // fixtures/publish-site-no-thumbnails.html is this page as the report
+    // template built it before thumbnails: main at ed73679, regenerated with
+    // capture health's template changes (feat/capture-health at 8b30ccc,
+    // before main's thumbnails were merged in), rendered with TZ=UTC and the
+    // en-US locale.
     // The page shows the run's time with toLocaleString() (template.ts), which
     // follows the time zone and locale of the machine that builds it, so that
     // one value is what the same call gives here, escaped the way the template

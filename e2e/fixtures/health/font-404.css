@@ -1,0 +1,2 @@
+@font-face { font-family: "Missing"; src: url("/fonts/missing.woff2") format("woff2"); }
+body { font-family: "Missing", serif; }

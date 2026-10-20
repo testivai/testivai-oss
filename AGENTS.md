@@ -122,6 +122,8 @@ CI — GitHub Actions
 | `src/report/compare.ts` | Orchestrates diff, writes images to `visual-report/images/` |
 | `src/capture/environment.ts` | Capture provenance: the `environment` block every adapter records in metadata.json |
 | `src/report/environment.ts` | What changed since the baseline (`delta`, `renderingDelta`), `isRenderingDrift()`, shared wording |
+| `src/capture/health.ts` | Capture health: `HEALTH_PROBE_EXPRESSION` (what failed to load, read in the page after the capture), `parseHealth`, network-side evidence |
+| `src/report/health.ts` | When a capture is unhealthy (`assessHealth`), `captureHealth` per snapshot, the "Unhealthy capture" wording |
 | `src/report/diff-shape.ts` | `diffShape()`: scattered / concentrated / large, when matching styles still mean likely render noise (shared by compare, the report, MCP and the action) |
 | `src/report/generator.ts` | Writes `results.json` + renders `index.html` |
 | `src/report/template.ts` | Self-contained HTML template for the report; escapes every value it shows; `snapshotAnchorId()` gives each snapshot a link target (`#snap-<name>`) |
@@ -201,13 +203,13 @@ CI — GitHub Actions
       screenshot.png             committed reference screenshot
       dom.html                   committed DOM snapshot
       elements.json              element map (boxes + computed-style digests); optional
-      metadata.json              { name, createdAt, updatedAt, environment, ... } (environment frozen on approve)
+      metadata.json              { name, createdAt, updatedAt, environment, health, ... } (environment and health frozen on approve)
   temp/                          gitignored — current run artifacts
     <name>/
       screenshot.png
       dom.html
       elements.json
-      metadata.json              { environment, masks, ... } written by the adapter (capture provenance)
+      metadata.json              { environment, health, masks, ... } written by the adapter (capture provenance, capture health)
 ```
 
 ---
@@ -218,9 +220,9 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "timestamp": "<ISO>",
-  "summary": { "total": 4, "passed": 1, "changed": 3, "newSnapshots": 0, "missing": 1 },
+  "summary": { "total": 5, "passed": 1, "changed": 4, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
   "environment": { "os": { "platform": "linux", "distro": "ubuntu 24.04" },
                    "browser": { "name": "chromium", "version": "141.0.7390.37" },
@@ -277,6 +279,17 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
                        "renderingDelta": ["browser.version"],
                        "baseline":  { "browser": { "name": "chromium", "version": "130.0.6723.58" } },
                        "candidate": { "browser": { "name": "chromium", "version": "141.0.7390.37" } } }
+    },
+    {
+      "name": "fancy-font",
+      "status": "changed",
+      "diffPercent": 0.07,
+      "dom": { "changed": false, "noiseHint": false, "summary": null, "styleCheck": "match" },
+      "captureHealth": { "unhealthy": "candidate",
+                         "reasons": ["web font 'Fancy' failed to load, so the page rendered with a fallback font"],
+                         "warnings": [],
+                         "candidate": { "fonts": { "status": "loaded",
+                                                   "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] } } }
     }
   ]
 }
@@ -305,6 +318,23 @@ status; `"strict"` makes a rendering change `changed` whatever the pixels say
 `<name>__<browser>__<platform>`. The run-level `environment` is the fields every capture
 of the run agrees on.
 
+`captureHealth` (schema 2.7.0) is capture health: the Playwright JS/TS adapter and
+`testivai witness <url>` record what failed to load (`health` in the capture's
+`metadata.json`: web fonts, stylesheets, images, requests that answered 400 or more, read
+after the capture by `HEALTH_PROBE_EXPRESSION` in `packages/witness/src/capture/health.ts`),
+and approving freezes it into the baseline's. Per snapshot, `captureHealth` is present when
+either side recorded one: both blocks, `unhealthy` (`"candidate"`, `"baseline"`, `"both"` or
+`null`), and `reasons` and `warnings` in plain words (the baseline's prefixed `baseline: `).
+Web fonts still loading, a font face that errored, a failed stylesheet, or a css request
+that failed (a failed font request only with a face that errored, or no Font Loading API)
+→ **unhealthy capture** (`assessHealth` in
+`packages/witness/src/report/health.ts`): never word it as render noise. `dom.noiseHint` is
+then false and no pass criterion applies while pixels differ (a zero-pixel diff still
+passes, and the warning is still shown); an unhealthy baseline is called out on every
+compare against it (re-baseline from a healthy run); unhealthy and rendering drift can both
+be true, unhealthy first. Broken images and failed scripts are warnings only. An adapter
+that does not run the probe writes no `health`: not checked, never healthy.
+
 `sizeMismatch` (schema 2.4.0) is present when the current capture's dimensions differ
 from the baseline's. The two are padded to max width × max height before diffing and
 every padded pixel counts as changed, so `totalPixels`, `diffCount` and `regions` are on
@@ -332,8 +362,8 @@ noise; `"mismatch"` → a real style-only change (`noiseHint` is then false);
 stylesheet-only change is not ruled out: never word it as noise.
 `noiseAutoPass` gives `autoPassed: "noise"` only to the `"match"` case whose diff is
 not concentrated in one area (`noiseHint` true AND `styleCheck: "match"` AND
-`diffShape(...).kind !== "concentrated"`, within `noiseMaxDiffPercent`), and
-`autoPassed` always comes with `status: "passed"`.
+`diffShape(...).kind !== "concentrated"`, within `noiseMaxDiffPercent`), never to an
+unhealthy capture, and `autoPassed` always comes with `status: "passed"`.
 
 Breaking changes to this schema require a major version bump on `@testivai/witness`.
 

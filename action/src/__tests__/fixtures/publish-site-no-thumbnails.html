@@ -143,6 +143,9 @@
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
     .verdict.v-new { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-pass { background: var(--passed-bg); color: var(--passed); border: 1px solid color-mix(in srgb, var(--passed) 30%, transparent); }
+    /* Unhealthy capture: a font, stylesheet or other asset failed to load; never the noise style */
+    .verdict.v-unhealthy { background: var(--changed-bg); color: var(--changed); border: 1px dashed color-mix(in srgb, var(--changed) 55%, transparent); }
+    .health-hint { font-size: 12px; color: var(--new); margin-top: 6px; }
     .verdict code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
 
     /* DOM / style signal */
@@ -267,7 +270,7 @@
     <div class="oss-notice">
       <h4>Pixel-exact mode</h4>
       <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
-      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over 1% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over 1% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out. A capture whose web fonts or stylesheets failed to load reads <strong>Unhealthy capture</strong>, never noise.</p>
       <p>To reduce noise:<br>
         • Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
         • For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>

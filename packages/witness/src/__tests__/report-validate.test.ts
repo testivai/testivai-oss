@@ -30,6 +30,19 @@ const ENV_BASE = {
 };
 const ENV_CURRENT = { ...ENV_BASE, browser: { name: 'chromium', version: '141.0.7390.37', headless: true } };
 
+const HEALTH_OK = {
+  fonts: { status: 'loaded', failed: [] },
+  stylesheets: { failed: 0, urls: [] },
+  images: { broken: 0, urls: [] },
+  resources: { status: 'checked', failed: {} },
+};
+const HEALTH_FONT_FAILED = {
+  ...HEALTH_OK,
+  fonts: { status: 'loaded', failed: [{ family: 'Fancy', weight: 'normal', style: 'normal' }] },
+  images: { broken: 1, urls: ['example.com/img/hero.png'] },
+  resources: { status: 'checked', failed: { font: { count: 1, entries: [{ url: 'example.com/fonts/fancy.woff2', status: 404 }] } } },
+};
+
 function valid(): Record<string, any> {
   return {
     version: '2.5.0',
@@ -73,6 +86,13 @@ function valid(): Record<string, any> {
           baseline: ENV_BASE,
           candidate: ENV_CURRENT,
           policy: 'strict',
+        },
+        captureHealth: {
+          candidate: HEALTH_FONT_FAILED,
+          baseline: HEALTH_OK,
+          unhealthy: 'candidate',
+          reasons: ["web font 'Fancy' failed to load, so the page rendered with a fallback font", 'font file example.com/fonts/fancy.woff2 returned 404'],
+          warnings: ['image example.com/img/hero.png did not load'],
         },
       },
       {
@@ -142,6 +162,14 @@ describe('parseReportData', () => {
 
     expect(parsed.data.environment).toEqual(data.environment);
     expect(parsed.data.snapshots[0].environment).toEqual(data.snapshots[0].environment);
+  });
+
+  it('keeps the capture health (schema 2.7.0) exactly', () => {
+    const data = valid();
+    const parsed = parseReportData(data);
+    if (!parsed.ok) throw new Error(parsed.reason);
+
+    expect(parsed.data.snapshots[0].captureHealth).toEqual(data.snapshots[0].captureHealth);
   });
 
   it('keeps environment fields it does not know yet, when they are plain values', () => {
@@ -241,6 +269,11 @@ describe('parseReportData', () => {
     ['a viewport size as text', withValue('snapshots.0.environment.baseline', { ...ENV_BASE, render: { viewport: { width: '1280', height: 720 } } }), /viewport\.width/],
     ['a very long environment value', withValue('environment', { label: 'x'.repeat(201) }), /environment\.label/],
     ['too many environment sections', withValue('environment', Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`k${i}`, 'v']))), /environment/],
+    ['an unknown unhealthy side', withValue('snapshots.0.captureHealth.unhealthy', 'neither'), /captureHealth\.unhealthy/],
+    ['health reasons that are not text', withValue('snapshots.0.captureHealth.reasons', [{}]), /captureHealth\.reasons/],
+    ['health warnings that are not a list', withValue('snapshots.0.captureHealth.warnings', 'x'), /captureHealth\.warnings/],
+    ['a candidate health block that is malformed', withValue('snapshots.0.captureHealth.candidate', { ...HEALTH_OK, fonts: { status: 'ok', failed: [] } }), /captureHealth\.candidate/],
+    ['a baseline health block that is not an object', withValue('snapshots.0.captureHealth.baseline', 'healthy'), /captureHealth\.baseline/],
     ['too many snapshots', withValue('snapshots', Array.from({ length: 5001 }, (_, i) => ({ name: `s${i}`, status: 'passed', diffPercent: 0, diffCount: 0, totalPixels: 1 }))), /snapshots/],
     ['too many regions', withValue('snapshots.0.regions', Array.from({ length: 1001 }, () => ({ x: 0, y: 0, width: 1, height: 1, diffPixels: 1, diffPercent: 1 }))), /regions/],
   ])('rejects %s, naming the field', (_label, data, field) => {
@@ -278,6 +311,11 @@ describe('parseReportData', () => {
     s.environment.renderingDelta = ['browser.version', 'label', 'adapter.captureMethod'];
     s.environment.delta = s.environment.renderingDelta;
     s.sizeMismatch = { baseline: { width: 1280, height: 2000 }, candidate: { width: 1280, height: 2400 } };
+    s.captureHealth.reasons = [PAYLOAD, `baseline: ${PAYLOAD}`];
+    s.captureHealth.warnings = [PAYLOAD];
+    s.captureHealth.candidate = { ...HEALTH_FONT_FAILED, fonts: { status: 'loaded', failed: [{ family: PAYLOAD, weight: PAYLOAD, style: PAYLOAD }] } };
+    s.captureHealth.unhealthy = 'both';
+    s.captureHealth.baseline = { ...HEALTH_OK, stylesheets: { failed: 1, urls: [PAYLOAD] } };
 
     const parsed = parseReportData(data);
     if (!parsed.ok) throw new Error(parsed.reason);

@@ -151,7 +151,7 @@ async function main(): Promise<void> {
 
     const resultsJson = JSON.parse(fs.readFileSync(path.join(reportDir, 'results.json'), 'utf-8'));
     assert.strictEqual(resultsJson.snapshots.length, 6);
-    assert.strictEqual(resultsJson.version, '2.6.0', 'results.json should carry schema 2.6.0');
+    assert.strictEqual(resultsJson.version, '2.7.0', 'results.json should carry schema 2.7.0');
 
     const byName = Object.fromEntries(resultsJson.snapshots.map((s: any) => [s.name, s]));
 

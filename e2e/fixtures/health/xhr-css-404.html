@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>XHR .css 404</title>
+  <script>
+    // Synchronous, so the request is done before the page loads: a script
+    // reading a .css file is not a stylesheet the page applied.
+    try { var xhr = new XMLHttpRequest(); xhr.open('GET', '/css/theme.css', false); xhr.send(); } catch (e) {}
+  </script>
+</head>
+<body><p>A script request for a .css file that answers 404.</p></body>
+</html>

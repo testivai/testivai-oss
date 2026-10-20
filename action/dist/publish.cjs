@@ -242,22 +242,22 @@ function describeEnvironmentChange(baseline, candidate, fields) {
     if (field === "browser.name" || field === "browser.version") continue;
     const left = a.get(field);
     const right = b.get(field);
-    let text2;
+    let text3;
     if (field === "browser.headless" || field === "container") {
-      text2 = `${field === "container" ? "container" : "headless"} ${yesNo(left)} \u2192 ${yesNo(right)}`;
+      text3 = `${field === "container" ? "container" : "headless"} ${yesNo(left)} \u2192 ${yesNo(right)}`;
     } else if (field === "label") {
-      text2 = `environment label ${left || "none"} \u2192 ${right || "none"}`;
+      text3 = `environment label ${left || "none"} \u2192 ${right || "none"}`;
     } else if (field === "os.distro") {
-      text2 = `${left ?? "unknown"} \u2192 ${right ?? "unknown"}`;
+      text3 = `${left ?? "unknown"} \u2192 ${right ?? "unknown"}`;
     } else if (field === "adapter.captureMethod") {
-      text2 = `capture method ${describeCaptureMethod(left ?? "?")} \u2192 ${describeCaptureMethod(right ?? "?")}`;
+      text3 = `capture method ${describeCaptureMethod(left ?? "?")} \u2192 ${describeCaptureMethod(right ?? "?")}`;
     } else if (/^(framework|adapter|driver)\.version$/.test(field)) {
       const owner = field.split(".")[0];
-      text2 = `${b.get(`${owner}.name`) ?? owner} ${left ?? "?"} \u2192 ${right ?? "?"}`;
+      text3 = `${b.get(`${owner}.name`) ?? owner} ${left ?? "?"} \u2192 ${right ?? "?"}`;
     } else {
-      text2 = `${LABELS[field] ?? field} ${left ?? "none"} \u2192 ${right ?? "none"}`;
+      text3 = `${LABELS[field] ?? field} ${left ?? "none"} \u2192 ${right ?? "none"}`;
     }
-    parts.push({ rank: rank(field), text: text2 });
+    parts.push({ rank: rank(field), text: text3 });
   }
   return parts.sort((x2, y) => x2.rank - y.rank).map((p) => p.text).join(", ");
 }
@@ -308,6 +308,143 @@ function environmentChangeLine(group) {
 var STATUS_CONTEXT = "TestivAI / visual";
 function resolveStatusContext(input) {
   return input.trim() || STATUS_CONTEXT;
+}
+
+// ../packages/witness/src/report/health.ts
+var NAMED = 3;
+var plural2 = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+function requestLine(noun, entry) {
+  const url = entry.url || "(no URL)";
+  if (entry.status > 0) return `${noun} ${url} returned ${entry.status}`;
+  return `${noun} ${url} failed to load${entry.error ? ` (${entry.error})` : ""}`;
+}
+function requestLines(noun, entries, total) {
+  const shown = entries.slice(0, NAMED);
+  const lines = shown.map((e) => requestLine(noun, e));
+  const rest = total - shown.length;
+  if (rest > 0) lines.push(`${plural2(rest, `more ${noun}`)} failed to load`);
+  return lines;
+}
+function elementLines(noun, urls, total, requests) {
+  const byUrl = new Map(requests.map((e) => [e.url, e]));
+  const shown = urls.slice(0, NAMED);
+  const lines = shown.map((url) => {
+    const request = byUrl.get(url);
+    return request ? requestLine(noun, request) : `${noun} ${url || "(no URL)"} did not load`;
+  });
+  const rest = total - shown.length;
+  if (rest > 0) lines.push(`${plural2(rest, `more ${noun}`)} did not load`);
+  return lines;
+}
+function fontLine(families) {
+  const quoted = families.map((f) => `'${f}'`);
+  if (quoted.length === 1) return `web font ${quoted[0]} failed to load, so the page rendered with a fallback font`;
+  const names = quoted.length === 2 ? `${quoted[0]} and ${quoted[1]}` : `${quoted.slice(0, 2).join(", ")} and ${quoted.length - 2} more`;
+  return `web fonts ${names} failed to load, so the page rendered with fallback fonts`;
+}
+function assessHealth(health) {
+  const reasons = [];
+  const warnings = [];
+  const problems = /* @__PURE__ */ new Set();
+  const failed = health.resources.failed;
+  if (health.fonts.status === "loading") {
+    reasons.push("web fonts were still loading when the page was captured");
+    problems.add("web fonts still loading");
+  }
+  const families = [...new Set(health.fonts.failed.map((f) => f.family))];
+  if (families.length > 0) {
+    reasons.push(fontLine(families));
+    problems.add("a failed web font");
+  }
+  if (failed.font && failed.font.count > 0) {
+    const lines = requestLines("font file", failed.font.entries, failed.font.count);
+    if (families.length > 0 || health.fonts.status === "unavailable") {
+      reasons.push(...lines);
+      problems.add("a failed web font");
+    } else {
+      warnings.push(...lines);
+    }
+  }
+  const css = failed.css ?? { count: 0, entries: [] };
+  if (health.stylesheets.failed > 0) {
+    reasons.push(...elementLines("stylesheet", health.stylesheets.urls, health.stylesheets.failed, css.entries));
+    problems.add("a failed stylesheet");
+  }
+  const linked = new Set(health.stylesheets.urls);
+  const unlinked = css.entries.filter((e) => !linked.has(e.url));
+  const unlinkedCount = css.count - (css.entries.length - unlinked.length);
+  if (unlinkedCount > 0) {
+    reasons.push(...requestLines("stylesheet", unlinked, unlinkedCount));
+    problems.add("a failed stylesheet");
+  }
+  const img = failed.img ?? { count: 0, entries: [] };
+  if (health.images.broken > 0) warnings.push(...elementLines("image", health.images.urls, health.images.broken, img.entries));
+  const shownImages = new Set(health.images.urls);
+  const otherImages = img.entries.filter((e) => !shownImages.has(e.url));
+  const otherImageCount = img.count - (img.entries.length - otherImages.length);
+  if (otherImageCount > 0) warnings.push(...requestLines("image", otherImages, otherImageCount));
+  if (failed.script && failed.script.count > 0) warnings.push(...requestLines("script", failed.script.entries, failed.script.count));
+  if (failed.other && failed.other.count > 0) warnings.push(...requestLines("request", failed.other.entries, failed.other.count));
+  return { unhealthy: problems.size > 0, problems: [...problems], reasons, warnings };
+}
+var BASELINE_HEALTH_PREFIX = "baseline: ";
+var UNHEALTHY_CAPTURE_NEXT = "an unhealthy capture is a glitch of the capture or a broken asset, not render noise: fix the page, the server or the test and re-run; never approve it as a baseline";
+var UNHEALTHY_BASELINE_NEXT = "re-baseline from a healthy run";
+var joinAnd = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+function sideAssessment(health, side) {
+  const block = side === "candidate" ? health.candidate : health.baseline;
+  if (block) return assessHealth(block);
+  const isBaseline = (r) => r.startsWith(BASELINE_HEALTH_PREFIX);
+  const reasons = side === "baseline" ? health.reasons.filter(isBaseline).map((r) => r.slice(BASELINE_HEALTH_PREFIX.length)) : health.reasons.filter((r) => !isBaseline(r));
+  return { problems: [], reasons };
+}
+function captureHealthReading(health) {
+  if (!health?.unhealthy) return null;
+  const side = health.unhealthy;
+  const parts = [];
+  if (side !== "baseline") parts.push(sideAssessment(health, "candidate").reasons.join("; "));
+  if (side !== "candidate") {
+    const b = sideAssessment(health, "baseline");
+    const what = b.problems.length > 0 ? `with ${joinAnd(b.problems)}` : "unhealthy";
+    parts.push(`the baseline was captured ${what}${side === "both" ? " too" : ""} (${b.reasons.join("; ")})`);
+  }
+  const next = side === "candidate" ? UNHEALTHY_CAPTURE_NEXT : side === "baseline" ? UNHEALTHY_BASELINE_NEXT : `${UNHEALTHY_CAPTURE_NEXT}, and ${UNHEALTHY_BASELINE_NEXT}`;
+  return { side, detail: parts.filter(Boolean).join("; "), next };
+}
+
+// src/comment-health.ts
+var capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function unhealthyCaptureHint(snapshot) {
+  const reading = captureHealthReading(snapshot.captureHealth);
+  if (!reading) return "";
+  return `> **Unhealthy capture** \u2014 ${reading.detail}. ${capitalize(reading.next)}.
+
+`;
+}
+function captureWarningsHint(snapshot) {
+  const warnings = snapshot.captureHealth?.warnings ?? [];
+  if (warnings.length === 0) return "";
+  const shown = warnings.slice(0, 5).join("; ") + (warnings.length > 5 ? "; \u2026" : "");
+  return `> Capture warnings \u2014 ${shown}.
+
+`;
+}
+function unhealthyPassedLines(snapshots) {
+  const lines = [];
+  for (const snapshot of snapshots.filter((s) => s.status === "passed")) {
+    const reading = captureHealthReading(snapshot.captureHealth);
+    if (!reading) continue;
+    const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
+    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot.name}\` passed, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
+
+`);
+  }
+  return lines.slice(0, 10).join("");
+}
+function unhealthyNewSuffix(snapshot) {
+  const reading = captureHealthReading(snapshot.captureHealth);
+  if (!reading) return "";
+  return ` \u2014 **unhealthy capture**: ${reading.detail}; do not approve it as the baseline`;
 }
 
 // src/comment.ts
@@ -420,6 +557,9 @@ function renderDomHintMarkdown(snapshot, include = {}) {
   return lines.length > 0 ? lines.join("\n") + "\n\n" : "";
 }
 function renderSnapshotHints(snapshot) {
+  return unhealthyCaptureHint(snapshot) + renderEnvironmentAndPageHints(snapshot) + captureWarningsHint(snapshot);
+}
+function renderEnvironmentAndPageHints(snapshot) {
   const change = snapshotEnvironmentChange(snapshot);
   if (!change) return renderDomHintMarkdown(snapshot);
   const env = snapshot.environment;
@@ -484,6 +624,7 @@ ${summaryLine} \u2014 **${summary.total} total**
 
 `;
   }
+  comment += unhealthyPassedLines(snapshots);
   const changedSnapshots = snapshots.filter((s) => s.status === "changed");
   if (changedSnapshots.length > 0) {
     comment += "#### Changed Snapshots\n\n";
@@ -520,7 +661,7 @@ ${picture}${domHint}
     comment += "#### New Snapshots\n\n";
     for (const snapshot of newSnapshots) {
       const open = reportUrl ? ` \u2014 [open](${snapshotUrl(reportUrl, snapshot.name)})` : "";
-      comment += `- \`${snapshot.name}\`${open}
+      comment += `- \`${snapshot.name}\`${open}${unhealthyNewSuffix(snapshot)}
 `;
     }
     comment += "\n";
@@ -571,7 +712,7 @@ function toBytes(data) {
 function octokitApi(github, owner, repo) {
   const base = { owner, repo };
   let fullName = `${owner}/${repo}`;
-  const list2 = async (route, params, pick, maxPages) => {
+  const list3 = async (route, params, pick, maxPages) => {
     const items = [];
     for (let page = 1; page <= maxPages; page++) {
       const { data } = await github.request(route, { ...base, ...params, per_page: PAGE, page });
@@ -603,7 +744,7 @@ function octokitApi(github, owner, repo) {
       }
     },
     async openPrs() {
-      const { items } = await list2("GET /repos/{owner}/{repo}/pulls", { state: "open" }, (d) => d, MAX_LIST_PAGES);
+      const { items } = await list3("GET /repos/{owner}/{repo}/pulls", { state: "open" }, (d) => d, MAX_LIST_PAGES);
       return items.filter((p) => p.head?.repo?.full_name).map((p) => ({
         number: p.number,
         headRepo: p.head.repo.full_name,
@@ -617,7 +758,7 @@ function octokitApi(github, owner, repo) {
       }));
     },
     async artifacts(name, maxPages) {
-      const { items, truncated } = await list2("GET /repos/{owner}/{repo}/actions/artifacts", { name }, (d) => d.artifacts ?? [], maxPages);
+      const { items, truncated } = await list3("GET /repos/{owner}/{repo}/actions/artifacts", { name }, (d) => d.artifacts ?? [], maxPages);
       const artifacts = items.filter((a) => a.workflow_run?.id).map((a) => ({
         id: a.id,
         runId: a.workflow_run.id,
@@ -658,7 +799,7 @@ function octokitApi(github, owner, repo) {
       return toBytes(data);
     },
     async comments(pr) {
-      const { items } = await list2("GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { issue_number: pr }, (d) => d, MAX_LIST_PAGES);
+      const { items } = await list3("GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { issue_number: pr }, (d) => d, MAX_LIST_PAGES);
       return items.map((c) => ({ id: c.id, body: c.body ?? "", author: c.user?.login ?? "" }));
     },
     async createComment(pr, body) {
@@ -1872,6 +2013,9 @@ function renderHtml(data, options = {}) {
     .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
     .verdict.v-new { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
     .verdict.v-pass { background: var(--passed-bg); color: var(--passed); border: 1px solid color-mix(in srgb, var(--passed) 30%, transparent); }
+    /* Unhealthy capture: a font, stylesheet or other asset failed to load; never the noise style */
+    .verdict.v-unhealthy { background: var(--changed-bg); color: var(--changed); border: 1px dashed color-mix(in srgb, var(--changed) 55%, transparent); }
+    .health-hint { font-size: 12px; color: var(--new); margin-top: 6px; }
     .verdict code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
 
     /* DOM / style signal */
@@ -1996,7 +2140,7 @@ function renderHtml(data, options = {}) {
     <div class="oss-notice">
       <h4>Pixel-exact mode</h4>
       <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
-      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out. A capture whose web fonts or stylesheets failed to load reads <strong>Unhealthy capture</strong>, never noise.</p>
       <p>To reduce noise:<br>
         \u2022 Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
         \u2022 For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>
@@ -2195,7 +2339,7 @@ function autoPassNote(snapshot) {
 }
 function renderAnalysis(snapshot) {
   const verdict = renderVerdict(snapshot);
-  const layers = [renderDomHint(snapshot), renderEnvironment(snapshot), renderRegions(snapshot), renderMasks(snapshot)].filter(Boolean).join("");
+  const layers = [renderDomHint(snapshot), renderHealthWarnings(snapshot), renderEnvironment(snapshot), renderRegions(snapshot), renderMasks(snapshot)].filter(Boolean).join("");
   if (!verdict && !layers) return "";
   return `
       <div class="analysis">
@@ -2208,6 +2352,8 @@ function renderAnalysis(snapshot) {
       </div>`;
 }
 function renderVerdict(snapshot) {
+  const unhealthy = unhealthyVerdict(snapshot);
+  if (unhealthy) return unhealthy;
   if (snapshot.status === "new") return baseVerdict(snapshot);
   const change = snapshotEnvironmentChange(snapshot);
   if (change && snapshot.environment?.policy === "strict") {
@@ -2231,6 +2377,31 @@ function renderVerdict(snapshot) {
     return base.replace(/<\/span><\/div>$/, `${note}</span></div>`);
   }
   return base;
+}
+var capitalize2 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function unhealthyVerdict(snapshot) {
+  const reading = captureHealthReading(snapshot.captureHealth);
+  if (!reading) return "";
+  let then;
+  if (snapshot.status === "new") then = `This is a first capture: ${reading.next}.`;
+  else if (snapshot.status === "passed") {
+    const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
+    then = `It passed, but ${who} the page as built: ${reading.next}.`;
+  } else then = `${capitalize2(reading.next)}.`;
+  let env = "";
+  const change = snapshotEnvironmentChange(snapshot);
+  if (change && snapshot.status === "changed") {
+    if (snapshot.environment?.policy === "strict") env = ` Environment changed too (strict policy) \u2014 ${change} since the baseline.`;
+    else if (isRenderingDrift(snapshot)) env = ` Rendering drift too \u2014 the environment changed since the baseline (${change}), with the DOM and computed styles identical; judge it once the capture is healthy.`;
+    else env = ` The environment also changed since the baseline (${change}), which can add rendering differences of its own.`;
+  }
+  return `<div class="verdict v-unhealthy"><span>Unhealthy capture \u2014 ${escapeHtml(reading.detail)}. ${escapeHtml(then)}${escapeHtml(env)}</span></div>`;
+}
+function renderHealthWarnings(snapshot) {
+  const warnings = snapshot.captureHealth?.warnings ?? [];
+  if (warnings.length === 0) return "";
+  return `
+      <div class="health-hint">Capture warnings \u2014 ${escapeHtml(warnings.join("; "))}</div>`;
 }
 function baseVerdict(snapshot) {
   if (snapshot.status === "passed" && !snapshot.autoPassed) {
@@ -2434,6 +2605,191 @@ var THUMBNAIL_LIMITS = {
   separator: 2
 };
 
+// ../packages/witness/src/capture/health.ts
+var RESOURCE_TYPES = ["css", "font", "img", "script", "other"];
+var HEALTH_LIMITS = {
+  /** Entries kept per list. */
+  list: 10,
+  /** Characters kept of a URL (host and path). */
+  url: 200,
+  /** Longest family, weight, style or error text accepted. */
+  text: 200
+};
+var HEALTH_PROBE_EXPRESSION = `(function () {
+  var LIMIT = ${HEALTH_LIMITS.list};
+  var MAX = ${HEALTH_LIMITS.url};
+  var out = {};
+  var base;
+  try { base = document.baseURI || undefined; } catch (e) {}
+  function where(href) {
+    try {
+      var u = new URL(String(href), base);
+      if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'file:') return (u.host + u.pathname).slice(0, MAX);
+      return u.protocol;
+    } catch (e) { return ''; }
+  }
+  var sheetHrefs = {};
+  function kindOf(url, initiator) {
+    if (initiator === 'fetch' || initiator === 'xmlhttprequest' || initiator === 'beacon') return 'other';
+    if (initiator === 'link' && sheetHrefs[url]) return 'css';
+    var m = /\\.([a-z0-9]+)$/i.exec(url);
+    var ext = m ? m[1].toLowerCase() : '';
+    if (/^(woff2?|ttf|otf|eot)$/.test(ext)) return 'font';
+    if (ext === 'css') return 'css';
+    if (/^(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/.test(ext)) return 'img';
+    if (/^m?js$/.test(ext)) return 'script';
+    if (ext) return 'other';
+    if (initiator === 'img' || initiator === 'image' || initiator === 'input') return 'img';
+    if (initiator === 'script') return 'script';
+    return 'other';
+  }
+  try {
+    var set = document.fonts;
+    if (set && typeof set.status === 'string' && typeof set.forEach === 'function') {
+      var faces = [];
+      set.forEach(function (face) {
+        if (face && face.status === 'error' && faces.length < LIMIT) {
+          faces.push({
+            family: String(face.family).replace(/^\\s*["']|["']\\s*$/g, '').slice(0, MAX),
+            weight: String(face.weight).slice(0, MAX),
+            style: String(face.style).slice(0, MAX)
+          });
+        }
+      });
+      out.fonts = { status: set.status === 'loaded' ? 'loaded' : 'loading', failed: faces };
+    } else {
+      out.fonts = { status: 'unavailable', failed: [] };
+    }
+  } catch (e) { out.fonts = { status: 'unavailable', failed: [] }; }
+  var statusByUrl = {};
+  try {
+    var timed = typeof performance !== 'undefined' && performance && typeof performance.getEntriesByType === 'function' ? performance.getEntriesByType('resource') : [];
+    for (var t = 0; t < timed.length; t++) {
+      if (typeof timed[t].responseStatus === 'number') statusByUrl[timed[t].name] = timed[t].responseStatus;
+    }
+  } catch (e) {}
+  try {
+    var links = document.querySelectorAll('link[rel]');
+    var sheetsFailed = 0, sheetUrls = [];
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var rel = ' ' + String(link.getAttribute('rel') || '').toLowerCase().replace(/\\s+/g, ' ') + ' ';
+      if (rel.indexOf(' stylesheet ') === -1) continue;
+      if (link.getAttribute('href')) sheetHrefs[where(link.href)] = true;
+      if (rel.indexOf(' alternate ') !== -1) continue;
+      if (link.disabled || !link.getAttribute('href')) continue;
+      if (!link.sheet || statusByUrl[link.href] >= 400) {
+        sheetsFailed++;
+        if (sheetUrls.length < LIMIT) sheetUrls.push(where(link.href));
+      }
+    }
+    out.stylesheets = { failed: sheetsFailed, urls: sheetUrls };
+  } catch (e) {}
+  try {
+    var imgs = document.images, broken = 0, imageUrls = [];
+    for (var j = 0; j < imgs.length; j++) {
+      var img = imgs[j];
+      var src = img.currentSrc || img.src || '';
+      if (!src) continue;
+      if (img.complete && img.naturalWidth === 0) {
+        broken++;
+        if (imageUrls.length < LIMIT) imageUrls.push(where(src));
+      }
+    }
+    out.images = { broken: broken, urls: imageUrls };
+  } catch (e) {}
+  try {
+    var timing = typeof PerformanceResourceTiming !== 'undefined' ? PerformanceResourceTiming : null;
+    var perf = typeof performance !== 'undefined' ? performance : null;
+    if (!timing || !timing.prototype || !('responseStatus' in timing.prototype) || !perf || typeof perf.getEntriesByType !== 'function') {
+      out.resources = { status: 'unavailable', failed: {} };
+    } else {
+      var failed = {}, seen = {};
+      var entries = perf.getEntriesByType('resource');
+      for (var k = 0; k < entries.length; k++) {
+        var entry = entries[k];
+        var status = entry.responseStatus;
+        if (typeof status !== 'number' || status < 400) continue;
+        var url = where(entry.name);
+        if (entry.initiatorType === 'other' && url.indexOf('/') === url.length - 12 && url.slice(-12) === '/favicon.ico') continue;
+        var type = kindOf(url, entry.initiatorType);
+        if (seen[type + ' ' + url]) continue;
+        seen[type + ' ' + url] = true;
+        var group = failed[type] || (failed[type] = { count: 0, entries: [] });
+        group.count++;
+        if (group.entries.length < LIMIT) group.entries.push({ url: url, status: status });
+      }
+      out.resources = { status: 'checked', failed: failed };
+    }
+  } catch (e) { out.resources = { status: 'unavailable', failed: {} }; }
+  return out;
+})()`;
+var Malformed = class extends Error {
+};
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+function record(v) {
+  if (!isRecord(v)) throw new Malformed();
+  return v;
+}
+function count(v) {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) throw new Malformed();
+  return v;
+}
+function text(v, max2) {
+  if (typeof v !== "string" || v.length > max2) throw new Malformed();
+  return v;
+}
+function oneOf(v, allowed) {
+  if (typeof v !== "string" || !allowed.includes(v)) throw new Malformed();
+  return v;
+}
+function list(v, item) {
+  if (!Array.isArray(v)) throw new Malformed();
+  return v.slice(0, HEALTH_LIMITS.list).map(item);
+}
+function readFailures(v) {
+  const g = record(v);
+  return {
+    count: count(g.count),
+    entries: list(g.entries, (e) => {
+      const entry = record(e);
+      const out = { url: text(entry.url, HEALTH_LIMITS.url), status: count(entry.status) };
+      if (entry.error !== void 0) out.error = text(entry.error, HEALTH_LIMITS.text);
+      return out;
+    })
+  };
+}
+function readHealthBlock(raw) {
+  const h = record(raw);
+  const fonts = record(h.fonts);
+  const stylesheets = record(h.stylesheets);
+  const images = record(h.images);
+  const resources = record(h.resources);
+  const failed = {};
+  for (const [type, group] of Object.entries(record(resources.failed))) {
+    failed[oneOf(type, RESOURCE_TYPES)] = readFailures(group);
+  }
+  return {
+    fonts: {
+      status: oneOf(fonts.status, ["loaded", "loading", "unavailable"]),
+      failed: list(fonts.failed, (f) => {
+        const face = record(f);
+        return { family: text(face.family, HEALTH_LIMITS.text), weight: text(face.weight, HEALTH_LIMITS.text), style: text(face.style, HEALTH_LIMITS.text) };
+      })
+    },
+    stylesheets: { failed: count(stylesheets.failed), urls: list(stylesheets.urls, (u) => text(u, HEALTH_LIMITS.url)) },
+    images: { broken: count(images.broken), urls: list(images.urls, (u) => text(u, HEALTH_LIMITS.url)) },
+    resources: { status: oneOf(resources.status, ["checked", "unavailable"]), failed }
+  };
+}
+function parseHealth(raw) {
+  try {
+    return readHealthBlock(raw);
+  } catch {
+    return null;
+  }
+}
+
 // ../packages/witness/src/report/validate.ts
 var SUPPORTED_SCHEMA_MAJOR = 2;
 var REPORT_DATA_LIMITS = {
@@ -2449,7 +2805,8 @@ var REPORT_DATA_LIMITS = {
   missingBaselines: 5e3,
   environmentKeys: 20,
   environmentValueLength: 200,
-  environmentFields: 100
+  environmentFields: 100,
+  healthLines: 100
 };
 function parseReportData(json) {
   try {
@@ -2467,11 +2824,11 @@ function fail(path4, problem) {
 function at(path4, key) {
   return path4 ? `${path4}.${key}` : key;
 }
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function record(value, path4) {
-  if (!isRecord(value)) fail(path4, "expected an object");
+function record2(value, path4) {
+  if (!isRecord2(value)) fail(path4, "expected an object");
   return value;
 }
 function num(value, path4, opts = {}) {
@@ -2480,10 +2837,10 @@ function num(value, path4, opts = {}) {
   if (opts.whole && !Number.isInteger(value)) fail(path4, "expected a whole number");
   return value;
 }
-function count(value, path4) {
+function count2(value, path4) {
   return num(value, path4, { min: 0, whole: true });
 }
-function text(value, path4, max2 = REPORT_DATA_LIMITS.textLength, min = 0) {
+function text2(value, path4, max2 = REPORT_DATA_LIMITS.textLength, min = 0) {
   if (typeof value !== "string") fail(path4, "expected text");
   if (value.length < min) fail(path4, "expected non-empty text");
   if (value.length > max2) fail(path4, `longer than ${max2} characters`);
@@ -2493,13 +2850,13 @@ function bool(value, path4) {
   if (typeof value !== "boolean") fail(path4, "expected true or false");
   return value;
 }
-function oneOf(value, path4, allowed) {
+function oneOf2(value, path4, allowed) {
   if (typeof value !== "string" || !allowed.includes(value)) {
     fail(path4, `expected one of ${allowed.join(", ")}`);
   }
   return value;
 }
-function list(value, path4, max2, item) {
+function list2(value, path4, max2, item) {
   if (!Array.isArray(value)) fail(path4, "expected a list");
   if (value.length > max2) fail(path4, `more than ${max2} items`);
   return value.map((v, i2) => item(v, `${path4}[${i2}]`));
@@ -2509,8 +2866,8 @@ function optional(target, key, source, path4, read) {
   if (value !== void 0) target[key] = read(value, at(path4, key));
 }
 function readReport(json) {
-  const root = record(json, "");
-  const version = text(root.version, "version", 32);
+  const root = record2(json, "");
+  const version = text2(root.version, "version", 32);
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
   if (!match) fail("version", "expected a schema version like 2.4.0");
   const major = Number(match[1]);
@@ -2522,71 +2879,86 @@ function readReport(json) {
   }
   const data = {
     version,
-    timestamp: text(root.timestamp, "timestamp", 64),
+    timestamp: text2(root.timestamp, "timestamp", 64),
     summary: readSummary(root.summary, "summary"),
-    snapshots: list(root.snapshots, "snapshots", REPORT_DATA_LIMITS.snapshots, readSnapshot)
+    snapshots: list2(root.snapshots, "snapshots", REPORT_DATA_LIMITS.snapshots, readSnapshot)
   };
   optional(
     data,
     "missingBaselines",
     root,
     "",
-    (v, p) => list(v, p, REPORT_DATA_LIMITS.missingBaselines, (n, q) => text(n, q, REPORT_DATA_LIMITS.nameLength, 1))
+    (v, p) => list2(v, p, REPORT_DATA_LIMITS.missingBaselines, (n, q) => text2(n, q, REPORT_DATA_LIMITS.nameLength, 1))
   );
   optional(data, "environment", root, "", (v, p) => readEnvironmentBlock(v, p));
   return data;
 }
 function readSummary(value, path4) {
-  const s = record(value, path4);
+  const s = record2(value, path4);
   const summary = {
-    total: count(s.total, at(path4, "total")),
-    passed: count(s.passed, at(path4, "passed")),
-    changed: count(s.changed, at(path4, "changed")),
-    newSnapshots: count(s.newSnapshots, at(path4, "newSnapshots"))
+    total: count2(s.total, at(path4, "total")),
+    passed: count2(s.passed, at(path4, "passed")),
+    changed: count2(s.changed, at(path4, "changed")),
+    newSnapshots: count2(s.newSnapshots, at(path4, "newSnapshots"))
   };
-  optional(summary, "missing", s, path4, count);
+  optional(summary, "missing", s, path4, count2);
   return summary;
 }
 var STATUSES = ["passed", "changed", "new"];
 function readSnapshot(value, path4) {
-  const s = record(value, path4);
+  const s = record2(value, path4);
   const snapshot = {
-    name: text(s.name, at(path4, "name"), REPORT_DATA_LIMITS.nameLength, 1),
-    status: oneOf(s.status, at(path4, "status"), STATUSES),
+    name: text2(s.name, at(path4, "name"), REPORT_DATA_LIMITS.nameLength, 1),
+    status: oneOf2(s.status, at(path4, "status"), STATUSES),
     diffPercent: num(s.diffPercent, at(path4, "diffPercent"), { min: 0 }),
-    diffCount: count(s.diffCount, at(path4, "diffCount")),
-    totalPixels: count(s.totalPixels, at(path4, "totalPixels"))
+    diffCount: count2(s.diffCount, at(path4, "diffCount")),
+    totalPixels: count2(s.totalPixels, at(path4, "totalPixels"))
   };
   optional(snapshot, "dom", s, path4, readDom);
-  optional(snapshot, "regions", s, path4, (v, p) => list(v, p, REPORT_DATA_LIMITS.regions, readRegion));
-  optional(snapshot, "masks", s, path4, (v, p) => list(v, p, REPORT_DATA_LIMITS.masks, readMask));
-  optional(snapshot, "maskWarnings", s, path4, (v, p) => list(v, p, REPORT_DATA_LIMITS.maskWarnings, (w, q) => text(w, q)));
+  optional(snapshot, "regions", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.regions, readRegion));
+  optional(snapshot, "masks", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.masks, readMask));
+  optional(snapshot, "maskWarnings", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.maskWarnings, (w, q) => text2(w, q)));
   optional(snapshot, "pageShift", s, path4, readPageShift);
-  optional(snapshot, "autoPassed", s, path4, (v, p) => oneOf(v, p, ["threshold", "noise", "shift"]));
-  optional(snapshot, "baselineApprovedAt", s, path4, (v, p) => text(v, p, 64));
+  optional(snapshot, "autoPassed", s, path4, (v, p) => oneOf2(v, p, ["threshold", "noise", "shift"]));
+  optional(snapshot, "baselineApprovedAt", s, path4, (v, p) => text2(v, p, 64));
   optional(snapshot, "sizeMismatch", s, path4, readSizeMismatch);
   optional(snapshot, "environment", s, path4, readSnapshotEnvironment);
-  if (s.thumbPath !== void 0) text(s.thumbPath, at(path4, "thumbPath"));
+  optional(snapshot, "captureHealth", s, path4, readCaptureHealth);
+  if (s.thumbPath !== void 0) text2(s.thumbPath, at(path4, "thumbPath"));
   return snapshot;
 }
+function readCaptureHealth(value, path4) {
+  const h = record2(value, path4);
+  const block = (v, p) => parseHealth(v) ?? fail(p, "expected a capture health block");
+  const lines = (v, p) => list2(v, p, REPORT_DATA_LIMITS.healthLines, (l, q) => text2(l, q));
+  const unhealthyPath = at(path4, "unhealthy");
+  const health = {
+    unhealthy: h.unhealthy === null ? null : oneOf2(h.unhealthy, unhealthyPath, ["candidate", "baseline", "both"]),
+    reasons: lines(h.reasons, at(path4, "reasons")),
+    warnings: lines(h.warnings, at(path4, "warnings"))
+  };
+  optional(health, "candidate", h, path4, block);
+  optional(health, "baseline", h, path4, block);
+  return { ...health.candidate ? { candidate: health.candidate } : {}, ...health.baseline ? { baseline: health.baseline } : {}, ...health };
+}
 function readSnapshotEnvironment(value, path4) {
-  const e = record(value, path4);
-  const fields = (v, p) => list(v, p, REPORT_DATA_LIMITS.environmentFields, (f, q) => text(f, q, 100, 1));
+  const e = record2(value, path4);
+  const fields = (v, p) => list2(v, p, REPORT_DATA_LIMITS.environmentFields, (f, q) => text2(f, q, 100, 1));
   const env = {
     delta: fields(e.delta, at(path4, "delta")),
     renderingDelta: fields(e.renderingDelta, at(path4, "renderingDelta"))
   };
   optional(env, "baseline", e, path4, readCaptureEnvironment);
   optional(env, "candidate", e, path4, readCaptureEnvironment);
-  optional(env, "policy", e, path4, (v, p) => oneOf(v, p, ["strict"]));
+  optional(env, "policy", e, path4, (v, p) => oneOf2(v, p, ["strict"]));
   return env;
 }
 function readCaptureEnvironment(value, path4) {
   const block = readEnvironmentBlock(value, path4);
-  const section = (name) => record(block[name], at(path4, name));
-  text(section("os").platform, at(path4, "os.platform"), REPORT_DATA_LIMITS.environmentValueLength, 1);
-  text(section("browser").name, at(path4, "browser.name"), REPORT_DATA_LIMITS.environmentValueLength, 1);
-  text(section("adapter").captureMethod, at(path4, "adapter.captureMethod"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  const section = (name) => record2(block[name], at(path4, name));
+  text2(section("os").platform, at(path4, "os.platform"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text2(section("browser").name, at(path4, "browser.name"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text2(section("adapter").captureMethod, at(path4, "adapter.captureMethod"), REPORT_DATA_LIMITS.environmentValueLength, 1);
   return block;
 }
 var ENVIRONMENT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,49}$/;
@@ -2594,7 +2966,7 @@ function readEnvironmentBlock(value, path4) {
   const plain = (v, p) => {
     if (v === null || typeof v === "boolean") return v;
     if (typeof v === "number") return num(v, p);
-    if (typeof v === "string") return text(v, p, REPORT_DATA_LIMITS.environmentValueLength);
+    if (typeof v === "string") return text2(v, p, REPORT_DATA_LIMITS.environmentValueLength);
     fail(p, "expected text, a number, true/false or null");
   };
   const keys = (o, p) => {
@@ -2603,12 +2975,12 @@ function readEnvironmentBlock(value, path4) {
     for (const key of k) if (!ENVIRONMENT_KEY.test(key)) fail(p, `field name ${JSON.stringify(key.slice(0, 50))} is not a plain name`);
     return k;
   };
-  const block = record(value, path4);
+  const block = record2(value, path4);
   const out = {};
   for (const sectionName of keys(block, path4)) {
     const sectionPath = at(path4, sectionName);
     const section = block[sectionName];
-    if (!isRecord(section)) {
+    if (!isRecord2(section)) {
       out[sectionName] = plain(section, sectionPath);
       continue;
     }
@@ -2617,7 +2989,7 @@ function readEnvironmentBlock(value, path4) {
       const fieldPath = at(sectionPath, field);
       const v = section[field];
       if (sectionName === "render" && field === "viewport") {
-        const vp = record(v, fieldPath);
+        const vp = record2(v, fieldPath);
         inner[field] = { width: num(vp.width, at(fieldPath, "width"), { min: 0 }), height: num(vp.height, at(fieldPath, "height"), { min: 0 }) };
       } else {
         inner[field] = plain(v, fieldPath);
@@ -2628,34 +3000,34 @@ function readEnvironmentBlock(value, path4) {
   return out;
 }
 function readDom(value, path4) {
-  const d = record(value, path4);
+  const d = record2(value, path4);
   const dom = {
     changed: bool(d.changed, at(path4, "changed")),
     noiseHint: bool(d.noiseHint, at(path4, "noiseHint")),
     summary: d.summary === void 0 || d.summary === null ? null : readDomSummary(d.summary, at(path4, "summary"))
   };
-  optional(dom, "styleCheck", d, path4, (v, p) => oneOf(v, p, ["match", "mismatch", "unavailable"]));
+  optional(dom, "styleCheck", d, path4, (v, p) => oneOf2(v, p, ["match", "mismatch", "unavailable"]));
   optional(dom, "styleChanges", d, path4, (v, p) => {
-    const c = record(v, p);
+    const c = record2(v, p);
     return {
-      count: count(c.count, at(p, "count")),
-      elements: list(c.elements, at(p, "elements"), REPORT_DATA_LIMITS.styleElements, (e, q) => text(e, q))
+      count: count2(c.count, at(p, "count")),
+      elements: list2(c.elements, at(p, "elements"), REPORT_DATA_LIMITS.styleElements, (e, q) => text2(e, q))
     };
   });
   return dom;
 }
 function readDomSummary(value, path4) {
-  const s = record(value, path4);
+  const s = record2(value, path4);
   const summary = {
-    added: count(s.added, at(path4, "added")),
-    removed: count(s.removed, at(path4, "removed")),
-    attributeChanges: count(s.attributeChanges, at(path4, "attributeChanges"))
+    added: count2(s.added, at(path4, "added")),
+    removed: count2(s.removed, at(path4, "removed")),
+    attributeChanges: count2(s.attributeChanges, at(path4, "attributeChanges"))
   };
-  optional(summary, "textChanges", s, path4, count);
+  optional(summary, "textChanges", s, path4, count2);
   return summary;
 }
 function readRegion(value, path4) {
-  const r = record(value, path4);
+  const r = record2(value, path4);
   const region = {
     x: num(r.x, at(path4, "x")),
     y: num(r.y, at(path4, "y")),
@@ -2664,9 +3036,9 @@ function readRegion(value, path4) {
     diffPixels: num(r.diffPixels, at(path4, "diffPixels"), { min: 0 }),
     diffPercent: num(r.diffPercent, at(path4, "diffPercent"), { min: 0 })
   };
-  optional(region, "classification", r, path4, (v, p) => oneOf(v, p, ["shift", "change"]));
+  optional(region, "classification", r, path4, (v, p) => oneOf2(v, p, ["shift", "change"]));
   optional(region, "shift", r, path4, (v, p) => {
-    const s = record(v, p);
+    const s = record2(v, p);
     return { dx: num(s.dx, at(p, "dx")), dy: num(s.dy, at(p, "dy")) };
   });
   optional(
@@ -2674,16 +3046,16 @@ function readRegion(value, path4) {
     "elements",
     r,
     path4,
-    (v, p) => list(v, p, REPORT_DATA_LIMITS.elementsPerRegion, (e, q) => {
-      const el = record(e, q);
-      return { selector: text(el.selector, at(q, "selector")), role: oneOf(el.role, at(q, "role"), ["shifted", "changed"]) };
+    (v, p) => list2(v, p, REPORT_DATA_LIMITS.elementsPerRegion, (e, q) => {
+      const el = record2(e, q);
+      return { selector: text2(el.selector, at(q, "selector")), role: oneOf2(el.role, at(q, "role"), ["shifted", "changed"]) };
     })
   );
   return region;
 }
 function readMask(value, path4) {
-  const m = record(value, path4);
-  const source = record(m.source, at(path4, "source"));
+  const m = record2(value, path4);
+  const source = record2(m.source, at(path4, "source"));
   const sourcePath = at(path4, "source");
   const mask = {
     x: num(m.x, at(path4, "x")),
@@ -2691,44 +3063,44 @@ function readMask(value, path4) {
     width: num(m.width, at(path4, "width"), { min: 0 }),
     height: num(m.height, at(path4, "height"), { min: 0 }),
     source: {
-      type: oneOf(source.type, at(sourcePath, "type"), ["selector", "region", "edge"]),
+      type: oneOf2(source.type, at(sourcePath, "type"), ["selector", "region", "edge"]),
       spec: readMaskSpec(source.spec, at(sourcePath, "spec")),
-      origin: oneOf(source.origin, at(sourcePath, "origin"), ["config", "call"])
+      origin: oneOf2(source.origin, at(sourcePath, "origin"), ["config", "call"])
     }
   };
   return mask;
 }
 function readMaskSpec(value, path4) {
-  if (typeof value === "string") return text(value, path4);
-  const spec = record(value, path4);
+  if (typeof value === "string") return text2(value, path4);
+  const spec = record2(value, path4);
   const keys = Object.keys(spec);
   if (keys.length > REPORT_DATA_LIMITS.maskSpecKeys) fail(path4, `more than ${REPORT_DATA_LIMITS.maskSpecKeys} keys`);
   const out = {};
   for (const key of keys) {
-    text(key, `${path4} key`, 50, 1);
+    text2(key, `${path4} key`, 50, 1);
     const v = spec[key];
-    out[key] = typeof v === "number" ? num(v, at(path4, key)) : text(v, at(path4, key), 200);
+    out[key] = typeof v === "number" ? num(v, at(path4, key)) : text2(v, at(path4, key), 200);
   }
   return out;
 }
 function readPageShift(value, path4) {
-  const p = record(value, path4);
-  return { dy: num(p.dy, at(path4, "dy")), belowY: num(p.belowY, at(path4, "belowY")), count: count(p.count, at(path4, "count")) };
+  const p = record2(value, path4);
+  return { dy: num(p.dy, at(path4, "dy")), belowY: num(p.belowY, at(path4, "belowY")), count: count2(p.count, at(path4, "count")) };
 }
 function readSizeMismatch(value, path4) {
-  const s = record(value, path4);
+  const s = record2(value, path4);
   const size = (v, p) => {
-    const d = record(v, p);
+    const d = record2(v, p);
     return { width: num(d.width, at(p, "width"), { min: 1 }), height: num(d.height, at(p, "height"), { min: 1 }) };
   };
   return { baseline: size(s.baseline, at(path4, "baseline")), candidate: size(s.candidate, at(path4, "candidate")) };
 }
 
 // src/report-artifact.ts
-function parseRunStamp(text2) {
+function parseRunStamp(text3) {
   let raw;
   try {
-    raw = JSON.parse(text2);
+    raw = JSON.parse(text3);
   } catch {
     return null;
   }
@@ -3062,14 +3434,14 @@ function publishedSite(input) {
   };
 }
 var INVISIBLE = /[\p{Cc}\u200E\u200F\u202A-\u202E\u2066-\u2069]+/gu;
-function escapeMarkdown(text2) {
-  return text2.replace(INVISIBLE, " ").replace(/[!-/:-@[-`{-~]/g, (c) => `\\${c}`);
+function escapeMarkdown(text3) {
+  return text3.replace(INVISIBLE, " ").replace(/[!-/:-@[-`{-~]/g, (c) => `\\${c}`);
 }
 var TITLE_MAX = 200;
 var whole = (n) => String(Math.trunc(n));
-function link(text2, url) {
+function link(text3, url) {
   const safe = safeReportUrl(url);
-  return safe ? `[${text2}](${safe})` : text2;
+  return safe ? `[${text3}](${safe})` : text3;
 }
 function title(pr) {
   if (pr.fork || !pr.title) return "";

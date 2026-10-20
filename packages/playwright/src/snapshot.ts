@@ -17,6 +17,7 @@ import {
   RENDER_PROBE_EXPRESSION,
 } from '@testivai/witness';
 import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
+import { probeCaptureHealth, recordCaptureHealth } from './capture/health';
 import { captureFullPageScreenshot } from './capture/full-page';
 
 /**
@@ -375,6 +376,16 @@ export async function snapshot(
     }
   }
 
+  // Capture health: what failed to load (web fonts, stylesheets, images,
+  // requests that answered 400+), read right after the screenshot (every
+  // capture path above ends here) so it sees what loaded, and before the
+  // ignoreSelectors and stabilize styles come off: removing them shows
+  // elements that were hidden in the capture, and a web font only they use
+  // starts loading then, for glyphs that were never in the image. A font that
+  // fell back leaves the DOM and the declared styles the same, so only this
+  // tells an unhealthy capture from render noise. Recorded with the metadata.
+  const captureHealth = await probeCaptureHealth(page as unknown as { evaluate(expression: string): Promise<unknown> });
+
   // Restore any elements hidden for ignoreSelectors
   if (ignoreStyleEl) {
     await ignoreStyleEl.evaluate((el: Element) => el.remove()).catch(() => {});
@@ -502,6 +513,9 @@ export async function snapshot(
     } catch {
       // no environment only means the compare cannot tell drift from noise for this capture
     }
+
+    // Capture health, probed right after the screenshot (above).
+    recordCaptureHealth(new BaselineStore(process.cwd()), snapshotName, captureHealth);
 
     // Element map: layout + computed-style digest for every visible
     // element, powering attribution ("WHICH element changed"), exact

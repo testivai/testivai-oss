@@ -4,6 +4,7 @@ import { PNG } from 'pngjs';
 import { BaselineStore, resolveBaselinesDir } from '@testivai/witness/baselines';
 import { shellArg } from './tool-meta';
 import {
+  captureHealthReading,
   describeCaptureMethod,
   describeEnvironmentChange,
   describeRegions,
@@ -14,6 +15,7 @@ import {
   explainHeightChange,
   formatSizes,
   isRenderingDrift,
+  isUnhealthyCapture,
   NOISE_MAX_DIFF_PERCENT,
   sizeMismatchKind,
   snapshotEnvironmentChange,
@@ -21,6 +23,7 @@ import {
   type CaptureEnvironment,
   type DiffShape,
   type SizeMismatchInfo,
+  type SnapshotCaptureHealth,
 } from '@testivai/witness/report';
 
 /** Subset of the semver-governed results.json contract this server reads. */
@@ -76,6 +79,13 @@ export interface SnapshotResult {
    * page). `policy: 'strict'` means environmentPolicy made it changed.
    */
   environment?: EnvironmentInfo;
+  /**
+   * results.json 2.7.0+: capture health, when the baseline or the current
+   * capture recorded what failed to load. An unhealthy side (a web font or
+   * stylesheet that failed) is never render noise: the verdict says
+   * "unhealthy capture" before anything else.
+   */
+  captureHealth?: SnapshotCaptureHealth;
 }
 
 export interface EnvironmentInfo {
@@ -430,6 +440,8 @@ function domSummaryDetail(s: NonNullable<DomInfo['summary']>): string {
  * verdict gets the environment change as context.
  */
 export function verdictFor(snapshot: SnapshotResult): string {
+  const unhealthy = unhealthyVerdict(snapshot);
+  if (unhealthy) return unhealthy;
   const base = pageVerdict(snapshot);
   if (snapshot.status === 'new') return base;
   const change = snapshotEnvironmentChange(snapshot);
@@ -466,6 +478,28 @@ export function verdictFor(snapshot: SnapshotResult): string {
     );
   }
   return `${base}; the environment also changed since the baseline (${change}), which can add rendering differences of its own`;
+}
+
+/**
+ * The verdict for a snapshot with an unhealthy side (a web font or
+ * stylesheet that failed to load), or null. It outranks every other reading:
+ * the capture is not the page as built. Rendering drift, when also true, is
+ * said after it.
+ */
+function unhealthyVerdict(snapshot: SnapshotResult): string | null {
+  const reading = captureHealthReading(snapshot.captureHealth);
+  if (!reading) return null;
+  if (snapshot.status === 'new') return `new snapshot — unhealthy capture: ${reading.detail}; ${reading.next}`;
+  if (snapshot.status === 'passed') {
+    const who = reading.side === 'both' ? 'neither image shows' : reading.side === 'baseline' ? 'the baseline does not show' : 'the current capture does not show';
+    return `passed — no visual change, but ${who} the page as built (unhealthy capture: ${reading.detail}); ${reading.next}`;
+  }
+  const pct = snapshot.diffPercent !== undefined ? `${snapshot.diffPercent.toFixed(2)}% pixels differ` : 'pixels differ';
+  let env = '';
+  const change = snapshotEnvironmentChange(snapshot);
+  if (change && isRenderingDrift(snapshot)) env = `; rendering drift too: ${change} since the baseline, with the DOM and computed styles matching`;
+  else if (change) env = `; the environment also changed since the baseline (${change})`;
+  return `changed (${pct}) — unhealthy capture: ${reading.detail}; ${reading.next}${env}`;
 }
 
 /**
@@ -683,6 +717,12 @@ export interface SnapshotExplanation {
     /** Structural evidence from the DOM pair. */
     dom: DomInfo | null;
     /**
+     * Capture health (results.json 2.7.0+): what failed to load in each
+     * capture, which side is unhealthy and why. Null when neither side
+     * recorded health (not checked).
+     */
+    health: SnapshotCaptureHealth | null;
+    /**
      * Capture provenance (results.json 2.5.0+): what changed in the capture
      * environment since the baseline. `change` words the rendering changes,
      * `context` the rest; `drift` is true when the diff is rendering drift.
@@ -741,6 +781,14 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
   }
 
   const guidance: string[] = [];
+  // An unhealthy capture first: what it shows is not the page as built.
+  const unhealthy = captureHealthReading(snapshot.captureHealth);
+  if (unhealthy) {
+    guidance.push(
+      `Unhealthy capture: ${unhealthy.detail}. The capture does not show the page as built, so this diff is not render noise and says nothing reliable about the page: ` +
+        `${unhealthy.next}. If the change under test touched the asset that failed (moved, renamed or removed a font or stylesheet, or changed its path), it is a bug in that change.`,
+    );
+  }
   if (snapshot.status === 'new') {
     guidance.push('No baseline exists yet — this is a first capture, not a regression. A human should review and approve it.');
     // The other half of a rename: read on its own it would look like something to approve.
@@ -880,6 +928,12 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
       );
     }
   }
+  const warnings = snapshot.captureHealth?.warnings ?? [];
+  if (warnings.length > 0) {
+    guidance.push(
+      `Capture warnings (they make no capture unhealthy on their own): ${warnings.join('; ')}. A broken image shows as a changed region where it sits: check whether it is where the diff is.`,
+    );
+  }
   if (snapshot.maskWarnings?.length) {
     guidance.push(`Mask warnings: ${snapshot.maskWarnings.join('; ')} — some configured masks could not be applied.`);
   }
@@ -904,6 +958,7 @@ export function explainSnapshot(root: string, name: string): SnapshotExplanation
         changedSelectors: [...changed].slice(0, 10),
       },
       dom: snapshot.dom ?? null,
+      health: snapshot.captureHealth ?? null,
     },
     guidance,
   };
@@ -1058,6 +1113,9 @@ const BASIS_ORDER: ChangeGroup['basis'][] = ['style-only', 'page-shift', 'styles
 function signatureOf(s: SnapshotResult): Signature | null {
   // Only changed snapshots; auto-passed ones are status 'passed'.
   if (s.status !== 'changed') return null;
+  // An unhealthy capture (a font or stylesheet that failed) has its own
+  // cause on its own page: never grouped.
+  if (isUnhealthyCapture(s)) return null;
   // No DOM data means a structural change cannot be ruled out.
   if (!s.dom || s.dom.changed) return null;
   // A size change: every padded pixel counts as changed, so the signals

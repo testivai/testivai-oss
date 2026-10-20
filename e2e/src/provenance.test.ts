@@ -81,7 +81,7 @@ async function main(): Promise<void> {
 
     // 3. Report.
     const data = generateReport({ projectRoot: root, autoOpen: false });
-    assert.strictEqual(data.version, '2.6.0');
+    assert.strictEqual(data.version, '2.7.0');
     const pricing = data.snapshots.find((s) => s.name === 'pricing')!;
     const control = data.snapshots.find((s) => s.name === 'control')!;
     assert.strictEqual(pricing.status, 'changed');

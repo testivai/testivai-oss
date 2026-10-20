@@ -14,6 +14,7 @@ import {
 } from '../../packages/witness/src/report/environment';
 import type { ResultsData, SnapshotResult } from './types';
 import { STATUS_CONTEXT } from './status';
+import { captureWarningsHint, unhealthyCaptureHint, unhealthyNewSuffix, unhealthyPassedLines } from './comment-health';
 
 export const UPSERT_MARKER = '<!-- testivai-visual-report -->';
 
@@ -248,13 +249,22 @@ function renderDomHintMarkdown(
 }
 
 /**
- * The hints for one changed snapshot, environment first: environmentPolicy
+ * The hints for one changed snapshot: an unhealthy capture first (a font or
+ * stylesheet that failed to load: never render noise), then the environment
+ * and page-side readings, then what else failed to load.
+ */
+function renderSnapshotHints(snapshot: SnapshotResult): string {
+  return unhealthyCaptureHint(snapshot) + renderEnvironmentAndPageHints(snapshot) + captureWarningsHint(snapshot);
+}
+
+/**
+ * The environment and page-side hints, environment first: environmentPolicy
  * "strict", a size change from another capture method, and rendering drift
  * (identical DOM, matching styles, a changed rendering environment) each
  * replace the reading they explain; any other reading gets the environment
  * change as context. Without a recorded environment, the page-side hints only.
  */
-function renderSnapshotHints(snapshot: SnapshotResult): string {
+function renderEnvironmentAndPageHints(snapshot: SnapshotResult): string {
   const change = snapshotEnvironmentChange(snapshot);
   if (!change) return renderDomHintMarkdown(snapshot);
   const env = snapshot.environment!;
@@ -344,6 +354,10 @@ ${summaryLine} — **${summary.total} total**
     comment += `> **${missing.length} baseline${missing.length === 1 ? '' : 's'} received no capture this run** — ${missing.slice(0, 5).map(n => `\`${n}\``).join(', ')}${missing.length > 5 ? ', …' : ''}. If a test was removed intentionally, delete its baseline; otherwise coverage just shrank.\n\n`;
   }
 
+  // Passed snapshots whose capture is unhealthy: nothing changed visibly,
+  // but the capture is not the page as built.
+  comment += unhealthyPassedLines(snapshots);
+
   // Changed snapshots — approve commands + DOM hints
   const changedSnapshots = snapshots.filter(s => s.status === 'changed');
   if (changedSnapshots.length > 0) {
@@ -388,7 +402,7 @@ ${picture}${domHint}
     comment += '#### New Snapshots\n\n';
     for (const snapshot of newSnapshots) {
       const open = reportUrl ? ` — [open](${snapshotUrl(reportUrl, snapshot.name)})` : '';
-      comment += `- \`${snapshot.name}\`${open}\n`;
+      comment += `- \`${snapshot.name}\`${open}${unhealthyNewSuffix(snapshot)}\n`;
     }
     comment += '\n';
   }

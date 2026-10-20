@@ -356,7 +356,8 @@ order (a snapshot joins at most one group):
 
 It never groups structural DOM changes, snapshots without DOM data, diffs
 concentrated in one area (each sits in its own place, so grouping two would
-suggest one cause), or style-only changes with more than 10 restyled elements (witness lists only
+suggest one cause), unhealthy captures (a web font or stylesheet that failed
+to load: each verdict names what failed), or style-only changes with more than 10 restyled elements (witness lists only
 the first 10, so those lists can't be compared exactly; the section names
 them instead). Passed, auto-passed and new snapshots are left out. Every
 snapshot keeps its own verdict line below the groups, unchanged.
@@ -405,6 +406,7 @@ After changing UI code, run the visual tests, then read visual-report/results.js
 - status "changed" + dom.noiseHint true + dom.styleCheck "match", diffPercent at most 1, and no regions or regions spread out (their combined bounding box covers more than a third of the page, totalPixels) → likely render noise; mention, don't block
 - status "changed" + dom.noiseHint true + dom.styleCheck "match" otherwise (every region within a box of at most a third of the page, or diffPercent over 1) → not noise: a bad capture or a change the style check does not cover (size, overflow, transform, images…); look at the diff before approving
 - status "changed" + dom.noiseHint true + dom.styleCheck "unavailable" or missing → styles not compared: could be render noise or a stylesheet-only change; look at the diff before approving
+- captureHealth.unhealthy set → unhealthy capture: a web font or stylesheet failed to load (captureHealth.reasons); never noise; fix what failed, never approve it as a baseline
 - status "new" → no baseline yet; tell the human
 Never run `testivai approve` yourself — approval is a human decision.
 ```

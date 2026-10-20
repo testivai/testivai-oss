@@ -94,7 +94,8 @@ export interface SnapshotResult {
    * diff not concentrated in one area, within noiseMaxDiffPercent; a diff
    * whose styles were not compared or changed, or whose regions all sit in
    * one area, is never auto-passed as noise), or 'shift' (every region is a pure
-   * element shift within shiftTolerance px). The diff image is still
+   * element shift within shiftTolerance px). Never present when
+   * `captureHealth.unhealthy` is set (schema 2.7.0). The diff image is still
    * written — auto-passes stay auditable.
    */
   autoPassed?: 'threshold' | 'noise' | 'shift';
@@ -121,6 +122,27 @@ export interface SnapshotResult {
    * (metadata.json `environment`). See report/environment.ts.
    */
   environment?: SnapshotEnvironment;
+  /**
+   * Capture health (schema 2.7.0): present when the baseline or the current
+   * capture recorded what failed to load (metadata.json `health`). An
+   * unhealthy side is never render noise: `dom.noiseHint` is false and no
+   * pass criterion applies while pixels differ. See report/health.ts.
+   */
+  captureHealth?: SnapshotCaptureHealth;
+}
+
+/** What failed to load in each capture of a snapshot, and whether that makes it unhealthy. */
+export interface SnapshotCaptureHealth {
+  /** The current capture's recorded health. Absent when it recorded none (not checked). */
+  candidate?: import('../capture/health').CaptureHealth;
+  /** The baseline's recorded health, frozen on approve. Absent when it recorded none (not checked). */
+  baseline?: import('../capture/health').CaptureHealth;
+  /** Which side is unhealthy, or null when neither recorded side is. */
+  unhealthy: 'candidate' | 'baseline' | 'both' | null;
+  /** Why, in plain words; the baseline's start with "baseline: ". Empty when not unhealthy. */
+  reasons: string[];
+  /** What else failed to load (broken images, failed scripts and other requests): shown, never unhealthy on its own. */
+  warnings: string[];
 }
 
 /** How the environment of the current capture differs from the baseline's. */
