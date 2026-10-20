@@ -138,7 +138,8 @@ visual-report/
     └── <name>/
         ├── baseline.png
         ├── current.png
-        └── diff.png    (when the PNGs differ: changed or auto-passed)
+        ├── diff.png    (when the PNGs differ: changed or auto-passed)
+        └── thumb.png   (changed only: baseline | current | diff of the changed area, ≤ 800×400)
 ```
 
 `results.json` schema (excerpt):

@@ -147,7 +147,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.5.0",         // results.json SCHEMA version
+  "version": "2.6.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 7,
@@ -226,6 +226,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       "baselinePath": "images/nav-redesign/baseline.png",
       "currentPath":  "images/nav-redesign/current.png",
       "diffPath":     "images/nav-redesign/diff.png",
+      "thumbPath":    "images/nav-redesign/thumb.png", // changed only: the changed area, baseline | current | diff
       "dom": {
         "changed": true,
         "summary": {
@@ -326,6 +327,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].baselinePath` | string | optional | relative path under `<reportDir>/`; absent for `new` |
 | `snapshots[].currentPath` | string | optional | relative path under `<reportDir>/` |
 | `snapshots[].diffPath` | string | optional | present whenever the two PNGs differ byte-wise and decode: `changed`, auto-passed, or a `passed` snapshot with no pixel above `threshold`; absent for byte-identical passes, `new`, and a `changed` snapshot whose PNG failed to decode |
+| `snapshots[].thumbPath` | string | optional | emitted from schema 2.6.0, for a `changed` snapshot only (never `passed`, auto-passed or `new`, and not for one whose PNG failed to decode or whose diff has no differing pixel): `images/<name>/thumb.png`, the changed area of the baseline, the current capture and the diff side by side, 2 px apart, at most 800×400 px (downscaled by area average, never upscaled). The area is the union of the up to three largest `regions` by area, padded 24 px and kept inside the diff canvas; without regions, a full-width band of 400 rows from the first differing row. With `sizeMismatch` it is on the padded canvas, and rows or columns a capture does not have are drawn as padding (grey). The HTML report does not show it; `publish@v1` publishes it and puts it in the pull request comment |
 | `snapshots[].dom` | object | optional | only present when DOM was captured on both sides and the PNGs differ byte-wise (`changed`, auto-passed, or `passed` with no pixel above `threshold`) |
 | `snapshots[].dom.changed` | boolean | yes within `dom` | true if structural DOM diff detected |
 | `snapshots[].dom.summary` | object &#124; null | yes within `dom` | null when `changed` is false |

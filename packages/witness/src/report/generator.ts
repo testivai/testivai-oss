@@ -47,7 +47,10 @@ export interface GenerateReportOptions {
  * @returns The report data
  */
 /**
- * results.json schema version. 2.5.0 adds capture provenance: per-snapshot
+ * results.json schema version. 2.6.0 adds per-snapshot `thumbPath`: thumb.png,
+ * the changed area of the baseline, the current capture and the diff side by
+ * side (at most 800×400 px), for 'changed' snapshots. 2.5.0 added capture
+ * provenance: per-snapshot
  * `environment` (what changed between the environment the baseline was
  * captured in and the current capture's: `delta`, `renderingDelta`, both
  * blocks when they differ, and `policy: "strict"` when that policy made the
@@ -61,7 +64,7 @@ export interface GenerateReportOptions {
  * diff bounding boxes), `masks[]` (applied masks with their source — the
  * audit trail), and `maskWarnings[]`. All additive.
  */
-export const RESULTS_SCHEMA_VERSION = '2.5.0';
+export const RESULTS_SCHEMA_VERSION = '2.6.0';
 
 /**
  * Write results.json for an already-computed set of snapshot results.

@@ -348,7 +348,8 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
   if (!options.comment) return { verified, siteUrl: state.siteUrl };
   for (const published of state.prs) {
     try {
-      const action = commentFor(published, await api.comments(published.pr), options.marker);
+      // A private site's images cannot be fetched for the comment (GitHub's image proxy has no sign-in).
+      const action = commentFor(published, await api.comments(published.pr), options.marker, { thumbnails: state.visibility === 'public' });
       if (action.kind === 'create') {
         await api.createComment(published.pr, action.body);
         log.info(`#${published.pr}: posted the report link.`);

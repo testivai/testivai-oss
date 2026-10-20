@@ -10,7 +10,7 @@
  */
 
 import { buildComment, buildEmptyComment, readRunKey, UPSERT_MARKER } from '../comment';
-import { commentFor, FORK_MARKER, type ExistingComment, type PublishedPr } from '../publish/comments';
+import { commentFor, FORK_MARKER, publishedThumbnails, type ExistingComment, type PublishedPr } from '../publish/comments';
 import type { ReportData } from '../../../packages/witness/src/report/results';
 import { parseReportData } from '../../../packages/witness/src/report/validate';
 
@@ -236,5 +236,118 @@ describe('commentFor, a fork pull request', () => {
 
   it("rebuilds the reporter's comment instead when the fork's run could comment (pull_request_target)", () => {
     expect(commentFor(fork(), [reporterComment('39150236166-1')], UPSERT_MARKER)).toMatchObject({ kind: 'update', id: 77 });
+  });
+});
+
+describe('publishedThumbnails: the thumbs the comment shows', () => {
+  /** A run's data as site.ts leaves it: thumbPath set only for a thumb it published, at its numbered path. */
+  function withThumbs(snapshots: Array<{ name: string; status: 'changed' | 'new' | 'passed'; thumb?: boolean }>): PublishedPr {
+    const data: ReportData = {
+      ...DATA,
+      snapshots: snapshots.map((s, i) => ({
+        name: s.name,
+        status: s.status,
+        diffPercent: 1,
+        diffCount: 1,
+        totalPixels: 100,
+        ...(s.thumb ? { thumbPath: `images/${i}/thumb.png` } : {}),
+      })),
+    };
+    return published({ outcome: { ok: true, summary: data.summary, data } });
+  }
+
+  it('lists the first 5 changed snapshots with a published thumb, in results order, from the page URL and numbers only', () => {
+    const p = withThumbs([
+      { name: 'a', status: 'changed', thumb: true },
+      { name: 'new-one', status: 'new', thumb: true },
+      { name: 'b', status: 'changed' },
+      { name: 'c', status: 'changed', thumb: true },
+      { name: 'passed-one', status: 'passed', thumb: true },
+      { name: 'd', status: 'changed', thumb: true },
+      { name: 'e', status: 'changed', thumb: true },
+      { name: 'f', status: 'changed', thumb: true },
+      { name: 'g', status: 'changed', thumb: true },
+    ]);
+
+    expect(publishedThumbnails(p)).toEqual([
+      { name: 'a', url: `${URL}images/0/thumb.png` },
+      { name: 'c', url: `${URL}images/3/thumb.png` },
+      { name: 'd', url: `${URL}images/5/thumb.png` },
+      { name: 'e', url: `${URL}images/6/thumb.png` },
+      { name: 'f', url: `${URL}images/7/thumb.png` },
+    ]);
+  });
+
+  it('takes nothing from a thumbPath that is not the numbered path site.ts gives', () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    if (p.outcome.ok) p.outcome.data.snapshots[0].thumbPath = 'https://evil.example/x.png';
+
+    expect(publishedThumbnails(p)).toEqual([]);
+  });
+
+  it('lists none for a report that could not be shown', () => {
+    expect(publishedThumbnails(published({ outcome: { ok: false, reason: 'x' } }))).toEqual([]);
+  });
+
+  it("shows them in the reporter's rebuilt comment: 5 images, the first three snapshots open", () => {
+    const p = withThumbs(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ name, status: 'changed' as const, thumb: true })));
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind).toBe('update');
+    if (action.kind !== 'update') return;
+    expect(action.body.match(/<img /g)).toHaveLength(5);
+    expect(action.body.match(/<details open>/g)).toHaveLength(3);
+    expect(action.body).toContain(`<img src="${URL}images/0/thumb.png" alt="a: baseline, current, diff">`);
+    expect(action.body).not.toContain('images/5/thumb.png');
+    // The reporter's own comment, before the publish, has none.
+    expect(reporter.body).not.toContain('<img');
+  });
+
+  it('shows none when told not to (a private site: GitHub cannot fetch its images for the comment)', () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER, { thumbnails: false });
+
+    expect(action.kind).toBe('update');
+    expect(action.kind === 'update' && action.body).toContain(`[Open the visual report](${URL})`);
+    expect(action.kind === 'update' && action.body).not.toContain('<img');
+  });
+
+  it("puts no image in the comment the publish posts on a fork's pull request", () => {
+    const p = { ...withThumbs([{ name: 'a', status: 'changed', thumb: true }]), fork: true };
+
+    const action = commentFor(p, [], UPSERT_MARKER);
+
+    expect(action.kind).toBe('create');
+    expect(action.kind === 'create' && action.body).not.toMatch(/<img|thumb\.png/);
+  });
+
+  it("puts no image in the reporter's rebuilt comment on a fork's pull request (pull_request_target): the fork chose those PNGs", () => {
+    const p = { ...withThumbs([{ name: 'a', status: 'changed', thumb: true }]), fork: true };
+    const data = (p.outcome as { data: ReportData }).data;
+    const reporter = reporterComment('39150236166-1', { body: buildComment(data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind).toBe('update');
+    if (action.kind !== 'update') return;
+    expect(action.id).toBe(77);
+    expect(action.body).not.toMatch(/<img|thumb\.png/);
+    // The links are added as before.
+    expect(action.body).toBe(buildComment(data as never, ZIP, UPSERT_MARKER, { reportUrl: URL, runKey: '39150236166-1' }));
+    expect(action.body).toContain(`[Open the visual report](${URL})`);
+    expect(publishedThumbnails(p)).toEqual([]);
+  });
+
+  it("still shows them on a branch pull request's rebuilt comment", () => {
+    const p = withThumbs([{ name: 'a', status: 'changed', thumb: true }]);
+    const reporter = reporterComment('39150236166-1', { body: buildComment((p.outcome as { data: ReportData }).data as never, ZIP, UPSERT_MARKER, { runKey: '39150236166-1' }) });
+
+    const action = commentFor(p, [reporter], UPSERT_MARKER);
+
+    expect(action.kind === 'update' && action.body).toContain(`<img src="${URL}images/0/thumb.png"`);
   });
 });

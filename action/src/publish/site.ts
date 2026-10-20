@@ -9,17 +9,22 @@
  * numbered paths (images/<snapshot index>/<kind>.png), so no name from the
  * report ends up in a URL, and every page is noindex, under a content
  * security policy that keeps it from loading or sending anything elsewhere.
+ * A changed snapshot's thumbnail (thumb.png, witness schema 2.6.0) is
+ * published the same way, at images/<snapshot index>/thumb.png, and only
+ * within the size witness makes one (THUMBNAIL_LIMITS); the page does not
+ * show it, the pull request comment does (comments.ts).
  *
  * Every function here is pure: the caller writes the files.
  */
 
 import { renderHtml, type ReportNotice } from '../../../packages/witness/src/report/template';
+import { THUMBNAIL_LIMITS } from '../../../packages/witness/src/report/thumbnail';
 import { parseReportData } from '../../../packages/witness/src/report/validate';
 import type { ReportData, ReportSummary } from '../../../packages/witness/src/report/results';
 import { parseRunStamp, staleReport } from '../report-artifact';
 import type { ReportArchive } from './archive';
 import type { PlannedRun, PlanPr, SitePlan } from './plan';
-import { checkPng } from './png';
+import { checkPng, type PngCheck } from './png';
 
 export interface SiteInfo {
   /** The site's address, ending in '/'. */
@@ -54,8 +59,8 @@ export type RunOutcome =
   | (OutcomeBase & { ok: true; summary: ReportSummary; data: ReportData; omittedImages: string[] })
   | (OutcomeBase & { ok: false; reason: string });
 
-const KINDS = ['baseline', 'current', 'diff'] as const;
-const PATH_FIELD = { baseline: 'baselinePath', current: 'currentPath', diff: 'diffPath' } as const;
+const KINDS = ['baseline', 'current', 'diff', 'thumb'] as const;
+const PATH_FIELD = { baseline: 'baselinePath', current: 'currentPath', diff: 'diffPath', thumb: 'thumbPath' } as const;
 
 /** Policy for the index and fallback pages: no scripts at all. */
 const PAGE_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
@@ -84,7 +89,7 @@ export function buildRunReport(input: RunReportInput): { files: SiteFile[]; outc
       if (typeof from !== 'string' || !from.endsWith(`/${kind}.png`)) continue;
       const bytes = archiveImages.get(from);
       if (!bytes) continue;
-      const check = checkPng(bytes);
+      const check = kind === 'thumb' ? checkThumb(bytes) : checkPng(bytes);
       if (!check.ok) {
         omittedImages.push(`${from} (${check.reason})`);
         continue;
@@ -117,6 +122,21 @@ export function buildRunReport(input: RunReportInput): { files: SiteFile[]; outc
 
   files.push({ path: page, data: renderHtml(data, { notices, noindex: true, csp: true }) });
   return { files, outcome: { ...base, ok: true, summary: data.summary, data, omittedImages } };
+}
+
+/**
+ * A thumb is a PNG no larger than witness makes one (THUMBNAIL_LIMITS). The
+ * pull request comment shows it inline, so a larger one, which no witness
+ * wrote, is left out like any other image that fails its check.
+ */
+function checkThumb(bytes: Uint8Array): PngCheck {
+  const check = checkPng(bytes);
+  if (!check.ok) return check;
+  const { maxWidth, maxHeight } = THUMBNAIL_LIMITS;
+  if (check.width > maxWidth || check.height > maxHeight) {
+    return { ok: false, reason: `a PNG of ${check.width}×${check.height} pixels, over the ${maxWidth}×${maxHeight} of a thumbnail` };
+  }
+  return check;
 }
 
 type ReadResults = { ok: true; data: ReportData; raw: { snapshots: unknown[] } } | { ok: false; reason: string };

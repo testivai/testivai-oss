@@ -312,6 +312,8 @@ function resolveStatusContext(input) {
 
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
+var MAX_COMMENT_THUMBNAILS = 5;
+var OPEN_WITH_THUMBNAIL = 3;
 var RUN_MARKER = /<!-- testivai-run:([A-Za-z0-9_-]+) -->/;
 function readRunKey(body) {
   return RUN_MARKER.exec(body)?.[1];
@@ -338,6 +340,18 @@ function snapshotUrl(reportUrl, name) {
 }
 function attr(value) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+function attrText(value) {
+  return value.replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function thumbnailUrls(reportUrl, thumbnails) {
+  const urls = /* @__PURE__ */ new Map();
+  if (!reportUrl) return urls;
+  for (const t of thumbnails ?? []) {
+    const url = safeReportUrl(t.url);
+    if (url?.startsWith(reportUrl) && !urls.has(t.name)) urls.set(t.name, url);
+  }
+  return urls;
 }
 function resolveUpsertMarker(statusContext) {
   if (statusContext === STATUS_CONTEXT) return UPSERT_MARKER;
@@ -434,6 +448,7 @@ function renderSnapshotHints(snapshot) {
 function buildComment(results, artifactUrl, marker = UPSERT_MARKER, links = {}) {
   const { summary, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
+  const thumbnails = thumbnailUrls(reportUrl, links.thumbnails);
   const summaryLine = [
     `**${summary.passed} passed**`,
     `**${summary.changed} changed**`,
@@ -472,15 +487,22 @@ ${summaryLine} \u2014 **${summary.total} total**
   const changedSnapshots = snapshots.filter((s) => s.status === "changed");
   if (changedSnapshots.length > 0) {
     comment += "#### Changed Snapshots\n\n";
+    let shown = 0;
     for (const snapshot of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot);
       const domHint = renderSnapshotHints(snapshot);
       const size = snapshot.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot.sizeMismatch)}` : "";
       const open = reportUrl ? ` \xB7 <a href="${attr(snapshotUrl(reportUrl, snapshot.name))}">open in report</a>` : "";
-      comment += `<details>
+      const thumb = reportUrl && shown < MAX_COMMENT_THUMBNAILS ? thumbnails.get(snapshot.name) : void 0;
+      if (thumb) shown++;
+      const picture = thumb && reportUrl ? `<a href="${attr(snapshotUrl(reportUrl, snapshot.name))}"><img src="${attr(thumb)}" alt="${attrText(`${snapshot.name}: baseline, current, diff`)}"></a>
+
+` : "";
+      const expanded = thumb && shown <= OPEN_WITH_THUMBNAIL ? " open" : "";
+      comment += `<details${expanded}>
 <summary><code>${snapshot.name}</code> \u2014 ${diffPercent}% different${size}${open}</summary>
 
-${domHint}
+${picture}${domHint}
 \`\`\`
 /testivai approve ${snapshot.name}
 \`\`\`
@@ -1292,7 +1314,7 @@ var ArchiveRefused = class extends Error {
   }
 };
 var SLICE = 16 * 1024;
-var IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff)\.png$/;
+var IMAGE_PATH = /^images\/(.+)\/(baseline|current|diff|thumb)\.png$/;
 function isPlainPath(name) {
   if (name.includes("\\") || name.includes("\0") || name.startsWith("/")) return false;
   return name.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
@@ -1497,13 +1519,13 @@ function runIdOf(key) {
   const m = key ? /^(\d+)-\d+$/.exec(key) : null;
   return m ? Number(m[1]) : void 0;
 }
-function commentFor(published, comments, marker) {
+function commentFor(published, comments, marker, options = {}) {
   const reporter = comments.find((c) => c.body.includes(marker) && readRunKey(c.body) !== void 0);
-  if (reporter) return updateReporterComment(published, reporter, marker);
+  if (reporter) return updateReporterComment(published, reporter, marker, options.thumbnails !== false);
   if (!published.fork) return { kind: "none", why: `no TestivAI comment for run ${published.runId} on the pull request` };
   return forkComment(published, comments);
 }
-function updateReporterComment(published, comment, marker) {
+function updateReporterComment(published, comment, marker, withThumbnails) {
   const runKey = readRunKey(comment.body);
   const described = runIdOf(runKey);
   if (described !== published.runId) {
@@ -1513,10 +1535,19 @@ function updateReporterComment(published, comment, marker) {
     return { kind: "none", why: `the report of run ${published.runId} could not be shown, so the comment keeps its ZIP link` };
   }
   const { data } = published.outcome;
-  const links = { reportUrl: published.url, runKey };
+  const links = { reportUrl: published.url, runKey, thumbnails: withThumbnails ? publishedThumbnails(published) : [] };
   const body = data.snapshots.length === 0 ? buildEmptyComment(published.artifactUrl, marker, links) : buildComment(data, published.artifactUrl, marker, links);
   if (body === comment.body) return { kind: "none", why: "the comment already links the report" };
   return { kind: "update", id: comment.id, body };
+}
+function publishedThumbnails(published) {
+  if (published.fork || !published.outcome.ok) return [];
+  const thumbnails = [];
+  published.outcome.data.snapshots.forEach((s, i2) => {
+    if (thumbnails.length >= MAX_COMMENT_THUMBNAILS || s.status !== "changed" || s.thumbPath !== `images/${i2}/thumb.png`) return;
+    thumbnails.push({ name: s.name, url: `${published.url}images/${i2}/thumb.png` });
+  });
+  return thumbnails;
 }
 function forkComment(published, comments) {
   const body = forkCommentBody(published);
@@ -2387,6 +2418,22 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+// ../packages/witness/src/report/thumbnail.ts
+var THUMBNAIL_LIMITS = {
+  /** The widest strip, the three panels and both separators together. */
+  maxWidth: 800,
+  /** The tallest strip. */
+  maxHeight: 400,
+  /** Pixels of context around the changed regions, on every side. */
+  padding: 24,
+  /** How many of the largest regions (by area) the area covers. */
+  regions: 3,
+  /** Rows in the band shown when the diff has no regions. */
+  bandHeight: 400,
+  /** Pixels between two panels. */
+  separator: 2
+};
+
 // ../packages/witness/src/report/validate.ts
 var SUPPORTED_SCHEMA_MAJOR = 2;
 var REPORT_DATA_LIMITS = {
@@ -2519,6 +2566,7 @@ function readSnapshot(value, path4) {
   optional(snapshot, "baselineApprovedAt", s, path4, (v, p) => text(v, p, 64));
   optional(snapshot, "sizeMismatch", s, path4, readSizeMismatch);
   optional(snapshot, "environment", s, path4, readSnapshotEnvironment);
+  if (s.thumbPath !== void 0) text(s.thumbPath, at(path4, "thumbPath"));
   return snapshot;
 }
 function readSnapshotEnvironment(value, path4) {
@@ -2727,8 +2775,8 @@ function checkPng(bytes) {
 }
 
 // src/publish/site.ts
-var KINDS = ["baseline", "current", "diff"];
-var PATH_FIELD = { baseline: "baselinePath", current: "currentPath", diff: "diffPath" };
+var KINDS = ["baseline", "current", "diff", "thumb"];
+var PATH_FIELD = { baseline: "baselinePath", current: "currentPath", diff: "diffPath", thumb: "thumbPath" };
 var PAGE_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
 function buildRunReport(input) {
   const { site, run, archive } = input;
@@ -2750,7 +2798,7 @@ function buildRunReport(input) {
       if (typeof from !== "string" || !from.endsWith(`/${kind}.png`)) continue;
       const bytes = archiveImages.get(from);
       if (!bytes) continue;
-      const check = checkPng(bytes);
+      const check = kind === "thumb" ? checkThumb(bytes) : checkPng(bytes);
       if (!check.ok) {
         omittedImages.push(`${from} (${check.reason})`);
         continue;
@@ -2781,6 +2829,15 @@ function buildRunReport(input) {
   }
   files.push({ path: page, data: renderHtml(data, { notices, noindex: true, csp: true }) });
   return { files, outcome: { ...base, ok: true, summary: data.summary, data, omittedImages } };
+}
+function checkThumb(bytes) {
+  const check = checkPng(bytes);
+  if (!check.ok) return check;
+  const { maxWidth, maxHeight } = THUMBNAIL_LIMITS;
+  if (check.width > maxWidth || check.height > maxHeight) {
+    return { ok: false, reason: `a PNG of ${check.width}\xD7${check.height} pixels, over the ${maxWidth}\xD7${maxHeight} of a thumbnail` };
+  }
+  return check;
 }
 function readResults(archive) {
   if ("refused" in archive) return { ok: false, reason: `The report was not read: ${archive.refused}.` };
@@ -3293,7 +3350,7 @@ async function finishPublish(api, options) {
   if (!options.comment) return { verified, siteUrl: state.siteUrl };
   for (const published of state.prs) {
     try {
-      const action = commentFor(published, await api.comments(published.pr), options.marker);
+      const action = commentFor(published, await api.comments(published.pr), options.marker, { thumbnails: state.visibility === "public" });
       if (action.kind === "create") {
         await api.createComment(published.pr, action.body);
         log.info(`#${published.pr}: posted the report link.`);

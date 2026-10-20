@@ -56,6 +56,14 @@ export interface SnapshotResult {
   /** Relative path to diff image (if any) */
   diffPath?: string;
   /**
+   * Relative path to the thumbnail (schema 2.6.0): the changed area of the
+   * baseline, the current capture and the diff side by side, at most 800×400
+   * px (report/thumbnail.ts). Only for 'changed' snapshots with a diff image
+   * that has a differing pixel; never for passed (auto-passed included) or
+   * new ones.
+   */
+  thumbPath?: string;
+  /**
    * DOM-level signal. Present only when both baseline and candidate
    * captured DOM HTML alongside the screenshot.
    */
