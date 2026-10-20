@@ -12,6 +12,8 @@ import { parse } from 'yaml';
 import { PUBLISH_LIMITS } from '../publish/build';
 import { DEFAULT_ARCHIVE_LIMITS } from '../publish/archive';
 import { CONSENT_VARIABLE } from '../publish/pages';
+import { buildComment, UPSERT_MARKER } from '../comment';
+import type { ResultsData } from '../types';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const read = (file: string) => fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -128,6 +130,31 @@ describe('GitHub Pages setup docs', () => {
     expect(limits).toMatch(/\/testivai approve/);
     expect(limits).toMatch(/no\s+publish|not\s+published|publishes\s+nothing/i);
     expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
+  });
+
+  it("shows a thumbnail row exactly as the comment has it, approve command fence included", () => {
+    const fence = /(`{3,})html\n([\s\S]*?thumb\.png[\s\S]*?)\n\1\n/.exec(DOC);
+    expect(fence).not.toBeNull();
+    const example = (fence as RegExpExecArray)[2];
+    const reportUrl = 'https://example.github.io/my-app/pr/14/39150236166-1/';
+    const results = {
+      summary: { total: 1, passed: 0, changed: 1, newSnapshots: 0 },
+      snapshots: [
+        {
+          name: 'checkout-page',
+          status: 'changed',
+          diffPercent: 0.5,
+          dom: { changed: true, noiseHint: false, summary: { added: 2, removed: 0, attributeChanges: 1, textChanges: 0 } },
+        },
+      ],
+    } as unknown as ResultsData;
+
+    const comment = buildComment(results, undefined, UPSERT_MARKER, {
+      reportUrl,
+      thumbnails: [{ name: 'checkout-page', url: `${reportUrl}images/0/thumb.png` }],
+    });
+
+    expect(comment).toContain(example);
   });
 
   it('is linked from the README', () => {

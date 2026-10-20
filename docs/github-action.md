@@ -442,7 +442,7 @@ chose those images (and the publish's own comment there is numbers and links
 only). Neither does a private Pages site: GitHub fetches a comment's images
 without the reader's sign-in, so they could not load.
 
-```html
+````html
 <details open>
 <summary><code>checkout-page</code> — 0.50% different · <a href="https://example.github.io/my-app/pr/14/39150236166-1/#snap-checkout-page">open in report</a></summary>
 
@@ -450,9 +450,13 @@ without the reader's sign-in, so they could not load.
 
 > **DOM changed** — 2 added, 1 attribute change.
 
-/testivai approve checkout-page
-</details>
+
 ```
+/testivai approve checkout-page
+```
+
+</details>
+````
 
 The site holds the last 3 runs of each open pull request, forks included, at
 `pr/<number>/<run id>-<attempt>/`, and the latest run on the default branch at
