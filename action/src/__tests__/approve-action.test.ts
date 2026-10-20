@@ -355,3 +355,77 @@ describe('Post confirmation comment', () => {
     expect(bodies[0]).toMatch(/- `home` · \[open in report\]\(https:\/\/o\.github\.io\/r\/pr\/1\/111-2\/#snap-home\)/);
   });
 });
+
+/**
+ * testivai/testivai-site#26: `/testivai approve-all` was read as `approve`
+ * with the target `-all`. The step now takes `approve` only as a word of its
+ * own, and answers a command glued to it with the right spelling.
+ */
+describe('Parse command + verify permissions', () => {
+  const auth = step('Parse command + verify permissions');
+
+  async function runAuth(body: string, permission = 'write') {
+    const values = { 'inputs.github-token': 'token', 'github.action_path': APPROVE_DIR };
+    const script = expand(auth.with!.script, values);
+    const env = expandEnv(auth.env, values);
+    const posted: string[] = [];
+    const github = {
+      rest: {
+        repos: { getCollaboratorPermissionLevel: async () => ({ data: { permission } }) },
+        issues: { createComment: async ({ body: b }: { body: string }) => void posted.push(b) },
+        pulls: { get: async () => ({ data: { head: { ref: 'feature' } } }) },
+      },
+    };
+    const context = { payload: { comment: { body } }, repo: { owner: 'o', repo: 'r' }, issue: { number: 1 }, actor: 'octocat' };
+    const core = { info: () => {}, warning: () => {} };
+
+    const saved = { ...process.env };
+    Object.assign(process.env, env);
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+      const result = await new AsyncFunction('require', 'github', 'context', 'core', script)(require, github, context, core);
+      return { result, posted };
+    } finally {
+      for (const key of Object.keys(env)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
+  }
+
+  it.each([
+    ['/testivai approve --all', '--all'],
+    ['/testivai approve', '--all'],
+    ['/testivai approve home home-mobile', 'home home-mobile'],
+    ['/testivai approve nope', 'nope'],
+  ])('%j: the apply step gets the target %j', async (body, target) => {
+    const { result, posted } = await runAuth(body);
+    expect(result).toEqual({ skip: false, cmd: 'approve', target, branch: 'feature', actor: 'octocat' });
+    expect(posted).toEqual([]);
+  });
+
+  it('/testivai approve-all: approves nothing and says which command was meant', async () => {
+    const { result, posted } = await runAuth('/testivai approve-all');
+    expect(result).toEqual({ skip: true });
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toContain('Unknown command `/testivai approve-all`. Did you mean `/testivai approve --all`?');
+  });
+
+  it('/testivai approvefoo: approves nothing and shows the usage', async () => {
+    const { result, posted } = await runAuth('/testivai approvefoo');
+    expect(result).toEqual({ skip: true });
+    expect(posted[0]).toContain('Unknown command `/testivai approvefoo`.');
+  });
+
+  it('an unknown command from someone without write access gets the access reply only', async () => {
+    const { result, posted } = await runAuth('/testivai approve-all', 'read');
+    expect(result).toEqual({ skip: true });
+    expect(posted).toEqual(['@octocat — only collaborators with **write** access can approve visual baselines.']);
+  });
+
+  it('a comment that is not a /testivai approve command gets no reply', async () => {
+    for (const body of ['lgtm', '/testivai help']) {
+      const { result, posted } = await runAuth(body);
+      expect(result).toEqual({ skip: true });
+      expect(posted).toEqual([]);
+    }
+  });
+});

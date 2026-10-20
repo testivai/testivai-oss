@@ -53,61 +53,18 @@ runs:
     - name: Parse command + verify permissions
       id: auth
       uses: actions/github-script@v9
+      # Runs before the checkout: the logic comes with the action itself
+      # (action/dist/approve.cjs), never from the pull request's branch.
+      # `approve` must be a word of its own: `/testivai approve-all` gets a
+      # reply naming the typo and approves nothing.
+      env:
+        TESTIVAI_APPROVE_LIB: ${{ github.action_path }}/../action/dist/approve.cjs
       with:
         github-token: ${{ inputs.github-token }}
         result-encoding: json
         script: |
-          const body = context.payload.comment?.body?.trim() ?? '';
-
-          // Only handle /testivai commands
-          const match = body.match(/^\/testivai\s+(approve)\s*(.+)?$/i);
-          if (!match) {
-            core.info('Not a /testivai command — skipping.');
-            return { skip: true };
-          }
-
-          const cmd    = match[1].toLowerCase();   // 'approve'
-          const target = (match[2] ?? '--all').trim(); // name or '--all'
-
-          // Verify the commenter has write access to this repo
-          let permission = 'none';
-          try {
-            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner:    context.repo.owner,
-              repo:     context.repo.repo,
-              username: context.actor,
-            });
-            permission = data.permission;
-          } catch {
-            // actor is not a collaborator at all
-          }
-
-          if (!['write', 'maintain', 'admin'].includes(permission)) {
-            await github.rest.issues.createComment({
-              owner:        context.repo.owner,
-              repo:         context.repo.repo,
-              issue_number: context.issue.number,
-              body: `@${context.actor} — only collaborators with **write** access can approve visual baselines.`,
-            });
-            return { skip: true };
-          }
-
-          // Resolve the PR's head branch
-          const { data: pr } = await github.rest.pulls.get({
-            owner:       context.repo.owner,
-            repo:        context.repo.repo,
-            pull_number: context.issue.number,
-          });
-
-          core.info(`Command: /testivai ${cmd} ${target} (by @${context.actor}, branch: ${pr.head.ref})`);
-
-          return {
-            skip:   false,
-            cmd,
-            target,
-            branch: pr.head.ref,
-            actor:  context.actor,
-          };
+          const approve = require(process.env.TESTIVAI_APPROVE_LIB);
+          return await approve.auth({ github, context, core });
 
     # ── Step 2: Checkout the PR branch ─────────────────────────────────────
     - name: Checkout PR branch

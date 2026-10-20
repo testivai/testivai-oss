@@ -168,6 +168,21 @@ Whole `report-dir/` (HTML report, `results.json`, all diff images and DOM captur
 
 The fastest path is the comment command: post `/testivai approve <name>` (or `/testivai approve --all`) directly on the PR. The companion `testivai/testivai-oss/approve@v1` action verifies the commenter has write access, restores the pending baselines from the workflow artifact, and commits them back to the PR branch — no local checkout needed.
 
+| Comment | Approves |
+| --- | --- |
+| `/testivai approve --all` | every pending snapshot of the latest visual run |
+| `/testivai approve` | the same as `--all` |
+| `/testivai approve <name> [<name> …]` | the named snapshots, separated by spaces |
+
+`--all` is the only spelling that approves everything. `/testivai approve-all`
+is not a command: `approve` must be followed by a space, so the action
+approves nothing and replies "Unknown command `/testivai approve-all`. Did you
+mean `/testivai approve --all`?". `/testivai approve all` (with a space)
+approves the snapshot named `all`, as it always has; it is not an alias, so a
+project with a snapshot called `all` keeps working. When no named snapshot
+matches, the reply names the ones that did not match and lists the pending
+snapshots of the run, so a typo in a name is easy to spot.
+
 Its reply lists what was approved and names the CI run the captures came from.
 When [`publish@v1`](#reports-on-github-pages) has put that run's report on
 GitHub Pages, the reply also links the report and each approved snapshot's

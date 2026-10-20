@@ -31,9 +31,14 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var approve_exports = {};
 __export(approve_exports, {
   approvedRun: () => approvedRun,
+  auth: () => auth,
   buildApproveReply: () => buildApproveReply,
+  buildUnknownCommandReply: () => buildUnknownCommandReply,
+  codeSpan: () => codeSpan,
   findReportUrl: () => findReportUrl,
+  parseApproveCommand: () => parseApproveCommand,
   readApprovedHealth: () => readApprovedHealth,
+  readPendingNames: () => readPendingNames,
   reply: () => reply
 });
 module.exports = __toCommonJS(approve_exports);
@@ -375,6 +380,37 @@ function parseRunStamp(text2) {
 }
 
 // src/approve.ts
+var COMMAND_SHOWN_MAX = 80;
+function parseApproveCommand(body) {
+  const text2 = body.trim();
+  const approve = text2.match(/^\/testivai\s+approve(?:\s+(.+))?$/i);
+  if (approve) {
+    const target = (approve[1] ?? "").trim().split(/\s+/).filter(Boolean).join(" ");
+    return { kind: "approve", target: target || "--all" };
+  }
+  const glued = text2.match(/^\/testivai\s+(approve(\S.*))$/i);
+  if (!glued) return null;
+  const line = `/testivai ${glued[1]}`.trim();
+  const command = line.length > COMMAND_SHOWN_MAX ? `${line.slice(0, COMMAND_SHOWN_MAX)}\u2026` : line;
+  const meansAll = /^[-_]*all$/i.test(glued[2].trim());
+  return { kind: "unknown", command, ...meansAll ? { suggestion: "/testivai approve --all" } : {} };
+}
+function codeSpan(text2) {
+  const clean = text2.replace(/[\u0000-\u001f\u007f]/g, "?");
+  const longest = Math.max(0, ...(clean.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longest + 1);
+  const pad = clean.startsWith("`") || clean.endsWith("`") ? " " : "";
+  return `${fence}${pad}${clean}${pad}${fence}`;
+}
+var USAGE = [
+  "Usage:",
+  "- `/testivai approve --all` approves every pending snapshot",
+  "- `/testivai approve <name> [<name> \u2026]` approves the named snapshots"
+].join("\n");
+function buildUnknownCommandReply({ command, suggestion }) {
+  const first = `Unknown command ${codeSpan(command)}.${suggestion ? ` Did you mean ${codeSpan(suggestion)}?` : ""}`;
+  return [first, "", "No baselines were updated.", "", USAGE].join("\n");
+}
 var LINK = /\]\((https:\/\/[^\s()<>"'`\\]+)\)/g;
 function findReportUrl(comments, { pr, runKey }) {
   const page = `/pr/${Math.trunc(pr)}/${runKey}/`;
@@ -394,6 +430,13 @@ function approvedRun(stamp, downloadedRunId) {
   if (stamp && stamp.runId === downloadedRunId) return { id: downloadedRunId, attempt: stamp.runAttempt };
   return { id: downloadedRunId };
 }
+function readPendingNames(artifactDir) {
+  try {
+    return fs2.readdirSync(path2.join(artifactDir, "pending-baselines"), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  } catch {
+    return void 0;
+  }
+}
 function readApprovedHealth(artifactDir, names) {
   const out = [];
   for (const name of names) {
@@ -409,20 +452,46 @@ function readApprovedHealth(artifactDir, names) {
   }
   return out;
 }
-var RERUN_NOTE = "CI runs again on this commit when the approve step pushes with a personal access token or GitHub App token. With the default `GITHUB_TOKEN`, GitHub starts no run for this push: push another commit to re-run CI.";
-function buildApproveReply({ approved, skipped, count: count2, actor, run, reportUrl, serverUrl, repo, unhealthy = [] }) {
-  if (count2 === 0) {
-    return [
+var PENDING_SHOWN_MAX = 50;
+function buildNothingApproved({ skipped, pending, runLink }) {
+  if (!pending) {
+    const lines2 = [
       "No baselines were updated.",
       "",
       "Possible reasons:",
       "- The snapshot name(s) don't match any pending changes.",
       "- The artifact is from a run where no visual differences were detected.",
       "- Re-run the OSS visual regression tests and try again."
-    ].join("\n");
+    ];
+    if (skipped.length) lines2.push("", `Not found in pending baselines: ${skipped.map(codeSpan).join(", ")}`);
+    return lines2.join("\n");
   }
+  const where = runLink ?? "the run";
+  if (!skipped.length) {
+    return [`No baselines were updated: ${where} has no pending snapshots.`, "", "Re-run the visual regression tests and try again."].join("\n");
+  }
+  const names = skipped.map(codeSpan);
+  const unmatched = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+  const lines = [`No baselines were updated: no pending snapshot is named ${unmatched}.`, ""];
+  if (!pending.length) {
+    lines.push(`${runLink ?? "The run"} has no pending snapshots. Re-run the visual regression tests and try again.`);
+    return lines.join("\n");
+  }
+  const shown = pending.slice(0, PENDING_SHOWN_MAX).map(codeSpan).join(", ");
+  const more = pending.length > PENDING_SHOWN_MAX ? ` and ${pending.length - PENDING_SHOWN_MAX} more` : "";
+  lines.push(
+    `Pending snapshots in ${where}: ${shown}${more}`,
+    "",
+    "Approve some with `/testivai approve <name> [<name> \u2026]`, or every one with `/testivai approve --all`."
+  );
+  return lines.join("\n");
+}
+var RERUN_NOTE = "CI runs again on this commit when the approve step pushes with a personal access token or GitHub App token. With the default `GITHUB_TOKEN`, GitHub starts no run for this push: push another commit to re-run CI.";
+function buildApproveReply({ approved, skipped, count: count2, actor, run, reportUrl, serverUrl, repo, unhealthy = [], pending }) {
+  const runLink = run ? `[CI run ${run.id}${run.attempt ? `, attempt ${run.attempt}` : ""}](${serverUrl}/${repo}/actions/runs/${run.id}${run.attempt ? `/attempts/${run.attempt}` : ""})` : void 0;
+  if (count2 === 0) return buildNothingApproved({ skipped, pending, runLink });
   const report = safeReportUrl(reportUrl);
-  const from = run ? ` from [CI run ${run.id}${run.attempt ? `, attempt ${run.attempt}` : ""}](${serverUrl}/${repo}/actions/runs/${run.id}${run.attempt ? `/attempts/${run.attempt}` : ""})` : "";
+  const from = runLink ? ` from ${runLink}` : "";
   const lines = [`**${count2} baseline${count2 === 1 ? "" : "s"} approved** by @${actor}${from}`, ""];
   if (report) lines.push(`> **[Open the visual report](${report})** of that run: baseline, current and diff side by side`, "");
   lines.push(approved.map((n) => report ? `- \`${n}\` \xB7 [open in report](${report}#${snapshotAnchorId(n)})` : `- \`${n}\``).join("\n"));
@@ -471,15 +540,47 @@ async function reply({ github, context, core, env }) {
     ...reportUrl ? { reportUrl } : {},
     serverUrl: context.serverUrl || "https://github.com",
     repo: `${context.repo.owner}/${context.repo.repo}`,
-    ...unhealthy.length > 0 ? { unhealthy } : {}
+    ...unhealthy.length > 0 ? { unhealthy } : {},
+    ...count2 === 0 && env.ARTIFACT_DIR ? { pending: readPendingNames(env.ARTIFACT_DIR) } : {}
   });
   await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+}
+async function auth({ github, context, core }) {
+  const command = parseApproveCommand(context.payload.comment?.body ?? "");
+  if (!command) {
+    core.info("Not a /testivai approve command \u2014 skipping.");
+    return { skip: true };
+  }
+  let permission = "none";
+  try {
+    const { data } = await github.rest.repos.getCollaboratorPermissionLevel({ ...context.repo, username: context.actor });
+    permission = data.permission;
+  } catch {
+  }
+  const post = (body) => github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+  if (!["write", "maintain", "admin"].includes(permission)) {
+    await post(`@${context.actor} \u2014 only collaborators with **write** access can approve visual baselines.`);
+    return { skip: true };
+  }
+  if (command.kind === "unknown") {
+    core.info(`Unknown command: ${command.command} \u2014 replying with the usage.`);
+    await post(buildUnknownCommandReply(command));
+    return { skip: true };
+  }
+  const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.issue.number });
+  core.info(`Command: /testivai approve ${command.target} (by @${context.actor}, branch: ${pr.head.ref})`);
+  return { skip: false, cmd: "approve", target: command.target, branch: pr.head.ref, actor: context.actor };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   approvedRun,
+  auth,
   buildApproveReply,
+  buildUnknownCommandReply,
+  codeSpan,
   findReportUrl,
+  parseApproveCommand,
   readApprovedHealth,
+  readPendingNames,
   reply
 });

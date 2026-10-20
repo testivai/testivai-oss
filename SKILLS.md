@@ -80,10 +80,11 @@ git push origin v1.5.1
 
 **When:** Modifying `approve/action.yml` (permission check, baseline copy logic) or the reply it posts on the PR (`action/src/approve.ts`)
 
-The shell steps in `approve/action.yml` ship as they are. The reply step loads
-`action/dist/approve.cjs`, built from `action/src/approve.ts`: it names the
-approved run and links its report when publish@v1 has published it. A change
-to the reply needs the dist rebuilt and committed:
+The shell steps in `approve/action.yml` ship as they are. The auth and reply
+steps load `action/dist/approve.cjs`, built from `action/src/approve.ts`: it
+reads the `/testivai approve` comment (`parseApproveCommand`), and the reply
+names the approved run and links its report when publish@v1 has published it.
+A change to the parsing or the reply needs the dist rebuilt and committed:
 
 ```bash
 cd action
@@ -177,8 +178,13 @@ Post a comment on the PR:
 
 ```
 /testivai approve homepage        ← approves one snapshot
+/testivai approve home about      ← approves several, separated by spaces
 /testivai approve --all           ← approves all changed snapshots
 ```
+
+`approve` must be followed by a space: `/testivai approve-all` is not a command and gets a reply
+pointing to `/testivai approve --all`. `/testivai approve all` approves a snapshot named `all`.
+If no named snapshot matches, the reply lists the pending snapshots of the run.
 
 **What happens:**
 1. The `testivai/testivai-oss/approve@v1` action verifies you have write access

@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { approvedRun, buildApproveReply, findReportUrl, reply } from '../approve';
+import { approvedRun, buildApproveReply, findReportUrl, readPendingNames, reply } from '../approve';
 import { buildComment, UPSERT_MARKER } from '../comment';
 import { commentFor, type PublishedPr } from '../publish/comments';
 import { snapshotAnchorId } from '../../../packages/witness/src/report/anchor';
@@ -261,5 +261,123 @@ describe('reply (the github-script step)', () => {
 
     expect(listed).toEqual([]);
     expect(posted[0]).toContain('No baselines were updated.');
+  });
+});
+
+/**
+ * When nothing matched (testivai/testivai-site#26: `-all` was looked up as a
+ * snapshot), the reply names what did not match and lists what could be
+ * approved from the run, instead of only generic reasons.
+ */
+describe('buildApproveReply when the named snapshots match nothing pending', () => {
+  const SERVER = 'https://github.com';
+  const REPO = 'testivai/testivai-example';
+  const none = { approved: [] as string[], count: 0, actor: 'octocat', serverUrl: SERVER, repo: REPO };
+
+  it('names the unmatched snapshot and lists the pending ones from the run', () => {
+    const body = buildApproveReply({ ...none, skipped: ['-all'], pending: ['home', 'home-mobile'], run: { id: '123', attempt: 2 } });
+
+    expect(body.split('\n')[0]).toBe('No baselines were updated: no pending snapshot is named `-all`.');
+    expect(body).toContain('Pending snapshots in [CI run 123, attempt 2](https://github.com/testivai/testivai-example/actions/runs/123/attempts/2): `home`, `home-mobile`');
+    expect(body).toContain('`/testivai approve <name> [<name> …]`');
+    expect(body).toContain('`/testivai approve --all`');
+    expect(body).not.toContain('Possible reasons');
+  });
+
+  it('names every unmatched snapshot when there are several', () => {
+    const body = buildApproveReply({ ...none, skipped: ['homepage', 'checkout'], pending: ['home'] });
+
+    expect(body.split('\n')[0]).toBe('No baselines were updated: no pending snapshot is named `homepage` or `checkout`.');
+    expect(body).toContain('Pending snapshots in the run: `home`');
+  });
+
+  it('says when the run has no pending snapshot at all', () => {
+    const body = buildApproveReply({ ...none, skipped: ['home'], pending: [] });
+
+    expect(body).toContain('no pending snapshot is named `home`');
+    expect(body).toContain('The run has no pending snapshots');
+    expect(body).not.toContain('/testivai approve --all');
+  });
+
+  it('says when --all found nothing to approve', () => {
+    const body = buildApproveReply({ ...none, skipped: [], pending: [], run: { id: '123' } });
+
+    expect(body.split('\n')[0]).toBe('No baselines were updated: [CI run 123](https://github.com/testivai/testivai-example/actions/runs/123) has no pending snapshots.');
+  });
+
+  it('cuts a long pending list and says how many more there are', () => {
+    const pending = Array.from({ length: 60 }, (_, i) => `snap-${i}`);
+    const body = buildApproveReply({ ...none, skipped: ['nope'], pending });
+
+    expect(body).toContain('`snap-49`');
+    expect(body).not.toContain('`snap-50`');
+    expect(body).toContain('and 10 more');
+  });
+
+  it('prints names as code that a backtick or a line break cannot break out of', () => {
+    const body = buildApproveReply({ ...none, skipped: ['a`b'], pending: ['x\n\n# heading', HOSTILE] });
+
+    expect(body).toContain('no pending snapshot is named ``a`b``');
+    expect(body).not.toMatch(/^# heading/m);
+    expect(body).toContain(`\`${HOSTILE}\``);
+  });
+
+  it('keeps the generic reasons when the pending snapshots could not be read', () => {
+    const body = buildApproveReply({ ...none, skipped: ['nope'] });
+
+    expect(body).toContain('No baselines were updated.');
+    expect(body).toContain('Possible reasons');
+    expect(body).toContain('Not found in pending baselines: `nope`');
+  });
+});
+
+describe('readPendingNames', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'approve-pending-'));
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it("lists the report's pending snapshot directories, sorted, and nothing else", () => {
+    const pending = path.join(dir, 'pending-baselines');
+    for (const name of ['home-mobile', 'home']) fs.mkdirSync(path.join(pending, name), { recursive: true });
+    fs.writeFileSync(path.join(pending, 'stray.txt'), '');
+    fs.mkdirSync(path.join(dir, 'secret'));
+    fs.symlinkSync(path.join(dir, 'secret'), path.join(pending, 'link'));
+
+    expect(readPendingNames(dir)).toEqual(['home', 'home-mobile']);
+  });
+
+  it('is unknown when the artifact has no pending-baselines', () => {
+    expect(readPendingNames(dir)).toBeUndefined();
+    expect(readPendingNames(path.join(dir, 'missing'))).toBeUndefined();
+  });
+});
+
+describe('reply when nothing matched', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'approve-nomatch-'));
+    for (const name of ['home', 'home-mobile']) fs.mkdirSync(path.join(dir, 'pending-baselines', name), { recursive: true });
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('lists the pending snapshots of the downloaded report', async () => {
+    const posted: string[] = [];
+    const github = {
+      rest: {
+        issues: {
+          listComments: async () => ({ data: [] }),
+          createComment: async ({ body }: { body: string }) => void posted.push(body),
+        },
+      },
+    };
+    const context = { repo: { owner: 'testivai', repo: 'testivai-example' }, issue: { number: 17 }, serverUrl: 'https://github.com' };
+
+    await reply({ github, context, core: { info: jest.fn(), warning: jest.fn() }, env: { APPROVED: '', SKIPPED: 'nope', COUNT: '0', ACTOR: 'octocat', RUN_ID: '123', ARTIFACT_DIR: dir } });
+
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toContain('no pending snapshot is named `nope`');
+    expect(posted[0]).toContain('Pending snapshots in [CI run 123](https://github.com/testivai/testivai-example/actions/runs/123): `home`, `home-mobile`');
   });
 });

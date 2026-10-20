@@ -96,6 +96,18 @@ describe('approve setup docs', () => {
     expect(skill).toMatch(/GitHub Pages/);
   });
 
+  it('docs/github-action.md: the approve commands, and that approve-all is not one of them', () => {
+    const doc = read('docs/github-action.md');
+    const start = doc.indexOf('## Approving changes from PR feedback');
+    const section = doc.slice(start, doc.indexOf('\n### ', start));
+    expect(section).toContain('/testivai approve --all');
+    expect(section).toMatch(/\/testivai approve <name>/);
+    // testivai/testivai-site#26: approve-all was read as a snapshot named "-all".
+    expect(section).toMatch(/`\/testivai approve-all`\s+is not a command/);
+    expect(section).toMatch(/`\/testivai approve all`[\s\S]{0,40}snapshot named `all`/);
+    expect(section).toMatch(/lists the pending\s+snapshots/);
+  });
+
   it.each(['README.md', 'SKILLS.md', 'AGENTS.md', 'CLAUDE.md', 'approve/action.yml'])(
     '%s does not promise an unconditional CI re-run after approve',
     (file) => {
