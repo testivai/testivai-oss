@@ -512,8 +512,23 @@ jobs:
 
 `workflow_run` starts only from a workflow file on the default branch, so the
 publish runs once this is merged. It runs after every visual run, whichever
-branch or fork it came from, and that run's report is on the site a minute or
-two after the reporter's comment.
+branch or fork it came from.
+
+**When the link appears.** `workflow_run` fires once the whole visual workflow
+has completed, every job in it, not when the reporter step has commented. The
+link then appears about a minute and a half after the comment: on
+[testivai/testivai-example](https://github.com/testivai/testivai-example)
+(6 pull request runs, October 2026) the median was 1 min 26 s, about half a
+minute for that workflow's other jobs to finish and a minute for the publish
+job, which there also builds a demo. Any job that runs longer than the visual
+job holds the link: an
+[AI triage](#ai-triage-of-every-diff) job in the same workflow delays it until
+the review finishes, up to its `timeout-minutes` (there the triage did not run
+Claude and was done in seconds, so a triage that runs adds its own length).
+The triage needs the `pull_request` event and this run's report, so it stays
+in the visual workflow. Jobs that do not need the report, such as other test
+suites, a build or a demo, can go in a separate workflow (its own file, also
+`on: pull_request`) when possible, so they no longer hold the link.
 
 After the deploy, the action adds the links to the TestivAI comment of each
 pull request whose latest published run it describes; a comment already about
