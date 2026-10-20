@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Hidden widget</title>
+  <!-- Only the widget uses "Gone", and its file answers 404. -->
+  <style>
+    @font-face { font-family: "Gone"; src: url("/fonts/gone.ttf") format("truetype"); }
+    #widget { font-family: "Gone", monospace; }
+  </style>
+</head>
+<body>
+  <h1>Main content</h1>
+  <div id="widget" hidden>A chat widget</div>
+  <script>
+    // A widget that pops in while the capture is being prepared: shown the
+    // moment a style is added to the page, which is when the test's
+    // ignoreSelectors rule (collapse) goes in, so it is never laid out (and
+    // its font never requested) until that rule comes off after the capture.
+    new MutationObserver(function (records, observer) {
+      for (var i = 0; i < records.length; i++) {
+        for (var j = 0; j < records[i].addedNodes.length; j++) {
+          if (records[i].addedNodes[j].nodeName === 'STYLE') {
+            document.getElementById('widget').hidden = false;
+            observer.disconnect();
+            return;
+          }
+        }
+      }
+    }).observe(document.head, { childList: true });
+  </script>
+</body>
+</html>

@@ -14,6 +14,12 @@
  *   3. With noiseAutoPass on, that used to auto-pass as likely render noise.
  *      It must stay changed and read "Unhealthy capture", naming the font.
  *
+ * And its counterpart: a web font used only by an element that
+ * ignoreSelectors hides (collapse) for the whole capture is not in the image,
+ * so its 404 must not make the capture unhealthy. The probe runs right after
+ * the screenshot, before the hiding style comes off (removing it lays the
+ * element out, which starts the font loading).
+ *
  * Needs a Chrome/Chromium (TESTIVAI_CHROME_PATH, or one on PATH) and a
  * TrueType font file to serve as "Fancy". Without either the test is
  * skipped, loudly, except in CI (CI set), where it fails.
@@ -28,7 +34,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { chromium } from 'playwright-core';
 
-import { BaselineStore, generateReport, snapshotAnchorId } from '@testivai/witness';
+import { BaselineStore, generateReport, parseHealth, snapshotAnchorId } from '@testivai/witness';
 import { witness } from '@testivai/witness-playwright';
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures', 'health');
@@ -79,6 +85,7 @@ function serve(fontFile: string): Promise<FixtureServer> {
       res.end(body);
     };
     if (url === '/fancy.html') return send(200, 'text/html; charset=utf-8', fs.readFileSync(path.join(FIXTURES, 'fancy.html')));
+    if (url === '/hidden-widget.html') return send(200, 'text/html; charset=utf-8', fs.readFileSync(path.join(FIXTURES, 'hidden-widget.html')));
     if (url === '/css/fancy.css') return send(200, 'text/css; charset=utf-8', fs.readFileSync(path.join(FIXTURES, 'fancy.css')));
     if (url === '/fonts/fancy.ttf' && state.fontAvailable) return send(200, 'font/ttf', font);
     return send(404, 'text/plain', 'not found');
@@ -176,6 +183,29 @@ async function main(): Promise<void> {
     assert.match(card, /Unhealthy capture/);
     assert.doesNotMatch(card, /Likely render noise/);
     console.log('[e2e] ✓ A web font that failed to load reads as an unhealthy capture, never as render noise, and is not auto-passed.');
+
+    // 4. A web font only a hidden element uses: not in the image, so not unhealthy.
+    {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+      const page = await context.newPage();
+      await page.goto(`${fixture.base}/hidden-widget.html`, { waitUntil: 'load' });
+      assert.strictEqual(await page.evaluate('performance.getEntriesByName(new URL("/fonts/gone.ttf", location.href).href).length'), 0, 'the font must not be requested before the capture');
+      await witness(page as unknown as Parameters<typeof witness>[0], testInfo, 'hidden-widget', {
+        ignoreSelectors: [{ selector: '#widget', mode: 'collapse' }],
+      });
+      // The widget is laid out once the ignore rule comes off: its font is
+      // requested then and fails, after the capture.
+      await page.waitForFunction('document.fonts.status === "loaded" && performance.getEntriesByType("resource").some(function (e) { return /gone\\.ttf$/.test(e.name); })');
+      await context.close();
+    }
+    const hidden = parseHealth(store.readTempMetadata('hidden-widget')?.health);
+    assert.ok(hidden, 'no health recorded for the hidden-widget capture');
+    assert.deepStrictEqual(
+      { fonts: hidden.fonts, resources: hidden.resources },
+      { fonts: { status: 'loaded', failed: [] }, resources: { status: 'checked', failed: {} } },
+      'a font only a hidden element uses is not in the image: the capture is healthy',
+    );
+    console.log('[e2e] ✓ A web font only an element hidden by ignoreSelectors uses does not make the capture unhealthy.');
   } finally {
     process.chdir(cwd);
     await browser.close();
