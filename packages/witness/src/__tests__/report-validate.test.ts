@@ -172,6 +172,19 @@ describe('parseReportData', () => {
     expect(parsed.data.snapshots[0].captureHealth).toEqual(data.snapshots[0].captureHealth);
   });
 
+  it('keeps sameOnBothSides (schema 2.8.0) when both sides are unhealthy', () => {
+    const data = valid();
+    const health = data.snapshots[0].captureHealth;
+    health.baseline = HEALTH_FONT_FAILED;
+    health.unhealthy = 'both';
+    health.sameOnBothSides = true;
+    const parsed = parseReportData(data);
+    if (!parsed.ok) throw new Error(parsed.reason);
+
+    expect(parsed.data.snapshots[0].captureHealth).toEqual(health);
+    expect(parsed.data.snapshots[0].captureHealth?.sameOnBothSides).toBe(true);
+  });
+
   it('keeps environment fields it does not know yet, when they are plain values', () => {
     const data = valid();
     data.snapshots[0].environment.candidate = { ...ENV_CURRENT, gpu: 'swiftshader', browser: { ...ENV_CURRENT.browser, flags: '--disable-gpu' } };
@@ -274,6 +287,8 @@ describe('parseReportData', () => {
     ['health warnings that are not a list', withValue('snapshots.0.captureHealth.warnings', 'x'), /captureHealth\.warnings/],
     ['a candidate health block that is malformed', withValue('snapshots.0.captureHealth.candidate', { ...HEALTH_OK, fonts: { status: 'ok', failed: [] } }), /captureHealth\.candidate/],
     ['a baseline health block that is not an object', withValue('snapshots.0.captureHealth.baseline', 'healthy'), /captureHealth\.baseline/],
+    ['sameOnBothSides that is not true', withValue('snapshots.0.captureHealth.sameOnBothSides', 'yes'), /captureHealth\.sameOnBothSides/],
+    ['sameOnBothSides when only one side is unhealthy', withValue('snapshots.0.captureHealth.sameOnBothSides', true), /captureHealth\.sameOnBothSides/],
     ['too many snapshots', withValue('snapshots', Array.from({ length: 5001 }, (_, i) => ({ name: `s${i}`, status: 'passed', diffPercent: 0, diffCount: 0, totalPixels: 1 }))), /snapshots/],
     ['too many regions', withValue('snapshots.0.regions', Array.from({ length: 1001 }, () => ({ x: 0, y: 0, width: 1, height: 1, diffPixels: 1, diffPercent: 1 }))), /regions/],
   ])('rejects %s, naming the field', (_label, data, field) => {

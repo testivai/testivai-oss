@@ -310,6 +310,16 @@ function resolveStatusContext(input) {
   return input.trim() || STATUS_CONTEXT;
 }
 
+// ../packages/witness/src/capture/health-limits.ts
+var HEALTH_LIMITS = {
+  /** Entries kept per list. */
+  list: 10,
+  /** Characters kept of a URL (host and path). */
+  url: 200,
+  /** Longest family, weight, style or error text accepted. */
+  text: 200
+};
+
 // ../packages/witness/src/report/health.ts
 var NAMED = 3;
 var plural2 = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
@@ -390,6 +400,7 @@ function assessHealth(health) {
 var BASELINE_HEALTH_PREFIX = "baseline: ";
 var UNHEALTHY_CAPTURE_NEXT = "an unhealthy capture is a glitch of the capture or a broken asset, not render noise: fix the page, the server or the test and re-run; never approve it as a baseline";
 var UNHEALTHY_BASELINE_NEXT = "re-baseline from a healthy run";
+var SAME_FAILURES_NEXT = "the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run";
 var joinAnd = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 function sideAssessment(health, side) {
   const block = side === "candidate" ? health.candidate : health.baseline;
@@ -401,6 +412,10 @@ function sideAssessment(health, side) {
 function captureHealthReading(health) {
   if (!health?.unhealthy) return null;
   const side = health.unhealthy;
+  if (side === "both" && health.sameOnBothSides === true) {
+    const detail = `${sideAssessment(health, "candidate").reasons.join("; ")}; the baseline was captured with the same failures`;
+    return { side, sameOnBothSides: true, detail, next: SAME_FAILURES_NEXT };
+  }
   const parts = [];
   if (side !== "baseline") parts.push(sideAssessment(health, "candidate").reasons.join("; "));
   if (side !== "candidate") {
@@ -435,7 +450,8 @@ function unhealthyPassedLines(snapshots) {
     const reading = captureHealthReading(snapshot.captureHealth);
     if (!reading) continue;
     const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
-    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot.name}\` passed, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
+    const passed = snapshot.autoPassed ? `auto-passed by the '${snapshot.autoPassed}' criterion` : "passed";
+    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot.name}\` ${passed}, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
 
 `);
   }
@@ -2386,7 +2402,8 @@ function unhealthyVerdict(snapshot) {
   if (snapshot.status === "new") then = `This is a first capture: ${reading.next}.`;
   else if (snapshot.status === "passed") {
     const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
-    then = `It passed, but ${who} the page as built: ${reading.next}.`;
+    const passed = snapshot.autoPassed ? `It auto-passed by the '${snapshot.autoPassed}' criterion` : "It passed";
+    then = `${passed}, but ${who} the page as built: ${reading.next}.`;
   } else then = `${capitalize2(reading.next)}.`;
   let env = "";
   const change = snapshotEnvironmentChange(snapshot);
@@ -2607,14 +2624,6 @@ var THUMBNAIL_LIMITS = {
 
 // ../packages/witness/src/capture/health.ts
 var RESOURCE_TYPES = ["css", "font", "img", "script", "other"];
-var HEALTH_LIMITS = {
-  /** Entries kept per list. */
-  list: 10,
-  /** Characters kept of a URL (host and path). */
-  url: 200,
-  /** Longest family, weight, style or error text accepted. */
-  text: 200
-};
 var HEALTH_PROBE_EXPRESSION = `(function () {
   var LIMIT = ${HEALTH_LIMITS.list};
   var MAX = ${HEALTH_LIMITS.url};
@@ -2939,7 +2948,20 @@ function readCaptureHealth(value, path4) {
   };
   optional(health, "candidate", h, path4, block);
   optional(health, "baseline", h, path4, block);
-  return { ...health.candidate ? { candidate: health.candidate } : {}, ...health.baseline ? { baseline: health.baseline } : {}, ...health };
+  const samePath = at(path4, "sameOnBothSides");
+  if (h.sameOnBothSides !== void 0) {
+    if (h.sameOnBothSides !== true) fail(samePath, "expected true when present");
+    if (health.unhealthy !== "both") fail(samePath, "only with unhealthy 'both'");
+  }
+  const { unhealthy, reasons, warnings } = health;
+  return {
+    ...health.candidate ? { candidate: health.candidate } : {},
+    ...health.baseline ? { baseline: health.baseline } : {},
+    unhealthy,
+    ...h.sameOnBothSides === true ? { sameOnBothSides: true } : {},
+    reasons,
+    warnings
+  };
 }
 function readSnapshotEnvironment(value, path4) {
   const e = record2(value, path4);

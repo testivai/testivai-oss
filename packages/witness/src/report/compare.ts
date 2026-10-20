@@ -21,7 +21,7 @@ import type { RegionOptions } from '../diff/types';
 import { type EnvironmentPolicy, readEnvironment } from '../capture/environment';
 import { parseHealth } from '../capture/health';
 import { diffEnvironments } from './environment';
-import { isUnhealthyCapture, snapshotCaptureHealth } from './health';
+import { healthAllowsTolerances, isUnhealthyCapture, snapshotCaptureHealth } from './health';
 import { type RgbaImage, renderThumbnail, thumbnailArea } from './thumbnail';
 import {
   attributeRegions,
@@ -108,7 +108,9 @@ export interface PassCriteria {
    * sit in one area (a bad capture, or a change the style check does not
    * cover), stays 'changed' for a human. No criterion passes an unhealthy
    * capture (captureHealth, a font or stylesheet that failed to load) whose
-   * pixels differ. Default false.
+   * pixels differ, except maxDiffPercent, maxDiffPixels and shiftTolerance
+   * when both sides failed the same way (captureHealth.sameOnBothSides);
+   * this one never does. Default false.
    */
   noiseAutoPass?: boolean;
   /** Upper bound (diff %, 0-100) for noiseAutoPass. Default 1. */
@@ -338,8 +340,11 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
   // An unhealthy capture (a font that fell back, a stylesheet that failed,
   // on either side) whose pixels differ is never passed by a tolerance: the
   // diff is a glitch of the capture or a broken asset, and the fix is the
-  // page, the server or the test, not a tolerance.
-  if (isUnhealthyCapture(result)) return;
+  // page, the server or the test, not a tolerance. Except when both sides
+  // failed the same way (captureHealth.sameOnBothSides, a permanently broken
+  // asset): both images miss the same assets, so the tolerances still
+  // measure the page. Noise auto-pass never applies to an unhealthy capture.
+  if (!healthAllowsTolerances(result)) return;
 
   const withinPercent = result.diffPercent <= maxDiffPercent;
   const withinPixels = maxDiffPixels !== undefined && result.diffCount <= maxDiffPixels;
@@ -357,6 +362,7 @@ export function applyPassCriteria(result: SnapshotResult, criteria: PassCriteria
   // too. The size bound is noiseMaxDiffPercent, not diffShape's 1%.
   if (
     noiseAutoPass &&
+    !isUnhealthyCapture(result) &&
     result.dom?.noiseHint === true &&
     result.dom.styleCheck === 'match' &&
     result.diffPercent <= noiseMaxDiffPercent &&

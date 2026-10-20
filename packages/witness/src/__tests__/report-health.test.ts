@@ -8,6 +8,7 @@ import {
   assessHealth,
   captureHealthReading,
   isUnhealthyCapture,
+  sameHealthFailures,
   snapshotCaptureHealth,
 } from '../report/health';
 
@@ -35,6 +36,9 @@ const IMAGE_404: CaptureHealth = {
   images: { broken: 1, urls: ['example.com/img/hero.png'] },
   resources: { status: 'checked', failed: { img: { count: 1, entries: [{ url: 'example.com/img/hero.png', status: 404 }] } } },
 };
+
+/** A deep copy: the two sides are separate records, as read from two metadata.json files. */
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 describe('assessHealth', () => {
   it('a healthy capture: nothing to say', () => {
@@ -287,5 +291,130 @@ describe('isUnhealthyCapture', () => {
     expect(isUnhealthyCapture({})).toBe(false);
     expect(isUnhealthyCapture({ captureHealth: snapshotCaptureHealth(HEALTHY, IMAGE_404) })).toBe(false);
     expect(isUnhealthyCapture({ captureHealth: snapshotCaptureHealth(CSS_404, HEALTHY) })).toBe(true);
+  });
+});
+
+describe('sameHealthFailures', () => {
+  const withFonts = (fonts: CaptureHealth['fonts']['failed']): CaptureHealth => ({ ...FONT_404, fonts: { status: 'loaded', failed: fonts } });
+  const fontRequests = (entries: Array<{ url: string; status: number; error?: string }>, count = entries.length): CaptureHealth => ({
+    ...FONT_404,
+    resources: { status: 'checked', failed: { font: { count, entries } } },
+  });
+
+  it('the same failed font and request on both sides: the same', () => {
+    expect(sameHealthFailures(FONT_404, clone(FONT_404))).toBe(true);
+    expect(sameHealthFailures(CSS_404, clone(CSS_404))).toBe(true);
+  });
+
+  it('a different failure: not the same', () => {
+    expect(sameHealthFailures(CSS_404, FONT_404)).toBe(false);
+    expect(sameHealthFailures(FONT_404, { ...FONT_404, stylesheets: CSS_404.stylesheets, resources: { status: 'checked', failed: { ...FONT_404.resources.failed, ...CSS_404.resources.failed } } })).toBe(false);
+  });
+
+  it('the same font file with another status, or on another port: not the same', () => {
+    expect(sameHealthFailures(FONT_404, fontRequests([{ url: '127.0.0.1:4000/fonts/fancy.ttf', status: 500 }]))).toBe(false);
+    expect(sameHealthFailures(FONT_404, fontRequests([{ url: '127.0.0.1:4001/fonts/fancy.ttf', status: 404 }]))).toBe(false);
+  });
+
+  it('the same family with another weight or style: not the same', () => {
+    expect(sameHealthFailures(FONT_404, withFonts([{ family: 'Fancy', weight: '700', style: 'normal' }]))).toBe(false);
+    expect(sameHealthFailures(FONT_404, withFonts([{ family: 'Fancy', weight: 'normal', style: 'italic' }]))).toBe(false);
+  });
+
+  it('the order the failures were listed in does not matter', () => {
+    const a = { family: 'A', weight: 'normal', style: 'normal' };
+    const b = { family: 'B', weight: 'normal', style: 'normal' };
+    expect(sameHealthFailures(withFonts([a, b]), withFonts([b, a]))).toBe(true);
+    const x = { url: 'example.com/a.woff2', status: 404 };
+    const y = { url: 'example.com/b.woff2', status: 404 };
+    expect(sameHealthFailures(fontRequests([x, y]), fontRequests([y, x]))).toBe(true);
+  });
+
+  it('a request that failed without a status: the same whatever the error text says', () => {
+    const refused = fontRequests([{ url: 'fonts.example.com/fancy.woff2', status: 0, error: 'net::ERR_CONNECTION_REFUSED' }]);
+    const unresolved = fontRequests([{ url: 'fonts.example.com/fancy.woff2', status: 0, error: 'net::ERR_NAME_NOT_RESOLVED' }]);
+    expect(sameHealthFailures(refused, unresolved)).toBe(true);
+  });
+
+  it('web fonts still loading on either side: never the same (the capture depends on timing)', () => {
+    const loading: CaptureHealth = { ...HEALTHY, fonts: { status: 'loading', failed: [] } };
+    expect(sameHealthFailures(loading, clone(loading))).toBe(false);
+    expect(sameHealthFailures({ ...FONT_404, fonts: { ...FONT_404.fonts, status: 'loading' } }, FONT_404)).toBe(false);
+  });
+
+  it('a different Font Loading API or request-status coverage: not the same', () => {
+    expect(sameHealthFailures(FONT_404, { ...FONT_404, fonts: { ...FONT_404.fonts, status: 'unavailable' } })).toBe(false);
+    expect(sameHealthFailures(FONT_404, { ...FONT_404, resources: { ...FONT_404.resources, status: 'unavailable' } })).toBe(false);
+  });
+
+  it('a list cut at the cap, or a count above its entries: cannot be proven the same', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ family: `F${i}`, weight: 'normal', style: 'normal' }));
+    expect(sameHealthFailures(withFonts(ten), withFonts(clone(ten)))).toBe(false);
+    const cut = fontRequests([{ url: '127.0.0.1:4000/fonts/fancy.ttf', status: 404 }], 12);
+    expect(sameHealthFailures(cut, clone(cut))).toBe(false);
+    const sheets: CaptureHealth = { ...CSS_404, stylesheets: { failed: 11, urls: ['example.com/css/site.css'] } };
+    expect(sameHealthFailures(sheets, clone(sheets))).toBe(false);
+  });
+
+  it('broken images, failed scripts and other requests are warnings: they do not count', () => {
+    const noisy: CaptureHealth = {
+      ...FONT_404,
+      images: { broken: 1, urls: ['example.com/img/hero.gif'] },
+      resources: {
+        status: 'checked',
+        failed: {
+          ...FONT_404.resources.failed,
+          img: { count: 1, entries: [{ url: 'example.com/img/hero.gif', status: 404 }] },
+          script: { count: 1, entries: [{ url: 'example.com/js/ads.js', status: 503 }] },
+        },
+      },
+    };
+    expect(sameHealthFailures(FONT_404, noisy)).toBe(true);
+  });
+});
+
+describe('snapshotCaptureHealth: sameOnBothSides', () => {
+  it('set when both sides are unhealthy with the same failures', () => {
+    expect(snapshotCaptureHealth(FONT_404, clone(FONT_404))).toEqual({
+      candidate: FONT_404,
+      baseline: FONT_404,
+      unhealthy: 'both',
+      sameOnBothSides: true,
+      reasons: [...assessHealth(FONT_404).reasons, ...assessHealth(FONT_404).reasons.map((r) => `baseline: ${r}`)],
+      warnings: [],
+    });
+  });
+
+  it('absent when the failures differ, when one side is unhealthy, or when neither is', () => {
+    expect(snapshotCaptureHealth(CSS_404, FONT_404)).not.toHaveProperty('sameOnBothSides');
+    expect(snapshotCaptureHealth(HEALTHY, FONT_404)).not.toHaveProperty('sameOnBothSides');
+    expect(snapshotCaptureHealth(FONT_404, HEALTHY)).not.toHaveProperty('sameOnBothSides');
+    expect(snapshotCaptureHealth(HEALTHY, HEALTHY)).not.toHaveProperty('sameOnBothSides');
+    expect(snapshotCaptureHealth(IMAGE_404, IMAGE_404)).not.toHaveProperty('sameOnBothSides');
+  });
+});
+
+describe('captureHealthReading: the same failures on both sides', () => {
+  it('names the failures once, says the baseline has the same, and that the tolerances still apply but never noise', () => {
+    expect(captureHealthReading(snapshotCaptureHealth(FONT_404, clone(FONT_404)))).toEqual({
+      side: 'both',
+      sameOnBothSides: true,
+      detail:
+        "web font 'Fancy' failed to load, so the page rendered with a fallback font; font file 127.0.0.1:4000/fonts/fancy.ttf returned 404; " +
+        'the baseline was captured with the same failures',
+      next:
+        'the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run',
+    });
+  });
+
+  it('reads results written by another tool (no blocks) from the flag and the reasons', () => {
+    const reading = captureHealthReading({
+      unhealthy: 'both',
+      sameOnBothSides: true,
+      reasons: ['stylesheet example.com/css/site.css returned 404', 'baseline: stylesheet example.com/css/site.css returned 404'],
+      warnings: [],
+    });
+    expect(reading?.sameOnBothSides).toBe(true);
+    expect(reading?.detail).toBe('stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures');
   });
 });

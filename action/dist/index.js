@@ -117220,6 +117220,7 @@ function assessHealth(health) {
 var BASELINE_HEALTH_PREFIX = "baseline: ";
 var UNHEALTHY_CAPTURE_NEXT = "an unhealthy capture is a glitch of the capture or a broken asset, not render noise: fix the page, the server or the test and re-run; never approve it as a baseline";
 var UNHEALTHY_BASELINE_NEXT = "re-baseline from a healthy run";
+var SAME_FAILURES_NEXT = "the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run";
 var joinAnd = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 function sideAssessment(health, side) {
   const block = side === "candidate" ? health.candidate : health.baseline;
@@ -117231,6 +117232,10 @@ function sideAssessment(health, side) {
 function captureHealthReading(health) {
   if (!health?.unhealthy) return null;
   const side = health.unhealthy;
+  if (side === "both" && health.sameOnBothSides === true) {
+    const detail = `${sideAssessment(health, "candidate").reasons.join("; ")}; the baseline was captured with the same failures`;
+    return { side, sameOnBothSides: true, detail, next: SAME_FAILURES_NEXT };
+  }
   const parts = [];
   if (side !== "baseline") parts.push(sideAssessment(health, "candidate").reasons.join("; "));
   if (side !== "candidate") {
@@ -117265,7 +117270,8 @@ function unhealthyPassedLines(snapshots) {
     const reading = captureHealthReading(snapshot2.captureHealth);
     if (!reading) continue;
     const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
-    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot2.name}\` passed, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
+    const passed = snapshot2.autoPassed ? `auto-passed by the '${snapshot2.autoPassed}' criterion` : "passed";
+    lines.push(`> **Unhealthy capture** \u2014 \`${snapshot2.name}\` ${passed}, but ${who} the page as built: ${reading.detail}. ${capitalize(reading.next)}.
 
 `);
   }

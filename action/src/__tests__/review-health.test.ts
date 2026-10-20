@@ -27,4 +27,8 @@ describe('the review prompt and capture health', () => {
   it('a change that broke the asset itself is a bug, not a glitch', () => {
     expect(prompt).toContain('It is a glitch unless the change under test touched the asset that failed');
   });
+
+  it('the same failures on both sides compare like with like: the tolerances applied, still never noise', () => {
+    expect(prompt).toContain('When captureHealth.sameOnBothSides is true, the baseline failed the same way');
+  });
 });

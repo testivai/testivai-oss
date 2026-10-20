@@ -77,6 +77,31 @@ describe('verdictFor with capture health', () => {
     expect(v).toMatch(/^passed — no visual change, but neither image shows the page as built \(unhealthy capture: web font 'Fancy'/);
   });
 
+  const SAME_NEXT =
+    'the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run';
+
+  it('the same failures on both sides, above the tolerance: changed, the tolerances still apply, never noise', () => {
+    const v = verdictFor(changed('home', { dom: noHint, captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED) }));
+    expect(v).toBe(
+      `changed (0.07% pixels differ) — unhealthy capture: stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures; ${SAME_NEXT}`,
+    );
+  });
+
+  it('the same failures on both sides, auto-passed by a tolerance: the criterion named, not "no visual change"', () => {
+    const v = verdictFor({
+      name: 'home',
+      status: 'passed',
+      diffPercent: 0.15,
+      autoPassed: 'threshold',
+      dom: noHint,
+      captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED),
+    });
+    expect(v).toBe(
+      "passed — auto-passed by the 'threshold' criterion (0.15% pixels differ), but neither image shows the page as built " +
+        `(unhealthy capture: stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures); ${SAME_NEXT}`,
+    );
+  });
+
   it('a first capture that is unhealthy: do not approve it', () => {
     const v = verdictFor({ name: 'fresh', status: 'new', captureHealth: snapshotCaptureHealth(null, CSS_FAILED) });
     expect(v).toBe(`new snapshot — unhealthy capture: stylesheet example.com/css/site.css returned 404; ${NEXT}`);
@@ -118,6 +143,18 @@ describe('explain_snapshot with capture health', () => {
     expect(e.guidance.join('\n')).not.toMatch(/likely render noise/i);
   });
 
+  it('the same failures on both sides: like with like, the tolerances applied, never noise, not blamed on the change under test', () => {
+    writeResults([changed('home', { dom: noHint, captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED) })]);
+    const e = explainSnapshot(root, 'home');
+    if (!e || !('layers' in e)) throw new Error('no explanation');
+    expect(e.guidance[0]).toBe(
+      'Unhealthy capture, the same on both sides: stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures. ' +
+        'Neither image shows the page as built, but both are missing the same assets, so the diff compares like with like: ' +
+        'the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run.',
+    );
+    expect(e.guidance.join('\n')).not.toMatch(/likely render noise/i);
+  });
+
   it('warnings as guidance; no health layer without health', () => {
     writeResults([changed('home', { dom: sameDom, captureHealth: snapshotCaptureHealth(HEALTHY, IMAGE_BROKEN) }), changed('plain', { dom: sameDom })]);
     const e = explainSnapshot(root, 'home');
@@ -144,6 +181,13 @@ describe('the prompts and tool descriptions name unhealthy captures', () => {
     expect(rubric).toContain('captureHealth.unhealthy');
     expect(rubric).toContain(
       'an unhealthy capture is a glitch of the capture or a broken asset; fix the page, the server or the test; never approve it as a baseline',
+    );
+  });
+
+  it('the triage rubric: the same failures on both sides compare like with like, still never noise', () => {
+    const rubric = TRIAGE_PROMPT.rubric();
+    expect(rubric).toContain(
+      'When captureHealth.sameOnBothSides is true, the baseline failed the same way: the diff compares like with like and the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) applied, never noise auto-pass; judge the diff itself, and name the broken asset as something to fix.',
     );
   });
 

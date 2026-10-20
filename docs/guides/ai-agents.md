@@ -66,7 +66,10 @@ Then read `visual-report/results.json` and act on each snapshot:
   stylesheet failed to load (`captureHealth.reasons` says which), so the
   image is not the page as built. Never call it noise. If your edit broke
   that asset (a moved font, a renamed stylesheet), fix it; otherwise tell
-  the human what failed. It must never become a baseline.
+  the human what failed. It must never become a baseline. With
+  `captureHealth.sameOnBothSides: true` the baseline failed the same way
+  (an asset broken on every run), so the pass tolerances still applied:
+  judge the diff itself, still never as noise, and report the broken asset.
 - `status: "new"` → new page/snapshot; tell the human baselines need
   approving.
 - Never run `testivai approve` yourself — baseline approval is a human

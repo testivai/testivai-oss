@@ -117,10 +117,37 @@ describe('report verdicts with capture health', () => {
 
   it('a passed snapshot with an unhealthy capture still shows it', () => {
     const main = text(
-      mainOf(report(snap('home', { status: 'passed', diffPercent: 0, diffCount: 0, captureHealth: snapshotCaptureHealth(FONT_FAILED, FONT_FAILED) }))),
+      mainOf(report(snap('home', { status: 'passed', diffPercent: 0, diffCount: 0, captureHealth: snapshotCaptureHealth(CSS_FAILED, FONT_FAILED) }))),
     );
     expect(main).toContain(
-      "Unhealthy capture — web font 'Fancy' failed to load, so the page rendered with a fallback font; the baseline was captured with a failed web font too (web font 'Fancy' failed to load, so the page rendered with a fallback font). It passed, but neither image shows the page as built:",
+      "Unhealthy capture — web font 'Fancy' failed to load, so the page rendered with a fallback font; the baseline was captured with a failed stylesheet too (stylesheet example.com/css/site.css returned 404). It passed, but neither image shows the page as built:",
+    );
+  });
+
+  const SAME_NEXT =
+    'the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run.';
+
+  it('the same failures on both sides, auto-passed by a tolerance: the criterion named, never noise', () => {
+    const main = text(
+      mainOf(
+        report(
+          snap('home', { status: 'passed', autoPassed: 'threshold', dom: sameDomNoHint, captureHealth: snapshotCaptureHealth(FONT_FAILED, FONT_FAILED) }),
+        ),
+      ),
+    );
+    expect(main).toContain(
+      "Unhealthy capture — web font 'Fancy' failed to load, so the page rendered with a fallback font; the baseline was captured with the same failures. " +
+        `It auto-passed by the 'threshold' criterion, but neither image shows the page as built: ${SAME_NEXT}`,
+    );
+    expect(main).not.toMatch(/likely render noise/i);
+  });
+
+  it('the same failures on both sides, above the tolerance: changed, the tolerances still apply', () => {
+    const main = text(mainOf(report(snap('home', { dom: sameDomNoHint, captureHealth: snapshotCaptureHealth(CSS_FAILED, CSS_FAILED) }))));
+    expect(main).toContain(
+      'Unhealthy capture — stylesheet example.com/css/site.css returned 404; the baseline was captured with the same failures. ' +
+        SAME_NEXT.charAt(0).toUpperCase() +
+        SAME_NEXT.slice(1),
     );
   });
 

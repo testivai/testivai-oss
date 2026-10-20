@@ -201,7 +201,7 @@ function readSnapshot(value: unknown, path: string): SnapshotResult {
   return snapshot;
 }
 
-/** A snapshot's capture health (schema 2.7.0); each recorded block goes through parseHealth. */
+/** A snapshot's capture health (schema 2.7.0, sameOnBothSides 2.8.0); each recorded block goes through parseHealth. */
 function readCaptureHealth(value: unknown, path: string): SnapshotCaptureHealth {
   const h = record(value, path);
   const block = (v: unknown, p: string): CaptureHealth => parseHealth(v) ?? fail(p, 'expected a capture health block');
@@ -214,7 +214,21 @@ function readCaptureHealth(value: unknown, path: string): SnapshotCaptureHealth 
   };
   optional(health, 'candidate', h, path, block);
   optional(health, 'baseline', h, path, block);
-  return { ...(health.candidate ? { candidate: health.candidate } : {}), ...(health.baseline ? { baseline: health.baseline } : {}), ...health };
+  // Schema 2.8.0: only ever true, and only when both sides are unhealthy.
+  const samePath = at(path, 'sameOnBothSides');
+  if (h.sameOnBothSides !== undefined) {
+    if (h.sameOnBothSides !== true) fail(samePath, 'expected true when present');
+    if (health.unhealthy !== 'both') fail(samePath, "only with unhealthy 'both'");
+  }
+  const { unhealthy, reasons, warnings } = health;
+  return {
+    ...(health.candidate ? { candidate: health.candidate } : {}),
+    ...(health.baseline ? { baseline: health.baseline } : {}),
+    unhealthy,
+    ...(h.sameOnBothSides === true ? { sameOnBothSides: true as const } : {}),
+    reasons,
+    warnings,
+  };
 }
 
 /** A snapshot's capture provenance (schema 2.5.0). */

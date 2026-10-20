@@ -123,6 +123,7 @@ per-snapshot calls) — the first occurrence wins.
 | Dynamic text (timestamps, emails, counters, "ago" strings) | `ignoreSelectors` with `mask` | Blanks the text while preserving the surrounding layout |
 | Data-dependent table/list heights that vary across runs | `ignoreSelectors` with `collapse` | Removes the element from flow so the rest of the page stays aligned |
 | Image/avatar/ad content changing inside a stable container | `ignoreSelectors` with `mask` | Hides the variable content, keeps the container box |
+| Animated GIFs, autoplaying `<video>`, `<canvas>` or script-driven motion (carousels, tickers) | `ignoreSelectors` with `mask`, or a `mask` entry | `stabilize` freezes CSS animations and transitions only: a GIF, a video or a script keeps moving. `ignoreSelectors` blanks the element in both captures; `mask` leaves it out of the pixel diff and hatches it in the report, so the exclusion stays visible |
 | Cross-machine anti-aliasing or font-rendering differences | Per-platform baselines ([below](#cross-platform-baselines)), tune `threshold`, or enable `noiseAutoPass` | The report labels these *likely render noise* when the DOM and the computed styles both match and the diff is small and scattered; `noiseAutoPass` passes only those (up to `noiseMaxDiffPercent`), never a diff whose styles were not compared or one concentrated in one area. When both captures recorded their environment and the browser, OS or capture method changed, the report calls it *rendering drift* instead: re-baseline, or pin the environment |
 
 :::tip DOM noise hint
@@ -333,10 +334,26 @@ whose next one loads renders as built, so that is a warning). The
 report, the PR comment and the MCP verdicts then read **Unhealthy capture**
 with what failed, never "likely render noise", and no pass criterion
 (`noiseAutoPass`, `maxDiffPercent`, `shiftTolerance`) passes it while its pixels
-differ. An unhealthy baseline is called out on every compare against it.
+differ, with one exception below. An unhealthy baseline is called out on every
+compare against it.
 Broken images, failed scripts and requests a script made (a `fetch()` of a
 `.css` file is not a stylesheet the page applied) are warnings: shown, but
 they do not make a capture unhealthy on their own.
+
+**The same failure on both sides.** When an asset is broken on every run (a
+third-party font that always 404s in CI) and the baseline was approved with
+that same failure, both images miss the same assets, so the diff compares like
+with like. When the two captures failed in exactly the same way (the same font
+faces, the same stylesheets, and the same stylesheet and font requests with the
+same status), `results.json` says `captureHealth.sameOnBothSides: true` and
+`maxDiffPercent`, `maxDiffPixels` and `shiftTolerance` still apply.
+`noiseAutoPass` never does, and the snapshot still reads **Unhealthy capture**.
+It does not apply while fonts were still loading on either side (that depends
+on timing), when one side failed differently, or when either side is healthy:
+the first run after an asset breaks always needs a person to look. A request
+URL is recorded as host and path, port included, so a test server on a random
+port never matches; give it a fixed port. Broken images and failed scripts are
+not compared: they are warnings.
 
 Fixes, in the order they usually help:
 

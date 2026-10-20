@@ -4,7 +4,7 @@
   "private": true,
   "description": "OSS smoke E2E - exercises the public surface of @testivai/witness end-to-end",
   "scripts": {
-    "test": "tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts && tsx src/published-site.test.ts && tsx src/health-probe.test.ts && tsx src/unhealthy-capture.test.ts"
+    "test": "tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts && tsx src/published-site.test.ts && tsx src/health-probe.test.ts && tsx src/unhealthy-capture.test.ts && tsx src/same-failure.test.ts"
   },
   "dependencies": {
     "@testivai/witness": "workspace:*",

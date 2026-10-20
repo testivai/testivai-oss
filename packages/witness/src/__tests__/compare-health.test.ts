@@ -164,6 +164,57 @@ describe('compareAll with capture health', () => {
     expect(r.status).toBe('changed');
   });
 
+  describe('the same failures on both sides (a permanently broken asset)', () => {
+    it('maxDiffPercent still applies: passed as threshold, sameOnBothSides recorded, never a noise hint', () => {
+      writeSnapshot('home', { baselineHealth: FONT_FAILED, candidateHealth: FONT_FAILED });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { maxDiffPercent: 1 } });
+      expect(r.diffCount).toBe(30);
+      expect(r.status).toBe('passed');
+      expect(r.autoPassed).toBe('threshold');
+      expect(r.dom?.noiseHint).toBe(false);
+      expect(r.captureHealth?.unhealthy).toBe('both');
+      expect(r.captureHealth?.sameOnBothSides).toBe(true);
+    });
+
+    it('maxDiffPixels still applies', () => {
+      writeSnapshot('home', { baselineHealth: CSS_FAILED, candidateHealth: CSS_FAILED });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { maxDiffPixels: 30 } });
+      expect(r.status).toBe('passed');
+      expect(r.autoPassed).toBe('threshold');
+    });
+
+    it('a diff above the tolerance: changed', () => {
+      writeSnapshot('home', { baselineHealth: FONT_FAILED, candidateHealth: FONT_FAILED });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { maxDiffPercent: 0.1, maxDiffPixels: 29 } });
+      expect(r.status).toBe('changed');
+      expect(r.autoPassed).toBeUndefined();
+      expect(r.captureHealth?.sameOnBothSides).toBe(true);
+    });
+
+    it('noiseAutoPass alone never passes it: an unhealthy capture is never render noise', () => {
+      writeSnapshot('home', { baselineHealth: FONT_FAILED, candidateHealth: FONT_FAILED });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { noiseAutoPass: true, noiseMaxDiffPercent: 5 } });
+      expect(r.status).toBe('changed');
+      expect(r.autoPassed).toBeUndefined();
+    });
+
+    it('different failures on the two sides: no tolerance applies', () => {
+      writeSnapshot('home', { baselineHealth: CSS_FAILED, candidateHealth: FONT_FAILED });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { maxDiffPercent: 5, maxDiffPixels: 1000, shiftTolerance: 5 } });
+      expect(r.captureHealth?.unhealthy).toBe('both');
+      expect(r.captureHealth).not.toHaveProperty('sameOnBothSides');
+      expect(r.status).toBe('changed');
+    });
+
+    it('the same failures but fonts still loading: no tolerance applies', () => {
+      const loading: CaptureHealth = { ...FONT_FAILED, fonts: { ...FONT_FAILED.fonts, status: 'loading' } };
+      writeSnapshot('home', { baselineHealth: loading, candidateHealth: loading });
+      const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: { maxDiffPercent: 5 } });
+      expect(r.captureHealth).not.toHaveProperty('sameOnBothSides');
+      expect(r.status).toBe('changed');
+    });
+  });
+
   it('unhealthy with identical bytes: passed by the existing rules, the health still recorded', () => {
     writeSnapshot('home', { baselineHealth: FONT_FAILED, candidateHealth: FONT_FAILED, candidate: page() });
     const [r] = compareAll({ projectRoot: root, reportDir, passCriteria: noise });
@@ -284,6 +335,34 @@ describe('applyPassCriteria with capture health', () => {
     applyPassCriteria(r, { noiseAutoPass: true, maxDiffPercent: 1 });
     expect(r.status).toBe('changed');
     expect(r.autoPassed).toBeUndefined();
+  });
+
+  it('the same failures on both sides: the threshold applies, noise never does, even with a stale noise hint', () => {
+    const same = { unhealthy: 'both' as const, sameOnBothSides: true as const, reasons: [], warnings: [] };
+    const noiseOnly = { ...base(), captureHealth: same };
+    applyPassCriteria(noiseOnly, { noiseAutoPass: true });
+    expect(noiseOnly.status).toBe('changed');
+    expect(noiseOnly.autoPassed).toBeUndefined();
+
+    const threshold = { ...base(), captureHealth: same };
+    applyPassCriteria(threshold, { noiseAutoPass: true, maxDiffPercent: 1 });
+    expect(threshold.autoPassed).toBe('threshold');
+  });
+
+  it('the same failures on both sides: shiftTolerance applies', () => {
+    const r: SnapshotResult = {
+      ...base(),
+      diffPercent: 5,
+      captureHealth: { unhealthy: 'both', sameOnBothSides: true, reasons: [], warnings: [] },
+      regions: [{ x: 0, y: 40, width: 200, height: 60, diffPixels: 1000, diffPercent: 5, classification: 'shift', shift: { dx: 0, dy: 2 } }],
+    };
+    applyPassCriteria(r, { shiftTolerance: 2 });
+    expect(r.status).toBe('passed');
+    expect(r.autoPassed).toBe('shift');
+
+    const different: SnapshotResult = { ...r, status: 'changed', autoPassed: undefined, captureHealth: { unhealthy: 'both', reasons: [], warnings: [] } };
+    applyPassCriteria(different, { shiftTolerance: 2 });
+    expect(different.status).toBe('changed');
   });
 
   it('passes the same diff when no side is unhealthy', () => {

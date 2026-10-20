@@ -178,7 +178,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.7.0",         // results.json SCHEMA version
+  "version": "2.8.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 7,
@@ -349,6 +349,29 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
       }
     },
     {
+      "name": "broken-font",
+      "status": "passed",     // the same font failed in the baseline: the tolerances still apply
+      "autoPassed": "threshold",
+      "diffPercent": 0.04,
+      "diffCount": 368,
+      "totalPixels": 921600,
+      "baselinePath": "images/broken-font/baseline.png",
+      "currentPath":  "images/broken-font/current.png",
+      "diffPath":     "images/broken-font/diff.png",
+      "dom": { "changed": false, "summary": null, "noiseHint": false, "styleCheck": "match" },
+      "captureHealth": {
+        "candidate": { "fonts": { "status": "loaded", "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] }, "…": "…" },
+        "baseline":  { "fonts": { "status": "loaded", "failed": [{ "family": "Fancy", "weight": "normal", "style": "normal" }] }, "…": "…" },
+        "unhealthy": "both",
+        "sameOnBothSides": true,   // both sides failed the same way (schema 2.8.0)
+        "reasons": [
+          "web font 'Fancy' failed to load, so the page rendered with a fallback font",
+          "baseline: web font 'Fancy' failed to load, so the page rendered with a fallback font"
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "fresh-baseline",
       "status": "new",
       "diffPercent": 0,
@@ -392,7 +415,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].pageShift` | object | optional | whole-page uniform displacement: `{ dy, belowY, count }`. Requires element maps on both sides |
 | `snapshots[].masks` | array | optional | masks applied to this comparison, resolved to pixels: `{ x, y, width, height, source }`. Present when non-empty |
 | `snapshots[].maskWarnings` | string[] | optional | mask specs that could not be applied (e.g. a selector with no captured geometry). Present when non-empty |
-| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. Never present when `captureHealth.unhealthy` is set: from schema 2.7.0 no criterion passes an unhealthy capture whose pixels differ. A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
+| `snapshots[].autoPassed` | enum | optional | `threshold` &#124; `noise` &#124; `shift` — which criterion turned a pixel diff into `passed`. `noise` requires `dom.noiseHint` true **and** `dom.styleCheck: "match"` (changed in this release: `@testivai/witness` 2.1.1 and earlier also gave it to `unavailable` diffs). Never present with `sizeMismatch`: from schema 2.4.0 no criterion passes a size change. Never present when `captureHealth.unhealthy` is set: from schema 2.7.0 no criterion passes an unhealthy capture whose pixels differ, except, from schema 2.8.0, `threshold` or `shift` when `captureHealth.sameOnBothSides` is true (never `noise`). A DOM change does not block a criterion (the pixel tolerances stay pixel tolerances); a passed snapshot whose `dom.changed` is true is reported as such |
 | `snapshots[].baselineApprovedAt` | ISO 8601 string | optional | when the compared baseline was last approved/added |
 | `snapshots[].environment` | object | optional | emitted from schema 2.5.0 when the baseline and the current capture both recorded an `environment` in their metadata.json (one side unrecorded is unknown, not a change) |
 | `snapshots[].environment.delta` | string[] | yes within `environment` | every field that differs, as sorted dotted paths (`browser.version`); empty when the environments match |
@@ -401,7 +424,8 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 | `snapshots[].environment.policy` | `"strict"` | optional | present when `environmentPolicy: "strict"` made the snapshot `changed` because `renderingDelta` is non-empty, whatever its pixels (a byte-identical capture included, with `diffPercent` 0). Under `"warn"` (default) and `"separate"`, the environment never changes a status |
 | `snapshots[].captureHealth` | object | optional | emitted from schema 2.7.0 when the baseline or the current capture recorded `health` in its metadata.json (see "Capture health"); absent when neither did (not checked). Present on `new` snapshots too, for the first capture |
 | `snapshots[].captureHealth.candidate` / `.baseline` | object | optional | each side's recorded `health` block; absent for a side that recorded none |
-| `snapshots[].captureHealth.unhealthy` | enum &#124; null | yes within `captureHealth` | `candidate` &#124; `baseline` &#124; `both` &#124; `null`. When set, the reading is **Unhealthy capture**, never render noise: `dom.noiseHint` is false and no pass criterion applies while pixels differ (`status` stays `changed`); a zero-pixel diff still passes by the existing rules, and the warning is still shown. An unhealthy baseline is called out on every compare against it (re-baseline from a healthy run). Both this and rendering drift can be true: unhealthy is said first |
+| `snapshots[].captureHealth.unhealthy` | enum &#124; null | yes within `captureHealth` | `candidate` &#124; `baseline` &#124; `both` &#124; `null`. When set, the reading is **Unhealthy capture**, never render noise: `dom.noiseHint` is false and no pass criterion applies while pixels differ (`status` stays `changed`), unless `sameOnBothSides` is true; a zero-pixel diff still passes by the existing rules, and the warning is still shown. An unhealthy baseline is called out on every compare against it (re-baseline from a healthy run). Both this and rendering drift can be true: unhealthy is said first |
+| `snapshots[].captureHealth.sameOnBothSides` | `true` | optional | emitted from schema 2.8.0 only when `unhealthy` is `both` and the two sides failed the same way: the same font faces (family, weight, style), the same stylesheets, and the same stylesheet and font requests (host and path, and status; the error text of a request without a status is not compared). Never while web fonts were still loading on either side, when one side could see what the other could not (Font Loading API, request statuses), or when a list may have been cut at 10 entries. A permanently broken asset shows in both images alike, so `maxDiffPercent`, `maxDiffPixels` and `shiftTolerance` still apply (`autoPassed` `threshold` or `shift`); `noiseAutoPass` never does, and the reading is still **Unhealthy capture**, never render noise. Broken images and failed scripts are not compared (they are warnings). Absent otherwise |
 | `snapshots[].captureHealth.reasons` | string[] | yes within `captureHealth` | why, in plain words ("web font 'Fancy' failed to load, so the page rendered with a fallback font", "stylesheet example.com/css/site.css returned 404"); the baseline's start with `baseline: `. Empty when not unhealthy |
 | `snapshots[].captureHealth.warnings` | string[] | yes within `captureHealth` | what else failed to load (broken images, failed scripts and other requests), the baseline's starting with `baseline: `: shown, never unhealthy on their own |
 | `snapshots[].sizeMismatch` | object | optional | emitted from schema 2.4.0 when the current capture's dimensions differ from the baseline's: `{ baseline: { width, height }, candidate: { width, height } }`. The two are padded to max width × max height before diffing and every padded pixel counts as changed, so `diffCount`, `diffPercent`, `totalPixels` and `regions` are on that canvas and the snapshot is `changed`, never `passed`. A height change is read with `pageShift` and `dom`: the padded band at the bottom is the new height, not where the change is (a banner inserted near the top grows the page too), so `pageShift` places the change, `dom.summary` says what changed, and an identical DOM is the same content laid out taller or shorter (restyled, or fonts and rendering that differ between machines), not content added or removed. A width change is almost always the viewport or device scale factor, not the page. Before 2.4.0 the candidate was truncated or zero-filled to the baseline's size, so a taller page with an identical overlap passed at 0% |

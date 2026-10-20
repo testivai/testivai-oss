@@ -19,6 +19,8 @@
  * No Node dependencies: the GitHub Action bundles the validator.
  */
 
+import { HEALTH_LIMITS } from './health-limits';
+
 /** The request groups, by what was requested. */
 export const RESOURCE_TYPES = ['css', 'font', 'img', 'script', 'other'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
@@ -54,14 +56,7 @@ export interface CaptureHealth {
   resources: { status: 'checked' | 'unavailable'; failed: Partial<Record<ResourceType, ResourceFailures>> };
 }
 
-export const HEALTH_LIMITS = {
-  /** Entries kept per list. */
-  list: 10,
-  /** Characters kept of a URL (host and path). */
-  url: 200,
-  /** Longest family, weight, style or error text accepted. */
-  text: 200,
-} as const;
+export { HEALTH_LIMITS };
 
 /**
  * One self-contained in-page expression (no imports, no closures, ES5) that
