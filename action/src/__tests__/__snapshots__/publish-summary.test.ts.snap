@@ -1,0 +1,58 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`publishSummary lists the runs left out and why 1`] = `
+"### TestivAI reports published
+
+**[Open the reports site](https://testivai.github.io/testivai-example/)** — the last 3 runs of each open pull request, and the latest run on main.
+
+#### main
+
+- [Latest run on main](https://testivai.github.io/testivai-example/main/) · 1 changed · 0 passed · [CI run 1](https://github.com/testivai/testivai-example/actions/runs/1), attempt 1
+
+#### Open pull requests
+
+- [#14](https://github.com/testivai/testivai-example/pull/14) PR 14 · [latest run](https://testivai.github.io/testivai-example/pr/14/3-1/) · 1 changed · 0 passed · [all 1 run](https://testivai.github.io/testivai-example/pr/14/)
+- [#15](https://github.com/testivai/testivai-example/pull/15) · from a fork · [latest run](https://testivai.github.io/testivai-example/pr/15/4-1/) · 1 changed · 0 passed · [all 1 run](https://testivai.github.io/testivai-example/pr/15/)
+
+#### Not published
+
+- [Run 2](https://github.com/testivai/testivai-example/actions/runs/2) of [#14](https://github.com/testivai/testivai-example/pull/14): the site would be over its 4 MB budget
+"
+`;
+
+exports[`publishSummary lists the site, main's latest run and each pull request's, as the front page does 1`] = `
+"### TestivAI reports published
+
+**[Open the reports site](https://testivai.github.io/testivai-example/)** — the last 3 runs of each open pull request, and the latest run on main.
+
+#### main
+
+- [Latest run on main](https://testivai.github.io/testivai-example/main/) · 1 passed · [CI run 1](https://github.com/testivai/testivai-example/actions/runs/1), attempt 1
+
+#### Open pull requests
+
+- [#14](https://github.com/testivai/testivai-example/pull/14) PR 14 · [latest run](https://testivai.github.io/testivai-example/pr/14/3-1/) · 1 changed · 0 passed · [all 2 runs](https://testivai.github.io/testivai-example/pr/14/)
+- [#15](https://github.com/testivai/testivai-example/pull/15) · from a fork · [latest run](https://testivai.github.io/testivai-example/pr/15/4-1/) · 1 changed · 0 passed · [all 1 run](https://testivai.github.io/testivai-example/pr/15/)
+"
+`;
+
+exports[`publishSummary when nothing was published Pages builds from a branch: the reason, with the admin instruction, on the run page 1`] = `
+"### TestivAI reports not published
+
+GitHub Pages here builds from a branch\\, so reports are not published\\. An admin can set Settings → Pages → Source to \\"GitHub Actions\\" for TestivAI to publish them\\.
+"
+`;
+
+exports[`publishSummary when nothing was published Pages is off: the reason, with the admin instruction, on the run page 1`] = `
+"### TestivAI reports not published
+
+GitHub Pages is not enabled for this repository\\, so reports are not published\\; the PR comment keeps the report ZIP\\. An admin can enable it under Settings → Pages\\, with the source \\"GitHub Actions\\"\\.
+"
+`;
+
+exports[`publishSummary when nothing was published a private repository with a public site: the reason, with the admin instruction, on the run page 1`] = `
+"### TestivAI reports not published
+
+This repository is private but its GitHub Pages site is public\\, so published reports \\(screenshots included\\) would be readable by anyone on the internet\\. Reports are not published\\. An admin can allow it by setting the variable TESTIVAI\\_PUBLIC\\_REPORTS\\=true on the github\\-pages environment \\(Settings → Environments → github\\-pages\\)\\, or make the site private \\(GitHub Enterprise Cloud\\: Settings → Pages → Visibility\\)\\.
+"
+`;

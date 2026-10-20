@@ -19,6 +19,7 @@ import { commentFor, type PublishedPr } from './comments';
 import { decidePublish, pagesAddress } from './pages';
 import { planSite, type PlannedRun, type PlanPr, type SitePlan } from './plan';
 import { buildIndexPages, buildRunReport, type RunOutcome, type SiteFile, type SiteInfo } from './site';
+import { publishedSite, type PublishedSite } from './summary';
 
 export interface Log {
   info: (message: string) => void;
@@ -75,6 +76,8 @@ export interface PublishState {
   visibility: 'public' | 'private';
   /** Each open pull request's latest published run. */
   prs: PublishedPr[];
+  /** What the site holds, for the job summary (summary.ts). */
+  site?: PublishedSite;
 }
 
 export type BuildResult =
@@ -238,6 +241,7 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
         outcome: outcome.ok ? { ok: true, summary: outcome.summary, data: outcome.data } : { ok: false, reason: outcome.reason },
       };
     }),
+    site: publishedSite({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...(options.include ? { include: options.include.name } : {}) }),
   };
   const stats: DownloadStats = {
     downloaded: downloads.count,
