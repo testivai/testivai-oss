@@ -60,6 +60,15 @@ On error, a `{ "error": "…" }` object is emitted instead.
 
 `{file}` is replaced with the share file's path; the command's **last stdout line** is printed as the shared URL. Works with `aws s3 cp`, `gsutil cp`, `rclone`, `curl` — anything on your PATH. TestivAI ships no cloud SDKs; local file is the default when the hook is unset.
 
+## Linking to a snapshot
+
+Each snapshot's card in `index.html` has its own link target, so a link can open the report at one snapshot: `index.html#snap-checkout`. Click a snapshot's name in the report to get its link. A name made of letters, digits, `_` and `-` is kept as it is; any other name is reduced to those characters and ends in a short hash of the full name, so two names that differ only in other characters still get different targets:
+
+- `checkout` → `#snap-checkout`
+- `checkout page` → `#snap-checkout-page-bc6bc5f0`
+
+The [GitHub Action](../github-action.md)'s PR comment links each changed or new snapshot this way once the run's report is [on GitHub Pages](../github-action.md#reports-on-github-pages). To build the same link yourself, `snapshotAnchorId(name)` from `@testivai/witness` returns the id without the `#`.
+
 ## CI Example
 
 ```bash

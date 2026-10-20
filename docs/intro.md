@@ -264,6 +264,6 @@ visual-report/
 - **[MCP server](./mcp.md)** — hand your agent the evidence; your model does the reasoning
 - **[Maintenance & roadmap](./maintenance.md)** — who builds this, cadence, and what happens if it stops
 - **[Playwright adapter](./frameworks/playwright.md)** / **[WebdriverIO adapter](./frameworks/webdriverio.md)**
-- **[GitHub Action](./github-action.md)** — post results to PRs
+- **[GitHub Action](./github-action.md)** — post results to PRs, approve from a comment, and publish each run's report to [GitHub Pages](./github-action.md#reports-on-github-pages)
 - **[Extension API](./extension-api.md)** — write a community adapter for your framework
 - **[Guides: CI/CD](./guides/ci-cd.md)** — running OSS lane in GitHub Actions
