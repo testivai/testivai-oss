@@ -78,6 +78,24 @@ describe('approve setup docs', () => {
     expect(section).toContain('#reports-on-github-pages');
   });
 
+  it("SKILLS.md: changing the approve action's reply means rebuilding the dist it loads", () => {
+    const skills = read('SKILLS.md');
+    const start = skills.indexOf('## Skill: Change the approve composite action');
+    const skill = skills.slice(start, skills.indexOf('\n---', start));
+    expect(skill).toContain('action/src/approve.ts');
+    expect(skill).toContain('action/dist/approve.cjs');
+    expect(skill).toMatch(/pnpm run build/);
+    expect(skill).not.toMatch(/no build step/i);
+  });
+
+  it('SKILLS.md: the approve reply names the run, and links its report when it is published', () => {
+    const skills = read('SKILLS.md');
+    const start = skills.indexOf('## Skill: Approve baselines via PR comment');
+    const skill = skills.slice(start, skills.indexOf('\n---', start));
+    expect(skill).toMatch(/names the (CI )?run/);
+    expect(skill).toMatch(/GitHub Pages/);
+  });
+
   it.each(['README.md', 'SKILLS.md', 'AGENTS.md', 'CLAUDE.md', 'approve/action.yml'])(
     '%s does not promise an unconditional CI re-run after approve',
     (file) => {

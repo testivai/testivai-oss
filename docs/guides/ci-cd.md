@@ -110,7 +110,7 @@ repo-wide. Leave it on for the full-suite job — that's where it earns its keep
 
 The reviewer downloads the `visual-report` workflow artifact from the failed run, opens `index.html` to inspect the side-by-side diffs, and decides whether the changes are intentional. To accept, re-run the tests locally, approve with `npx testivai approve --all` (or commit the updated baselines directly), and push — the next CI run passes.
 
-> For a richer PR workflow with inline diff comments and `/testivai approve` commands, see the **[GitHub Action](/github-action)**.
+> For a richer PR workflow with inline diff comments and `/testivai approve` commands, see the **[GitHub Action](/github-action)**. It can also publish each run's report to the repository's GitHub Pages and link it from the comment, so reviewers open the report in the browser instead of downloading the artifact: [Reports on GitHub Pages](/github-action#reports-on-github-pages).
 
 ---
 
@@ -484,6 +484,6 @@ pipeline {
 
 ## Next Steps
 
-- **[GitHub Action](/github-action)** — PR comments, commit statuses, and `/testivai approve`
+- **[GitHub Action](/github-action)** — PR comments, commit statuses, `/testivai approve`, and reports on GitHub Pages
 - **[`testivai report`](../cli/report.md)** — exit codes and `--json` for scripting the gate
 - **[Troubleshooting](/guides/troubleshooting)** — common CI issues and solutions
