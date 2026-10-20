@@ -4,8 +4,9 @@
  *
  * The reporter's summary is its PR comment: the same markdown from the same
  * buildComment / buildEmptyComment call, so the two never drift, without
- * what only makes sense in a comment: the hidden markers and the
- * `/testivai approve` code blocks (nobody can comment from a run page). A
+ * what only makes sense in a comment: the hidden markers, the
+ * `/testivai approve` code blocks and the "approve all at once" line (nobody
+ * can comment from a run page, and a push has no pull request to comment on). A
  * push has no comment, so on the default branch the summary is where a run's
  * result and report link show. The publish action's is publish/summary.ts.
  */
@@ -22,10 +23,13 @@ const MARKER_LINE = /^<!-- testivai-[^\n]*-->(?:\n|$)/gm;
 /** A changed snapshot's approve command, as buildComment writes it. */
 const APPROVE_BLOCK = /\n```\n\/testivai approve [^\n]*\n```\n/g;
 
-/** The PR comment's markdown, for the run page: no hidden markers, no approve code blocks; nothing else changed. */
+/** The bulk approve line under the changed snapshots, as buildComment writes it, with the blank line after it. */
+const APPROVE_ALL_LINE = /^> To approve all at once: comment `\/testivai approve --all` on this PR\n\n?/gm;
+
+/** The PR comment's markdown, for the run page: no hidden markers, no approve commands; nothing else changed. */
 export function summaryFromComment(body: string): string {
   // The markers open the comment; the blank line after them goes with them.
-  return body.replace(MARKER_LINE, '').replace(APPROVE_BLOCK, '').replace(/^\n+/, '');
+  return body.replace(MARKER_LINE, '').replace(APPROVE_BLOCK, '').replace(APPROVE_ALL_LINE, '').replace(/^\n+/, '');
 }
 
 /**

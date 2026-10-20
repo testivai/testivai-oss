@@ -1,8 +1,9 @@
 /**
  * The reporter's job summary is its PR comment on the run's page:
  * summaryFromComment takes the comment's markdown and leaves out only what a
- * run page cannot use, the hidden markers and the `/testivai approve` code
- * blocks (nobody can comment from a run page). Built from the same
+ * run page cannot use, the hidden markers, the `/testivai approve` code
+ * blocks and the "approve all at once" line (nobody can comment from a run
+ * page, and a push has no pull request to comment on). Built from the same
  * buildComment / buildEmptyComment output, so the two never drift.
  *
  * The fixtures are the comment fixtures of comment.test.ts and
@@ -109,8 +110,15 @@ function removedLines(comment: string, summary: string): string[] {
   return removed;
 }
 
-/** The approve code block of each changed snapshot, as the comment has it. */
-const approveBlocks = (results: ResultsData) => results.snapshots.filter((s) => s.status === 'changed').flatMap((s) => ['```', `/testivai approve ${s.name}`, '```']);
+/** The comment's approve-all line, under the changed snapshots. */
+const APPROVE_ALL = '> To approve all at once: comment `/testivai approve --all` on this PR';
+
+/** The approve code block of each changed snapshot, then the approve-all line, as the comment has them. */
+const approveBlocks = (results: ResultsData) => {
+  const changed = results.snapshots.filter((s) => s.status === 'changed');
+  const blocks = changed.flatMap((s) => ['```', `/testivai approve ${s.name}`, '```']);
+  return changed.length > 0 ? [...blocks, APPROVE_ALL] : blocks;
+};
 
 describe('summaryFromComment', () => {
   describe.each(Object.entries(FIXTURES))('%s', (_, results) => {
@@ -142,7 +150,18 @@ describe('summaryFromComment', () => {
       expect(summary).not.toContain('<!--');
       expect(summary).not.toMatch(/^\/testivai approve /m);
       expect(summary).not.toContain('```');
+      expect(summary).not.toContain('/testivai approve');
     }
+  });
+
+  it('leaves the PR comment itself as it is: approve commands and the approve-all line included', () => {
+    const results = FIXTURES['changed, new and passed'];
+    const comment = buildComment(results, ZIP, UPSERT_MARKER, { runKey: RUN_KEY });
+
+    summaryFromComment(comment);
+
+    expect(comment.split('\n')).toContain(APPROVE_ALL);
+    expect(comment).toContain('```\n/testivai approve home\n```');
   });
 
   it('is the empty-run comment without its markers', () => {

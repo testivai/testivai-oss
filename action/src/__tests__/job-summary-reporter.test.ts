@@ -1,8 +1,9 @@
 /**
  * The reporter's job summary (index.ts), with the actions toolkit stubbed:
  * written once per run, for every event, with summaryFromComment of the
- * comment's markdown; after the PR comment and before the check run and the
- * commit status; and a failed write only warns.
+ * comment's markdown; before the PR comment (so a comment the token cannot
+ * post still leaves the summary), the check run and the commit status; and a
+ * failed write only warns.
  *
  * index.ts runs its action when it is loaded, so each test loads it afresh
  * (jest.isolateModules) and lets its promise chain settle; every stub answers
@@ -21,6 +22,8 @@ interface MockState {
   context: { eventName: string; payload: Record<string, any>; repo: { owner: string; repo: string }; sha: string };
   comments: Array<{ id: number; body: string }>;
   failSummaryWrite: boolean;
+  /** The comment API call that rejects, as a fork PR's read-only token or a missing `pull-requests: write` makes it. */
+  failComment: '' | 'listComments' | 'createComment' | 'updateComment';
 }
 
 /** Everything the stubs were asked to do, in order. */
@@ -30,7 +33,10 @@ const mockState: MockState = {
   context: { eventName: 'push', payload: {}, repo: { owner: 'testivai', repo: 'testivai-example' }, sha: 'a'.repeat(40) },
   comments: [],
   failSummaryWrite: false,
+  failComment: '',
 };
+
+const FORBIDDEN = 'Resource not accessible by integration';
 
 // @actions/core and @actions/artifact ship as ES modules only (no `require`
 // export), which jest's CommonJS resolver cannot load: they are mocked as
@@ -75,13 +81,19 @@ jest.mock('@actions/github', () => ({
   getOctokit: () => ({
     rest: {
       issues: {
-        listComments: async () => ({ data: mockState.comments }),
+        listComments: async () => {
+          mockEvents.push({ kind: 'comment.list' });
+          if (mockState.failComment === 'listComments') throw new Error(FORBIDDEN);
+          return { data: mockState.comments };
+        },
         createComment: async ({ body }: { body: string }) => {
           mockEvents.push({ kind: 'comment.create', value: body });
+          if (mockState.failComment === 'createComment') throw new Error(FORBIDDEN);
           return { data: {} };
         },
         updateComment: async ({ body }: { body: string }) => {
           mockEvents.push({ kind: 'comment.update', value: body });
+          if (mockState.failComment === 'updateComment') throw new Error(FORBIDDEN);
           return { data: {} };
         },
       },
@@ -136,6 +148,7 @@ beforeEach(() => {
   };
   mockState.comments = [];
   mockState.failSummaryWrite = false;
+  mockState.failComment = '';
 });
 
 afterEach(() => {
@@ -164,7 +177,7 @@ const kinds = (...wanted: string[]) => mockEvents.filter((e) => wanted.includes(
 const summaries = () => mockEvents.filter((e) => e.kind === 'summary.addRaw').map((e) => e.value);
 
 describe('the reporter writes a job summary', () => {
-  it('on a pull request: once, the posted comment without markers or approve commands, after the comment and before the status', async () => {
+  it('on a pull request: once, the posted comment without markers or approve commands, before the comment and the status', async () => {
     writeResults(RESULTS);
     mockState.context = {
       eventName: 'pull_request',
@@ -178,7 +191,7 @@ describe('the reporter writes a job summary', () => {
     const posted = mockEvents.find((e) => e.kind === 'comment.create')?.value as string;
     expect(posted).toBe(buildComment(RESULTS, ZIP, UPSERT_MARKER, { runKey: `${RUN_ID}-1` }));
     expect(summaries()).toEqual([summaryFromComment(posted)]);
-    expect(kinds('comment.create', 'summary.addRaw', 'summary.write', 'check', 'status')).toEqual(['comment.create', 'summary.addRaw', 'summary.write', 'check', 'status']);
+    expect(kinds('comment.list', 'comment.create', 'summary.addRaw', 'summary.write', 'check', 'status')).toEqual(['summary.addRaw', 'summary.write', 'comment.list', 'comment.create', 'check', 'status']);
     expect(kinds('setFailed')).toEqual([]);
   });
 
@@ -196,7 +209,7 @@ describe('the reporter writes a job summary', () => {
 
     const posted = mockEvents.find((e) => e.kind === 'comment.update')?.value as string;
     expect(summaries()).toEqual([summaryFromComment(posted)]);
-    expect(kinds('comment.update', 'summary.write', 'check', 'status')).toEqual(['comment.update', 'summary.write', 'check', 'status']);
+    expect(kinds('comment.list', 'comment.update', 'summary.write', 'check', 'status')).toEqual(['summary.write', 'comment.list', 'comment.update', 'check', 'status']);
   });
 
   it('on a push, which gets no comment: once, the comment it would have posted, ZIP link included, before the status', async () => {
@@ -211,6 +224,30 @@ describe('the reporter writes a job summary', () => {
     expect(expected).toContain(`(${ZIP})`);
     expect(expected).toContain('#### Changed Snapshots');
     expect(kinds('summary.write', 'check', 'status')).toEqual(['summary.write', 'check', 'status']);
+  });
+
+  it.each([
+    ['listComments', []],
+    ['createComment', []],
+    ['updateComment', [{ id: 7, body: `${UPSERT_MARKER}\nolder run` }]],
+  ] as const)('when the comment cannot be posted (%s rejects): the summary is still written, and the job fails as before', async (failing, existing) => {
+    writeResults(RESULTS);
+    mockState.context = {
+      eventName: 'pull_request',
+      payload: { pull_request: { number: 14, head: { sha: 'b'.repeat(40) } } },
+      repo: { owner: 'testivai', repo: 'testivai-example' },
+      sha: 'a'.repeat(40),
+    };
+    mockState.comments = [...existing];
+    mockState.failComment = failing;
+
+    await runReporter();
+
+    const comment = buildComment(RESULTS, ZIP, UPSERT_MARKER, { runKey: `${RUN_ID}-1` });
+    expect(summaries()).toEqual([summaryFromComment(comment)]);
+    expect(kinds('summary.write', 'setFailed')).toEqual(['summary.write', 'setFailed']);
+    expect(mockEvents.filter((e) => e.kind === 'setFailed').map((e) => e.value)).toEqual([FORBIDDEN]);
+    expect(kinds('check', 'status')).toEqual([]);
   });
 
   it('for a run with no snapshots: the empty-run comment', async () => {

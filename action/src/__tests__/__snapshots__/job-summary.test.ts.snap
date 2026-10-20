@@ -25,8 +25,6 @@ exports[`summaryFromComment DOM hints drops a custom lane's marker the same way,
 
 </details>
 
-> To approve all at once: comment \`/testivai approve --all\` on this PR
-
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
 
@@ -59,8 +57,6 @@ exports[`summaryFromComment DOM hints is the comment without its markers and app
 
 </details>
 
-> To approve all at once: comment \`/testivai approve --all\` on this PR
-
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
 
@@ -83,8 +79,6 @@ exports[`summaryFromComment a changed snapshot drops a custom lane's marker the 
 
 </details>
 
-> To approve all at once: comment \`/testivai approve --all\` on this PR
-
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
 
@@ -106,8 +100,6 @@ exports[`summaryFromComment a changed snapshot is the comment without its marker
 
 
 </details>
-
-> To approve all at once: comment \`/testivai approve --all\` on this PR
 
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
@@ -170,8 +162,6 @@ exports[`summaryFromComment a page shift drops a custom lane's marker the same w
 
 </details>
 
-> To approve all at once: comment \`/testivai approve --all\` on this PR
-
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
 
@@ -196,8 +186,6 @@ exports[`summaryFromComment a page shift is the comment without its markers and 
 
 
 </details>
-
-> To approve all at once: comment \`/testivai approve --all\` on this PR
 
 ---
 > Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with \`ignoreSelectors\` or exclude it with \`mask\`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [\`@testivai/mcp\`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (\`explain_snapshot\`).
@@ -255,8 +243,6 @@ exports[`summaryFromComment changed, new and passed drops a custom lane's marker
 
 </details>
 
-> To approve all at once: comment \`/testivai approve --all\` on this PR
-
 #### New Snapshots
 
 - \`signup\` — [open](https://testivai.github.io/testivai-example/pr/14/39150236166-1/#snap-signup)
@@ -288,8 +274,6 @@ exports[`summaryFromComment changed, new and passed is the comment without its m
 
 
 </details>
-
-> To approve all at once: comment \`/testivai approve --all\` on this PR
 
 #### New Snapshots
 

@@ -115,13 +115,20 @@ async function run(): Promise<void> {
     const context = github.context;
 
     // Build comment — includes artifact link when available. It is also the
-    // job summary (below), for every event.
+    // job summary, for every event.
     // The run marker lets the publish step check the comment is still
     // about this run before adding the published report's links.
     const links = { runKey: runKeyFromEnv(process.env) };
     const commentBody = results.snapshots.length === 0
       ? buildEmptyComment(artifactUrl, upsertMarker, links)
       : buildComment(results, artifactUrl, upsertMarker, links);
+
+    // The comment on the run's page, for every event (a push has no comment).
+    // Written before the comment is posted: a token that cannot comment (a
+    // fork's pull request, no `pull-requests: write`, a rate limit) fails the
+    // job below, and the summary is then where the result shows. A failed
+    // write only warns (job-summary.ts).
+    await writeJobSummary(core, summaryFromComment(commentBody));
 
     // Only post comment on PRs
     if (context.eventName === 'pull_request' && context.payload.pull_request) {
@@ -158,10 +165,6 @@ async function run(): Promise<void> {
     } else {
       core.info('Not a PR event, skipping comment');
     }
-
-    // The comment on the run's page, for every event (a push has no comment):
-    // a failed write only warns (job-summary.ts).
-    await writeJobSummary(core, summaryFromComment(commentBody));
 
     const status = determineStatus(results, { failOnDiff, failOnMissing });
     const sha = context.payload.pull_request?.head.sha || context.sha;
