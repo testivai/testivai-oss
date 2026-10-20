@@ -26,6 +26,18 @@ const SITE: SiteInfo = {
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 5, 0, 0, 0, 2, 0xd0, 8, 6, 0, 0, 0, 0, 0, 0, 0]);
 const HTML_AS_PNG = new TextEncoder().encode('<script>alert(1)</script>');
 
+/** A PNG header (signature and IHDR) of that size: all checkPng reads. */
+function pngHeader(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(PNG);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+}
+
+/** A thumb as witness writes it: at most THUMBNAIL_LIMITS (800×400). */
+const THUMB = pngHeader(800, 400);
+
 function plannedRun(over: Partial<PlannedRun> = {}): PlannedRun {
   return {
     runId: 39150236166,
@@ -259,13 +271,13 @@ describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
     const { files, outcome } = build(
       archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' }), changed('checkout', { thumbPath: 'images/checkout/thumb.png' })]), {
         'images/home/current.png': PNG,
-        'images/home/thumb.png': PNG,
-        'images/checkout/thumb.png': PNG,
+        'images/home/thumb.png': THUMB,
+        'images/checkout/thumb.png': THUMB,
       }),
     );
 
-    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')?.data).toBe(PNG);
-    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')?.data).toBe(THUMB);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(THUMB);
     // The run's data says which thumbs were published (the PR comment reads it).
     expect(outcome.ok && outcome.data.snapshots.map((s) => s.thumbPath)).toEqual(['images/0/thumb.png', 'images/1/thumb.png']);
     // The report page itself does not show it.
@@ -282,6 +294,30 @@ describe('buildRunReport, thumbnails (thumb.png, witness schema 2.6.0)', () => {
     expect(outcome.ok && outcome.omittedImages).toEqual(['images/home/thumb.png (not a PNG)']);
     expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
     expect(htmlAt(files, PAGE)).toMatch(/report-notice warning">1 image was left out[^<]*images\/home\/thumb\.png \(not a PNG\)/);
+  });
+
+  it.each([
+    ['a pixel too wide', 801, 400],
+    ['a pixel too tall', 800, 401],
+    ['the size of a page', 1280, 720],
+  ])('leaves out a thumb over the 800×400 of a thumbnail (%s), and publishes the rest of the report', (_, width, height) => {
+    const { files, outcome } = build(
+      archiveOf(results([changed('home', { thumbPath: 'images/home/thumb.png' }), changed('checkout', { thumbPath: 'images/checkout/thumb.png' })]), {
+        'images/home/current.png': PNG,
+        'images/home/diff.png': PNG,
+        'images/home/thumb.png': pngHeader(width, height),
+        'images/checkout/thumb.png': THUMB,
+      }),
+    );
+
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/thumb.png')).toBeUndefined();
+    expect(outcome.ok && outcome.data.snapshots[0].thumbPath).toBeUndefined();
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/current.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/0/diff.png')?.data).toBe(PNG);
+    expect(fileAt(files, 'pr/14/39150236166-1/images/1/thumb.png')?.data).toBe(THUMB);
+    expect(outcome.ok && outcome.data.snapshots[1].thumbPath).toBe('images/1/thumb.png');
+    expect(outcome.ok && outcome.omittedImages).toEqual([`images/home/thumb.png (a PNG of ${width}×${height} pixels, over the 800×400 of a thumbnail)`]);
+    expect(htmlAt(files, PAGE)).toMatch(/report-notice warning">1 image was left out[^<]*images\/home\/thumb\.png \(a PNG of/);
   });
 
   it('takes no thumb from a path that names another kind of image', () => {

@@ -2297,6 +2297,22 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+// ../packages/witness/src/report/thumbnail.ts
+var THUMBNAIL_LIMITS = {
+  /** The widest strip, the three panels and both separators together. */
+  maxWidth: 800,
+  /** The tallest strip. */
+  maxHeight: 400,
+  /** Pixels of context around the changed regions, on every side. */
+  padding: 24,
+  /** How many of the largest regions (by area) the area covers. */
+  regions: 3,
+  /** Rows in the band shown when the diff has no regions. */
+  bandHeight: 400,
+  /** Pixels between two panels. */
+  separator: 2
+};
+
 // ../packages/witness/src/report/validate.ts
 var SUPPORTED_SCHEMA_MAJOR = 2;
 var REPORT_DATA_LIMITS = {
@@ -2661,7 +2677,7 @@ function buildRunReport(input) {
       if (typeof from !== "string" || !from.endsWith(`/${kind}.png`)) continue;
       const bytes = archiveImages.get(from);
       if (!bytes) continue;
-      const check = checkPng(bytes);
+      const check = kind === "thumb" ? checkThumb(bytes) : checkPng(bytes);
       if (!check.ok) {
         omittedImages.push(`${from} (${check.reason})`);
         continue;
@@ -2692,6 +2708,15 @@ function buildRunReport(input) {
   }
   files.push({ path: page, data: renderHtml(data, { notices, noindex: true, csp: true }) });
   return { files, outcome: { ...base, ok: true, summary: data.summary, data, omittedImages } };
+}
+function checkThumb(bytes) {
+  const check = checkPng(bytes);
+  if (!check.ok) return check;
+  const { maxWidth, maxHeight } = THUMBNAIL_LIMITS;
+  if (check.width > maxWidth || check.height > maxHeight) {
+    return { ok: false, reason: `a PNG of ${check.width}\xD7${check.height} pixels, over the ${maxWidth}\xD7${maxHeight} of a thumbnail` };
+  }
+  return check;
 }
 function readResults(archive) {
   if ("refused" in archive) return { ok: false, reason: `The report was not read: ${archive.refused}.` };
