@@ -53,6 +53,8 @@ When a repo runs more than one visual lane (e.g. a Playwright workflow and a pyt
 - **Commit status** under the context `TestivAI / visual` (configurable via `status-context`) — `success`, `pending`, or `failure` based on `fail-on-diff` and `fail-on-missing`
 - **Workflow artifact** of the entire `report-dir` (HTML report, `results.json`, diff images)
 
+The comment links the report as that artifact, a ZIP. With the companion `testivai/testivai-oss/publish@v1` action, each run's report is published to the repository's GitHub Pages, and once it is, the comment links it (the ZIP stays as a fallback), and each changed or new snapshot links to its card in it: see [Reports on GitHub Pages](../docs/github-action.md#reports-on-github-pages).
+
 The PR comment surfaces the **DOM noise hint** from the OSS `@testivai/witness` pixel-and-DOM comparison. The action does not filter on the hint: every snapshot with status `changed` is listed with its approve command. A diff becomes `passed` before it reaches the action only through witness pass criteria you configure (`maxDiffPercent`, `maxDiffPixels`, `shiftTolerance`, or `noiseAutoPass`, which passes an identical-DOM diff only when `styleCheck` is "match" and the diff is not concentrated in one area). When pixels differ but the DOM is structurally identical, the computed-style check decides what the comment says:
 
 - **Styles compared and unchanged** (`styleCheck: "match"`), small and scattered diff: likely render noise (anti-aliasing, font hinting), still not proof. The line ends "Styles verified unchanged; the diff is small and scattered".

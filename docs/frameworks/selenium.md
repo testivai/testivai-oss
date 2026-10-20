@@ -127,4 +127,4 @@ identical-DOM diff reads *styles not compared* rather than likely noise.
 The [example repo](https://github.com/testivai/testivai-example) is a
 complete, minimal consumer project — a static page, three `witness()` calls,
 the PR `/testivai approve` flow, and a
-[live report](https://testivai.github.io/testivai-example/) published from CI.
+[live report](https://testivai.github.io/testivai-example/demo/) published from CI.

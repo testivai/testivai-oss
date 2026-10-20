@@ -9,9 +9,9 @@
 
 This is the home of TestivAI. It contains everything you need to capture, diff, and report visual regressions **fully locally** — MIT-licensed, no account, no server.
 
-> **[See a live report →](https://testivai.github.io/testivai-example/)** — a real TestivAI OSS report rendered in your browser, straight from CI. No install, no signup.
+> **[See a live report →](https://testivai.github.io/testivai-example/demo/)** — a real TestivAI OSS report rendered in your browser, straight from CI. No install, no signup.
 
-[![Real TestivAI report — style-only-change verdict, selector-attributed regions, heatmap diff](./docs/assets/oss-report.png)](https://testivai.github.io/testivai-example/)
+[![Real TestivAI report — style-only-change verdict, selector-attributed regions, heatmap diff](./docs/assets/oss-report.png)](https://testivai.github.io/testivai-example/demo/)
 
 ## Why TestivAI?
 
@@ -25,7 +25,7 @@ Pixel-only visual testing drowns you in false positives — a font re-hint or an
 - **Element attribution & exact shift detection** — the report names *which element* changed ("`div.card:nth-of-type(2)` shifted +8px vertically — content unchanged") and spots the injected-banner case ("everything below y=80 moved +24px"), derived from layout, not pixel guesswork. No local-first tool does this.
 - **First-class adapters** — Playwright (TS/JS **and Python**, Java experimental) and WebdriverIO, using each framework's native APIs; every language shares one set of baselines and one report.
 - **Mobile web, no extra package** — Playwright device emulation works through the same `witness()` call: one project per device profile, baselines keyed per device automatically, and the DOM and computed-style attribution survives emulation, so a change behind a `@media` query is caught on mobile and correctly passes on desktop. See the [mobile web guide](docs/guides/mobile-web.md).
-- **PR-native workflow** — a GitHub Action posts the diff and approves baselines from a `/testivai approve` comment.
+- **PR-native workflow** — a GitHub Action posts the diff and approves baselines from a `/testivai approve` comment, and a companion action can publish each run's report to the repository's [GitHub Pages](docs/github-action.md#reports-on-github-pages), linked from the comment.
 - **No lock-in** — MIT license, baselines live in your git, and `results.json` is a semver-governed public contract.
 
 > **Evaluating this for a team?** [Maintenance & roadmap](docs/maintenance.md)
@@ -323,7 +323,7 @@ Changed Snapshots
 
 ## Real-World Example
 
-A complete, minimal consumer project lives at [`testivai-example`](https://github.com/testivai/testivai-example): a static page, three `witness()` calls, the PR `/testivai approve` flow, and a [live report on Pages](https://testivai.github.io/testivai-example/) — all against the published packages.
+A complete, minimal consumer project lives at [`testivai-example`](https://github.com/testivai/testivai-example): a static page, three `witness()` calls, the PR `/testivai approve` flow, and a [live report on Pages](https://testivai.github.io/testivai-example/demo/), published with `publish@v1` beside the reports of `main` and each open pull request — all against the published packages.
 
 ## Repository Layout
 
