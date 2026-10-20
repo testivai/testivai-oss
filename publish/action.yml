@@ -38,8 +38,9 @@ inputs:
   runs-per-pr:
     description: >
       How many of each open pull request's latest runs to publish, 1 to 10.
-      Every publish downloads them all again, so lower it for a repository
-      with many open pull requests.
+      Every publish downloads them all again (with cache: true, only the
+      ones it has not built before), so lower it for a repository with many
+      open pull requests.
     required: false
     default: '3'
 
@@ -87,6 +88,25 @@ inputs:
     required: false
     default: 'true'
 
+  cache:
+    description: >
+      false (the default) downloads every report on every publish. true keeps
+      each report ZIP it downloads in the Actions cache, so the next publish
+      downloads only the runs it has not built before. A ZIP from the cache is
+      used only when its SHA-256 is the digest GitHub lists for the artifact,
+      and every page is rebuilt from it as from a download. But actions/cache
+      unpacks an entry before that check, in this job, which holds
+      pages: write and id-token: write, and a workflow on the default branch
+      that GitHub gives a writable cache (one a push, schedule or
+      workflow_dispatch starts) can save one: turn it on only where no code
+      you do not trust runs in such a workflow. Each publish that changes the
+      set of reports saves a new full copy of the folder (up to the site's
+      900 MB budget), and old copies go only when GitHub evicts them (unused
+      for 7 days, or the least recently used once the repository is over its
+      cache limit), so on a busy repository it can push out other caches.
+    required: false
+    default: 'false'
+
 outputs:
   published:
     description: "'true' when the site was built and deployed, 'false' when the repository's settings say not to."
@@ -101,8 +121,23 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # The report ZIPs earlier publishes downloaded, by artifact id: the newest
+    # cache this repository's publishes saved (each saves under its own run's
+    # key). Not trusted: the build uses a ZIP only when its SHA-256 is the
+    # artifact's digest. A miss or a cache error never fails the publish.
+    - name: Restore the reports earlier publishes downloaded
+      id: cache-restore
+      if: inputs.cache == 'true'
+      continue-on-error: true
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/testivai-pages/cache
+        key: testivai-pages-reports-v1-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: testivai-pages-reports-v1-${{ github.repository_id }}-
+
     # Reads the Pages settings, then (when they allow it) downloads each
-    # report and rebuilds its page from results.json and the PNGs only.
+    # report it has not built before and rebuilds every page from
+    # results.json and the PNGs only.
     - name: Build the reports site
       id: build
       uses: actions/github-script@v9
@@ -113,11 +148,26 @@ runs:
         PUBLIC_REPORTS: ${{ inputs.public-reports }}
         INCLUDE_DIR: ${{ inputs.include-dir }}
         INCLUDE_NAME: ${{ inputs.include-name }}
+        CACHE: ${{ inputs.cache }}
+        CACHE_DIR: ${{ runner.temp }}/testivai-pages/cache
       with:
         github-token: ${{ inputs.github-token }}
         script: |
           const publish = require(process.env.TESTIVAI_PUBLISH_LIB);
           await publish.build({ github, context, core, env: process.env });
+
+    # Only when the build added or removed a report; before the deploy, so a
+    # publish that a newer one cancels still leaves its downloads. Where
+    # GitHub gives the run a read-only cache (pull_request_target, or a
+    # workflow_run a fork's pull request started), it saves nothing and warns.
+    - name: Save the downloaded reports for the next publish
+      id: cache-save
+      if: inputs.cache == 'true' && steps.build.outputs.cache-save == 'true'
+      continue-on-error: true
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/testivai-pages/cache
+        key: testivai-pages-reports-v1-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Upload the site
       if: steps.build.outputs.published == 'true'

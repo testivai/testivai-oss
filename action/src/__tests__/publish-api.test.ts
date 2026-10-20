@@ -153,6 +153,23 @@ describe('octokitApi', () => {
     await expect(octokitApi(github, 'o', 'r').run(7)).rejects.toThrow(/rate limit/);
   });
 
+  it("reads an artifact's SHA-256 digest, and leaves it out where GitHub has none (upload-artifact before v4)", async () => {
+    const digest = `sha256:${'c'.repeat(64)}`;
+    const { github } = fake({
+      'GET /repos/{owner}/{repo}/actions/artifacts': () => ({
+        artifacts: [
+          { id: 1, name: 'n', size_in_bytes: 1, expired: false, created_at: 't', digest, workflow_run: { id: 2, head_repository_id: 3, head_branch: 'b' } },
+          { id: 4, name: 'n', size_in_bytes: 1, expired: false, created_at: 't', digest: null, workflow_run: { id: 5, head_repository_id: 3, head_branch: 'b' } },
+        ],
+      }),
+    });
+
+    const { artifacts } = await octokitApi(github, 'o', 'r').artifacts('n', 1);
+
+    expect(artifacts[0].digest).toBe(digest);
+    expect('digest' in artifacts[1]).toBe(false);
+  });
+
   it('marks an expired artifact', async () => {
     const { github } = fake({
       'GET /repos/{owner}/{repo}/actions/artifacts': () => ({
