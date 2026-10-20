@@ -53,11 +53,10 @@ Do **not** run this for changes to `action/`, `approve/`, `docs/`, or `examples/
 
 ```bash
 cd action
-npm install          # if deps changed
 # ... make your changes to src/ ...
-npm run build        # rebuilds dist/index.js via esbuild
+pnpm run build       # rebuilds dist/ via esbuild: index.js, review.cjs, publish.cjs, approve.cjs
 cd ..
-git add action/dist/index.js action/src/
+git add action/dist/ action/src/
 git commit -m "feat(action): ..."
 ```
 
@@ -67,31 +66,38 @@ Then push a new semver tag to roll `v1`:
 # Find current latest action tag
 git tag --list 'v*' --sort=-version:refname | head -3
 
-# Bump patch (e.g. v1.0.3 → v1.0.4)
-git tag v1.0.4
-git push origin v1.0.4
+# Bump patch (e.g. v1.5.0 → v1.5.1)
+git tag v1.5.1
+git push origin v1.5.1
 # CI automatically rolls the v1 major tag
 ```
 
-**Never** edit `action/dist/index.js` by hand — always rebuild via `npm run build`.
+**Never** edit `action/dist/` by hand — always rebuild via `pnpm run build`.
 
 ---
 
 ## Skill: Change the approve composite action
 
-**When:** Modifying `approve/action.yml` (permission check, baseline copy logic, comment text, etc.)
+**When:** Modifying `approve/action.yml` (permission check, baseline copy logic) or the reply it posts on the PR (`action/src/approve.ts`)
+
+The shell steps in `approve/action.yml` ship as they are. The reply step loads
+`action/dist/approve.cjs`, built from `action/src/approve.ts`: it names the
+approved run and links its report when publish@v1 has published it. A change
+to the reply needs the dist rebuilt and committed:
 
 ```bash
-# Edit approve/action.yml directly — no build step needed
-git add approve/action.yml
+cd action
+pnpm run build       # rebuilds dist/, approve.cjs included
+cd ..
+git add approve/action.yml action/src/approve.ts action/dist/
 git commit -m "fix(approve): ..."
 
-# Push a new semver tag to ship the change at v1
-git tag v1.0.4
-git push origin v1.0.4
+# Push a new semver tag to ship the change at v1 (see the reporter skill above)
+git tag v1.5.1
+git push origin v1.5.1
 ```
 
-The composite action ships as-is. CI rolls `v1` to the new tag automatically.
+CI rolls `v1` to the new tag automatically.
 
 ---
 
@@ -179,7 +185,7 @@ Post a comment on the PR:
 2. Downloads the `testivai-visual-report` artifact from the latest CI run
 3. Copies approved screenshots into `.testivai/baselines/`
 4. Commits them to your PR branch
-5. Posts a confirmation comment
+5. Posts a reply that names the CI run it approved and, when publish@v1 has put that run's report on GitHub Pages, links the report and each approved snapshot's card in it
 
 **Requires:** the `approve-baselines` job, with `contents: write`, `pull-requests: write` and `actions: read`.
 
