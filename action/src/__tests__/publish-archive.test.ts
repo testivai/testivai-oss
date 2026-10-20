@@ -52,6 +52,15 @@ describe('readReportArchive', () => {
     expect(archive.images.get('images/home/diff.png')).toEqual(PNG);
   });
 
+  it('reads the thumbnail (thumb.png) with the other report images', () => {
+    const archive = readReportArchive(
+      zip({ 'results.json': '{}', 'images/home/thumb.png': PNG, 'images/home/thumbnail.png': PNG, 'images/home/thumb.png.html': PNG }),
+      LIMITS,
+    );
+
+    expect([...archive.images.keys()]).toEqual(['images/home/thumb.png']);
+  });
+
   it('reads stored (uncompressed) entries too', () => {
     const archive = readReportArchive(zip({ 'results.json': '{}', 'images/a/current.png': PNG }, 0), LIMITS);
 

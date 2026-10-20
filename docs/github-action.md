@@ -434,6 +434,34 @@ its card in the report:
 
 > **[Open the visual report](https://example.github.io/my-app/pr/14/39150236166-1/)** — baseline, current and diff side by side · or [download it as a ZIP](https://github.com/example/my-app/actions/runs/39150236166/artifacts/4402)
 
+**Unreleased** (the next action release, with reports from `@testivai/witness`
+2.6.0 or later): each changed snapshot's row also shows the changed area
+itself, baseline | current | diff side by side (`thumb.png`, at most
+800×400 px, linked to the snapshot's card). The publish puts the pictures in
+when it adds the links, so the reporter's own comment is as before until
+then. The first five changed snapshots with a thumbnail get one, and the
+first three of those are expanded so it shows without a click. A fork's
+pull request gets none, whichever comment the links go into: the fork's run
+chose those images (and the publish's own comment there is numbers and links
+only). Neither does a private Pages site: GitHub fetches a comment's images
+without the reader's sign-in, so they could not load.
+
+````html
+<details open>
+<summary><code>checkout-page</code> — 0.50% different · <a href="https://example.github.io/my-app/pr/14/39150236166-1/#snap-checkout-page">open in report</a></summary>
+
+<a href="https://example.github.io/my-app/pr/14/39150236166-1/#snap-checkout-page"><img src="https://example.github.io/my-app/pr/14/39150236166-1/images/0/thumb.png" alt="checkout-page: baseline, current, diff"></a>
+
+> **DOM changed** — 2 added, 1 attribute change.
+
+
+```
+/testivai approve checkout-page
+```
+
+</details>
+````
+
 The site holds the last 3 runs of each open pull request, forks included, at
 `pr/<number>/<run id>-<attempt>/`, and the latest run on the default branch at
 `main/`: the state pull requests merge into. Its front page lists them, each

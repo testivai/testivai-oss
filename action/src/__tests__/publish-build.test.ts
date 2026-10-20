@@ -478,6 +478,25 @@ describe('finishPublish', () => {
     expect(calls.create.map(([n]) => n)).toEqual([15]);
   });
 
+  it("shows a published thumbnail in the branch pull request's comment on a public site, and none on a private one", async () => {
+    const withThumb = { ...results(1), snapshots: [{ ...results(1).snapshots[0], thumbPath: 'images/0/thumb.png' }] };
+    const state = (visibility: 'public' | 'private'): PublishState => ({
+      ...STATE,
+      visibility,
+      prs: [{ ...STATE.prs[0], outcome: { ok: true, summary: withThumb.summary, data: withThumb as never } }],
+    });
+    const bodyFor = async (visibility: 'public' | 'private') => {
+      const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+      await finishPublish(api, { state: state(visibility), pageUrl: DEPLOYED, comment: true, marker: UPSERT_MARKER, fetch: ok, delayMs: 0, log });
+      return calls.update[0][1];
+    };
+
+    expect(await bodyFor('public')).toContain('<img src="https://testivai.github.io/testivai-example/pr/14/3-1/images/0/thumb.png"');
+    const privateBody = await bodyFor('private');
+    expect(privateBody).toContain('[Open the visual report](https://testivai.github.io/testivai-example/pr/14/3-1/)');
+    expect(privateBody).not.toContain('<img');
+  });
+
   it('retries while the site is not answering yet', async () => {
     const { api } = fakeApi(world());
     let n = 0;

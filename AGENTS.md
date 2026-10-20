@@ -217,7 +217,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "timestamp": "<ISO>",
   "summary": { "total": 4, "passed": 1, "changed": 3, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
@@ -232,6 +232,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
       "baselinePath": "images/homepage/baseline.png",
       "currentPath":  "images/homepage/current.png",
       "diffPath":     "images/homepage/diff.png",
+      "thumbPath":    "images/homepage/thumb.png",
       "baselineApprovedAt": "<ISO>",
       "dom": {
         "changed":   false,
@@ -279,6 +280,13 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
   ]
 }
 ```
+
+`thumbPath` (schema 2.6.0) is `images/<name>/thumb.png`, for a `changed` snapshot only
+(never passed, auto-passed or new): the changed area of the baseline, the current capture
+and the diff side by side, 2 px apart, at most 800×400 px, downscaled and never upscaled.
+The area is the union of the up to three largest `regions` padded 24 px, or without regions
+a 400 px band from the first differing row; on a size change it is on the padded canvas.
+The HTML report does not show it; `publish@v1` puts it in the pull request comment.
 
 `environment` (schema 2.5.0) is capture provenance: each adapter records where a capture
 came from (OS and distro, browser and version, framework, adapter and capture method,

@@ -53,6 +53,14 @@ describe('results.json schema documents', () => {
     }
   });
 
+  it('the thumbnail path (schema 2.6.0) is documented in all three', () => {
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('"thumbPath"');
+    }
+    expect(claude).toMatch(/`thumbPath` \(schema 2\.6\.0\)/);
+    expect(extensionApi).toContain('| `snapshots[].thumbPath` |');
+  });
+
   it('the metadata.json environment block every adapter writes is documented for community adapters', () => {
     expect(extensionApi).toMatch(/### Capture provenance: `environment` in metadata\.json/);
     for (const field of ['os.platform', 'browser.name', 'adapter.captureMethod', 'render.deviceScaleFactor']) {

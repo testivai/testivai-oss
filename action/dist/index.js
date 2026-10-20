@@ -117142,6 +117142,8 @@ ${detail}${others}`
 
 // src/comment.ts
 var UPSERT_MARKER = "<!-- testivai-visual-report -->";
+var MAX_COMMENT_THUMBNAILS = 5;
+var OPEN_WITH_THUMBNAIL = 3;
 function runKeyFromEnv(env) {
   const id = env.GITHUB_RUN_ID;
   if (!id) return void 0;
@@ -117169,6 +117171,18 @@ function snapshotUrl(reportUrl, name) {
 }
 function attr(value) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+function attrText(value) {
+  return value.replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function thumbnailUrls(reportUrl, thumbnails) {
+  const urls = /* @__PURE__ */ new Map();
+  if (!reportUrl) return urls;
+  for (const t of thumbnails ?? []) {
+    const url2 = safeReportUrl(t.url);
+    if (url2?.startsWith(reportUrl) && !urls.has(t.name)) urls.set(t.name, url2);
+  }
+  return urls;
 }
 function resolveUpsertMarker(statusContext) {
   if (statusContext === STATUS_CONTEXT) return UPSERT_MARKER;
@@ -117265,6 +117279,7 @@ function renderSnapshotHints(snapshot2) {
 function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER, links = {}) {
   const { summary: summary2, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
+  const thumbnails = thumbnailUrls(reportUrl, links.thumbnails);
   const summaryLine = [
     `**${summary2.passed} passed**`,
     `**${summary2.changed} changed**`,
@@ -117303,15 +117318,22 @@ ${summaryLine} \u2014 **${summary2.total} total**
   const changedSnapshots = snapshots.filter((s) => s.status === "changed");
   if (changedSnapshots.length > 0) {
     comment += "#### Changed Snapshots\n\n";
+    let shown = 0;
     for (const snapshot2 of changedSnapshots) {
       const diffPercent = formatDiffPercent(snapshot2);
       const domHint = renderSnapshotHints(snapshot2);
       const size = snapshot2.sizeMismatch ? ` \xB7 ${formatSizeMismatch(snapshot2.sizeMismatch)}` : "";
       const open2 = reportUrl ? ` \xB7 <a href="${attr(snapshotUrl(reportUrl, snapshot2.name))}">open in report</a>` : "";
-      comment += `<details>
+      const thumb = reportUrl && shown < MAX_COMMENT_THUMBNAILS ? thumbnails.get(snapshot2.name) : void 0;
+      if (thumb) shown++;
+      const picture = thumb && reportUrl ? `<a href="${attr(snapshotUrl(reportUrl, snapshot2.name))}"><img src="${attr(thumb)}" alt="${attrText(`${snapshot2.name}: baseline, current, diff`)}"></a>
+
+` : "";
+      const expanded = thumb && shown <= OPEN_WITH_THUMBNAIL ? " open" : "";
+      comment += `<details${expanded}>
 <summary><code>${snapshot2.name}</code> \u2014 ${diffPercent}% different${size}${open2}</summary>
 
-${domHint}
+${picture}${domHint}
 \`\`\`
 /testivai approve ${snapshot2.name}
 \`\`\`
