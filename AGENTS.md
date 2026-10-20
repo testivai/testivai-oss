@@ -316,8 +316,9 @@ after the capture by `HEALTH_PROBE_EXPRESSION` in `packages/witness/src/capture/
 and approving freezes it into the baseline's. Per snapshot, `captureHealth` is present when
 either side recorded one: both blocks, `unhealthy` (`"candidate"`, `"baseline"`, `"both"` or
 `null`), and `reasons` and `warnings` in plain words (the baseline's prefixed `baseline: `).
-Web fonts still loading, a font face that errored, a failed stylesheet, or a css or font
-request that failed → **unhealthy capture** (`assessHealth` in
+Web fonts still loading, a font face that errored, a failed stylesheet, or a css request
+that failed (a failed font request only with a face that errored, or no Font Loading API)
+→ **unhealthy capture** (`assessHealth` in
 `packages/witness/src/report/health.ts`): never word it as render noise. `dom.noiseHint` is
 then false and no pass criterion applies while pixels differ (a zero-pixel diff still
 passes, and the warning is still shown); an unhealthy baseline is called out on every
