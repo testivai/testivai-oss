@@ -107,14 +107,14 @@ CI (GitHub Actions):
 - `src/types.ts`             — shared TypeScript interfaces
 - `src/review.ts`            — the review action's logic: when it runs, the triage prompt (MCP rubric), Claude's tools and output schema, the comment
 - `src/publish.ts`           — the publish action's github-script steps: `build` (decide, build the site) and `finish` (after the deploy: check it answers, add the links)
-- `src/publish/`             — `pages.ts` (publish or not, from the Pages settings; consent `TESTIVAI_PUBLIC_REPORTS`), `plan.ts` (which runs: each open PR's last runs, forks included, and the default branch's latest, under a size budget; folders from numbers only), `archive.ts` (untrusted report ZIP: results.json, run stamp and PNGs only, inflated in slices with caps), `png.ts`, `site.ts` (pages rebuilt from `parseReportData` output with the report template, CSP, noindex; index pages, 404), `comments.ts` (the links in the PR comment; a fork's PR gets the bot's own, numbers and links only), `build.ts` + `api.ts` (orchestration and the GitHub API calls)
+- `src/publish/`             — `pages.ts` (publish or not, from the Pages settings; consent `TESTIVAI_PUBLIC_REPORTS`), `plan.ts` (which runs: each open PR's last runs, forks included, and the default branch's latest, under a size budget; folders from numbers only), `archive.ts` (untrusted report ZIP: results.json, run stamp and PNGs only, inflated in slices with caps), `png.ts`, `site.ts` (pages rebuilt from `parseReportData` output with the report template, CSP, noindex; index pages, 404), `comments.ts` (the links in the PR comment; a fork's PR gets the bot's own, numbers and links only), `cache.ts` (opt-in, `cache: true`: report ZIPs kept between publishes, used only when their SHA-256 is the artifact's digest; pages are still rebuilt every time), `build.ts` + `api.ts` (orchestration and the GitHub API calls)
 - `dist/index.js`, `dist/review.cjs`, `dist/publish.cjs` — bundled output (esbuild); **must be committed**; rebuild with `pnpm run build` inside `action/`
 
 ### GitHub Action AI triage (`review/`)
 - `action.yml`               — composite action: github-script prepare → `anthropics/claude-code-action@v1` → github-script post; loads `action/dist/review.cjs`, so it ships with the action's dist at the same `v1` tag
 
 ### GitHub Action Pages publisher (`publish/`)
-- `action.yml`               — composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`, never checks out code; setup in `docs/github-action.md#reports-on-github-pages`
+- `action.yml`               — composite action: `actions/cache/restore@v6` (with `cache: true`) → github-script build → `actions/cache/save@v6` (with `cache: true`) → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`, never checks out code; setup in `docs/github-action.md#reports-on-github-pages`
 
 ### GitHub Action approver (`approve/`)
 - `action.yml`               — composite action: github-script auth → checkout → shell download and apply → commit → github-script reply; the reply loads `action/dist/approve.cjs` (`action/src/approve.ts`: names the approved run, links its published report from the TestivAI comment)

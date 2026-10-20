@@ -27,6 +27,8 @@ export interface OpenPr extends PlanPr {
 export interface ApiArtifact extends PlanArtifact {
   headRepoId?: number;
   headBranch?: string;
+  /** "sha256:<hex>" of the ZIP, for artifacts uploaded with upload-artifact v4 or later. */
+  digest?: string;
 }
 
 export interface PublishApi {
@@ -135,6 +137,7 @@ export function octokitApi(github: OctokitLike, owner: string, repo: string): Pu
           createdAt: a.created_at,
           headRepoId: a.workflow_run.head_repository_id,
           headBranch: a.workflow_run.head_branch,
+          ...(typeof a.digest === 'string' ? { digest: a.digest } : {}),
         }));
       return { artifacts, truncated };
     },

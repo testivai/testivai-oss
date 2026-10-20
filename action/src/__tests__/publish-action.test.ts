@@ -10,6 +10,7 @@
  * ships.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -83,25 +84,28 @@ describe('inputs and outputs', () => {
     // The address the finish step linked (the deploy's, as https), else the build's;
     // never deploy-pages' page_url as is, which GitHub gives as http for github.io.
     expect(ACTION.outputs['page-url'].value).toBe('${{ steps.finish.outputs.page-url || steps.build.outputs.page-url }}');
-    expect(byId('finish')).toBe(steps[3]);
+    expect(byId('finish')).toBe(steps[steps.length - 1]);
   });
 });
 
 describe('steps', () => {
+  /** The steps that make and deploy the site; the report cache's are checked below. */
+  const site = steps.filter((s) => !s.uses?.startsWith('actions/cache/'));
+
   it('builds, uploads, deploys, then adds the links: the last three only when the build published', () => {
     expect(ACTION.runs.using).toBe('composite');
-    expect(steps.map((s) => s.uses)).toEqual(['actions/github-script@v9', 'actions/upload-pages-artifact@v5', 'actions/deploy-pages@v5', 'actions/github-script@v9']);
-    expect(steps[0].id).toBe('build');
-    expect(steps[0].if).toBeUndefined();
-    for (const s of steps.slice(1)) expect(s.if).toBe("steps.build.outputs.published == 'true'");
-    expect(byId('deploy')).toBe(steps[2]);
-    expect(steps[1].with?.path).toBe('${{ steps.build.outputs.site-dir }}');
+    expect(site.map((s) => s.uses)).toEqual(['actions/github-script@v9', 'actions/upload-pages-artifact@v5', 'actions/deploy-pages@v5', 'actions/github-script@v9']);
+    expect(site[0].id).toBe('build');
+    expect(site[0].if).toBeUndefined();
+    for (const s of site.slice(1)) expect(s.if).toBe("steps.build.outputs.published == 'true'");
+    expect(byId('deploy')).toBe(site[2]);
+    expect(site[1].with?.path).toBe('${{ steps.build.outputs.site-dir }}');
   });
 
   it('never checks out or runs code: every step is a pinned action, none a shell command', () => {
     for (const s of steps) {
       expect(s.run).toBeUndefined();
-      expect(s.uses).toMatch(/^actions\/(github-script|upload-pages-artifact|deploy-pages)@v\d+$/);
+      expect(s.uses).toMatch(/^actions\/(github-script|upload-pages-artifact|deploy-pages|cache\/restore|cache\/save)@v\d+$/);
     }
   });
 
@@ -114,6 +118,62 @@ describe('steps', () => {
 
   it('deploys with the job token (OIDC), never the token input', () => {
     expect(byId('deploy').with?.token).toBeUndefined();
+  });
+});
+
+describe('the report cache (actions/cache)', () => {
+  const CACHE_PATH = '${{ runner.temp }}/testivai-pages/cache';
+  const PREFIX = 'testivai-pages-reports-v1-${{ github.repository_id }}-';
+  const restore = () => byId('cache-restore') as Step & { 'continue-on-error'?: boolean };
+  const save = () => byId('cache-save') as Step & { 'continue-on-error'?: boolean };
+
+  it('restores the report ZIPs before the build, and saves them right after it, before the deploy', () => {
+    const order = ['cache-restore', 'build', 'cache-save', 'deploy', 'finish'].map((id) => steps.indexOf(byId(id)));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(steps.indexOf(byId('cache-save'))).toBe(steps.indexOf(byId('build')) + 1);
+    expect(restore().uses).toBe('actions/cache/restore@v6');
+    expect(save().uses).toBe('actions/cache/save@v6');
+    expect(restore().with?.path).toBe(CACHE_PATH);
+    expect(save().with?.path).toBe(CACHE_PATH);
+  });
+
+  it("saves under a key of its own per run and attempt, and restores the newest of this repository's by that key's prefix", () => {
+    const key = `${PREFIX}\${{ github.run_id }}-\${{ github.run_attempt }}`;
+    expect(save().with?.key).toBe(key);
+    expect(restore().with?.key).toBe(key);
+    expect(restore().with?.['restore-keys']).toBe(PREFIX);
+    expect(restore().with?.['fail-on-cache-miss']).toBeUndefined();
+  });
+
+  it('runs only with the cache on, and saves only when the build changed what the cache holds', () => {
+    expect(restore().if).toBe("inputs.cache == 'true'");
+    expect(save().if).toBe("inputs.cache == 'true' && steps.build.outputs.cache-save == 'true'");
+  });
+
+  it('is off unless the workflow turns it on: actions/cache unpacks an entry before any check, in a job that can deploy Pages', () => {
+    expect(ACTION.inputs.cache.default).toBe('false');
+    const description = ACTION.inputs.cache.description.replace(/\s+/g, ' ');
+    expect(description).toMatch(/^false \(the default\)/);
+    expect(description).toMatch(/unpacks an entry before/);
+    expect(description).toMatch(/pages: write/);
+  });
+
+  it('says what the cache costs: a full copy per changed publish, kept until GitHub evicts it', () => {
+    const description = ACTION.inputs.cache.description.replace(/\s+/g, ' ');
+    expect(description).toMatch(/new full copy/);
+    expect(description).toMatch(/7 days/);
+    expect(description).toMatch(/evict/);
+    expect(description).toMatch(/other caches/);
+  });
+
+  it('never fails the publish: a cache that cannot be restored or saved is only a warning', () => {
+    expect(restore()['continue-on-error']).toBe(true);
+    expect(save()['continue-on-error']).toBe(true);
+  });
+
+  it('hands the build the folder the cache steps restore and save', () => {
+    expect(byId('build').env?.CACHE_DIR).toBe(CACHE_PATH);
+    expect(byId('build').env?.CACHE).toBe('${{ inputs.cache }}');
   });
 });
 
@@ -147,6 +207,9 @@ const RESULTS = {
   snapshots: [{ name: 'home', status: 'changed', diffPercent: 1, diffCount: 1, totalPixels: 100, currentPath: 'images/home/current.png' }],
 };
 
+const REPORT_ZIP = zipSync({ 'results.json': strToU8(JSON.stringify(RESULTS)), 'images/home/current.png': PNG });
+const REPORT_DIGEST = `sha256:${crypto.createHash('sha256').update(REPORT_ZIP).digest('hex')}`;
+
 /** A repository with Pages on, and one fork pull request with one run. */
 function fakeGithub(pages: 'on' | 'off') {
   const posted: Array<{ route: string; params: Record<string, any> }> = [];
@@ -161,7 +224,7 @@ function fakeGithub(pages: 'on' | 'off') {
     ],
     'GET /repos/{owner}/{repo}/actions/artifacts': () => ({
       artifacts: [
-        { id: 40, name: 'testivai-visual-report', size_in_bytes: 1000, expired: false, created_at: '2026-10-18T10:00:00Z', workflow_run: { id: 4, head_repository_id: 9, head_branch: 'patch-1' } },
+        { id: 40, name: 'testivai-visual-report', size_in_bytes: 1000, expired: false, created_at: '2026-10-18T10:00:00Z', digest: REPORT_DIGEST, workflow_run: { id: 4, head_repository_id: 9, head_branch: 'patch-1' } },
       ],
     }),
     'GET /repos/{owner}/{repo}/actions/runs/{run_id}': () => ({
@@ -174,8 +237,7 @@ function fakeGithub(pages: 'on' | 'off') {
       status: 'completed',
       created_at: '2026-10-18T10:00:00Z',
     }),
-    'GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/{archive_format}': () =>
-      Buffer.from(zipSync({ 'results.json': strToU8(JSON.stringify(RESULTS)), 'images/home/current.png': PNG })),
+    'GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/{archive_format}': () => Buffer.from(REPORT_ZIP),
     'GET /repos/{owner}/{repo}/issues/{issue_number}/comments': () => [],
     'POST /repos/{owner}/{repo}/issues/{issue_number}/comments': () => ({}),
   };
@@ -243,6 +305,8 @@ describe('the scripts load dist/publish.cjs and run', () => {
     'inputs.github-token': 'unused',
     'inputs.include-dir': '',
     'inputs.include-name': '',
+    'inputs.cache': 'true',
+    'runner.temp': temp,
     ...over,
   });
 
@@ -269,7 +333,7 @@ describe('the scripts load dist/publish.cjs and run', () => {
     expect(path.relative(temp, outputs['state-file']).startsWith('..')).toBe(false);
     expect(path.relative(outputs['site-dir'], outputs['state-file']).startsWith('..')).toBe(true);
 
-    const finish = steps[3];
+    const finish = byId('finish');
     await runScript(
       finish,
       values({
@@ -339,11 +403,78 @@ describe('the scripts load dist/publish.cjs and run', () => {
     await runScript(byId('build'), values(), { github, context, core });
 
     await expect(
-      runScript(steps[3], values({ 'inputs.comment': 'yes', 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': '' }), {
+      runScript(byId('finish'), values({ 'inputs.comment': 'yes', 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': '' }), {
         github,
         context,
         core,
       }),
     ).rejects.toThrow(/comment/);
+  });
+
+  /** github.request, counting the report downloads. */
+  function countingDownloads(github: { request: (route: string, params?: Record<string, any>) => Promise<{ data: unknown }> }) {
+    const downloads: unknown[] = [];
+    return {
+      downloads,
+      github: {
+        request: (route: string, params: Record<string, any> = {}) => {
+          if (route.endsWith('/{archive_format}')) downloads.push(params.artifact_id);
+          return github.request(route, params);
+        },
+      },
+    };
+  }
+
+  it('build: keeps the report ZIPs in the folder the cache steps save, so the next build downloads none of them', async () => {
+    const first = countingDownloads(fakeGithub('on').github);
+    const one = fakeCore();
+    await runScript(byId('build'), values(), { github: first.github, context, core: one.core });
+
+    expect(first.downloads).toEqual([40]);
+    expect(one.outputs['cache-save']).toBe('true');
+    expect(fs.readdirSync(path.join(temp, 'testivai-pages', 'cache'))).toEqual(['40.zip']);
+    const page = fs.readFileSync(path.join(one.outputs['site-dir'], 'pr/15/4-1/index.html'));
+
+    // As if actions/cache restored the folder for the next publish.
+    const second = countingDownloads(fakeGithub('on').github);
+    const two = fakeCore();
+    await runScript(byId('build'), values(), { github: second.github, context, core: two.core });
+
+    expect(second.downloads).toEqual([]);
+    expect(two.outputs['cache-save']).toBe('false');
+    expect(fs.readFileSync(path.join(two.outputs['site-dir'], 'pr/15/4-1/index.html')).equals(page)).toBe(true);
+  });
+
+  it('build: with cache false, downloads every report and keeps none', async () => {
+    for (let i = 0; i < 2; i++) {
+      const { github, downloads } = countingDownloads(fakeGithub('on').github);
+      const { core, outputs } = fakeCore();
+      await runScript(byId('build'), values({ 'inputs.cache': 'false' }), { github, context, core });
+
+      expect(downloads).toEqual([40]);
+      expect(outputs['cache-save']).toBe('false');
+    }
+    expect(fs.existsSync(path.join(temp, 'testivai-pages', 'cache'))).toBe(false);
+  });
+
+  it('build: without the cache setting, downloads every report and keeps none (the cache is opt-in)', async () => {
+    const build = byId('build');
+    const { CACHE: _cache, ...env } = build.env ?? {};
+    expect(process.env.CACHE).toBeUndefined();
+    for (let i = 0; i < 2; i++) {
+      const { github, downloads } = countingDownloads(fakeGithub('on').github);
+      const { core, outputs } = fakeCore();
+      await runScript({ ...build, env }, values(), { github, context, core });
+
+      expect(downloads).toEqual([40]);
+      expect(outputs['cache-save']).toBe('false');
+    }
+    expect(fs.existsSync(path.join(temp, 'testivai-pages', 'cache'))).toBe(false);
+  });
+
+  it('build: refuses a cache input other than true or false', async () => {
+    const { github } = fakeGithub('on');
+
+    await expect(runScript(byId('build'), values({ 'inputs.cache': 'yes' }), { github, context, core: fakeCore().core })).rejects.toThrow(/cache must be true or false/);
   });
 });

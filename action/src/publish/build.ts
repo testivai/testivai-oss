@@ -4,7 +4,9 @@
  *
  * buildSite starts from an empty folder every time and rebuilds the site from
  * what is true now (plan.ts), downloading and rebuilding one report at a time
- * so a large site never sits in memory. finishPublish runs after
+ * so a large site never sits in memory; a report an earlier publish
+ * downloaded comes from the report cache instead (cache.ts), and its page is
+ * rebuilt all the same. finishPublish runs after
  * actions/deploy-pages, so a comment never links a page that is not live.
  */
 
@@ -12,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { PublishApi } from './api';
 import { ArchiveRefused, readReportArchive, type ReportArchive } from './archive';
+import { openReportCache, type ReportCache } from './cache';
 import { commentFor, type PublishedPr } from './comments';
 import { decidePublish, pagesAddress } from './pages';
 import { planSite, type PlannedRun, type PlanPr, type SitePlan } from './plan';
@@ -49,7 +52,23 @@ export interface BuildOptions {
    * published as they are under <name>/, and linked from the front page.
    */
   include?: { dir: string; name: string };
+  /**
+   * A folder of report ZIPs kept between publishes (cache.ts; publish/action.yml
+   * restores and saves it with actions/cache): a report found there, with the
+   * SHA-256 GitHub lists for its artifact, is not downloaded again. Without
+   * it, every report is downloaded.
+   */
+  cacheDir?: string;
   log: Log;
+}
+
+/** Where this build's reports came from. */
+export interface DownloadStats {
+  downloaded: number;
+  downloadedBytes: number;
+  fromCache: number;
+  /** The cache gained or lost an entry, so it is worth saving. */
+  cacheChanged: boolean;
 }
 
 export interface PublishState {
@@ -63,7 +82,7 @@ export interface PublishState {
 
 export type BuildResult =
   | { published: false; reason: string }
-  | { published: true; reason: string; state: PublishState; files: number; bytes: number };
+  | { published: true; reason: string; state: PublishState; files: number; bytes: number; downloads: DownloadStats };
 
 /** root/rel, for a path made only of letters, digits, '-' and '_' segments ending in .html or .png. */
 export function safeSitePath(root: string, rel: string): string {
@@ -72,6 +91,7 @@ export function safeSitePath(root: string, rel: string): string {
 }
 
 const mb = (bytes: number) => `${Math.round(bytes / MB)} MB`;
+const mb1 = (bytes: number) => `${(bytes / MB).toFixed(1)} MB`;
 const sizeOf = (f: SiteFile) => (typeof f.data === 'string' ? Buffer.byteLength(f.data) : f.data.byteLength);
 
 /** Folder names the reports use. */
@@ -168,8 +188,11 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     files += include.files.length;
     log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
   }
+  const cache = options.cacheDir ? openReportCache(options.cacheDir, { log, maxEntryBytes: limits.maxPrBytes }) : undefined;
+  const digests = new Map(artifacts.map((a) => [a.id, a.digest]));
+  const downloads = { count: 0, bytes: 0 };
   for (const { run, pr } of order) {
-    const archive = await fetchArchive(api, run);
+    const archive = await fetchArchive(api, run, { cache, digest: digests.get(run.artifactId), downloads });
     const built = buildRunReport({ site, run, ...(pr ? { pr } : {}), artifactUrl: artifactUrl(run), archive });
     const size = built.files.reduce((n, f) => n + sizeOf(f), 0);
     if (bytes + size > limits.maxSiteBytes) {
@@ -184,6 +207,13 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     outcomes.set(run.runId, built.outcome);
     log.info(`${built.outcome.url}: ${built.outcome.ok ? 'published' : `could not be shown (${built.outcome.reason})`}`);
   }
+  cache?.prune();
+  const downloaded = `Reports: ${downloads.count} downloaded (${mb1(downloads.bytes)})`;
+  log.info(
+    cache
+      ? `${downloaded}, ${cache.stats.hits} from the cache (${mb1(cache.stats.hitBytes)}); ${cache.stats.stored} added to the cache, ${cache.stats.removed} removed from it.`
+      : `${downloaded}.`,
+  );
   const published: SitePlan = {
     ...plan,
     ...(plan.main && left.has(plan.main) ? { main: undefined } : {}),
@@ -213,15 +243,31 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     }),
     site: publishedSite({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...(options.include ? { include: options.include.name } : {}) }),
   };
-  return { published: true, reason: decision.reason, state, files, bytes };
+  const stats: DownloadStats = {
+    downloaded: downloads.count,
+    downloadedBytes: downloads.bytes,
+    fromCache: cache?.stats.hits ?? 0,
+    cacheChanged: cache !== undefined && cache.stats.stored + cache.stats.removed > 0,
+  };
+  return { published: true, reason: decision.reason, state, files, bytes, downloads: stats };
 }
 
-async function fetchArchive(api: PublishApi, run: PlannedRun): Promise<ReportArchive | { refused: string }> {
-  let zip: Uint8Array;
-  try {
-    zip = await api.download(run.artifactId);
-  } catch (error) {
-    return { refused: `the report could not be downloaded (${error instanceof Error ? error.message : String(error)})` };
+/** The run's report: from the cache when it holds the artifact's ZIP, else downloaded (and kept there). */
+async function fetchArchive(
+  api: PublishApi,
+  run: PlannedRun,
+  from: { cache?: ReportCache; digest?: string; downloads: { count: number; bytes: number } },
+): Promise<ReportArchive | { refused: string }> {
+  let zip = from.cache?.read(run.artifactId, from.digest);
+  if (!zip) {
+    try {
+      zip = await api.download(run.artifactId);
+    } catch (error) {
+      return { refused: `the report could not be downloaded (${error instanceof Error ? error.message : String(error)})` };
+    }
+    from.downloads.count += 1;
+    from.downloads.bytes += zip.byteLength;
+    from.cache?.write(run.artifactId, from.digest, zip);
   }
   try {
     return readReportArchive(zip);

@@ -169,6 +169,7 @@ CI — GitHub Actions
 | `src/publish/png.ts` | `checkPng`: a PNG of sane dimensions, or refused |
 | `src/publish/site.ts` | Each run's page rebuilt with the report template from `parseReportData` output (images at numbered paths, CSP, noindex), the index pages and 404 |
 | `src/publish/comments.ts` | The PR comment after a publish: rebuild the reporter's when its run marker matches; a fork gets the bot's own, numbers and links only |
+| `src/publish/cache.ts` | Opt-in (`cache: true`): report ZIPs kept between publishes (`actions/cache`), used only when their SHA-256 is the digest GitHub lists for the artifact; pages are still rebuilt every time |
 | `src/publish/build.ts`, `src/publish/api.ts` | The orchestration (`buildSite`, `finishPublish`) and the GitHub API calls it makes |
 | `dist/index.js`, `dist/review.cjs`, `dist/publish.cjs` | Bundled output (esbuild) — **must be committed after every src change** |
 
@@ -182,7 +183,7 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `action.yml` | Composite action: github-script build → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`; never checks out code |
+| `action.yml` | Composite action: `actions/cache/restore@v6` (with `cache: true`) → github-script build → `actions/cache/save@v6` (with `cache: true`) → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`; never checks out code |
 
 ### GitHub Action approver (`approve/`)
 

@@ -32,13 +32,14 @@ var publish_exports = {};
 __export(publish_exports, {
   build: () => build,
   finish: () => finish,
+  parseCache: () => parseCache,
   parseComment: () => parseComment,
   parseInclude: () => parseInclude,
   parseRunsPerPr: () => parseRunsPerPr
 });
 module.exports = __toCommonJS(publish_exports);
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
 
 // ../packages/witness/src/report/diff-shape.ts
 var NOISE_MAX_DIFF_PERCENT = 1;
@@ -766,7 +767,8 @@ function octokitApi(github, owner, repo) {
         expired: a.expired === true,
         createdAt: a.created_at,
         headRepoId: a.workflow_run.head_repository_id,
-        headBranch: a.workflow_run.head_branch
+        headBranch: a.workflow_run.head_branch,
+        ...typeof a.digest === "string" ? { digest: a.digest } : {}
       }));
       return { artifacts, truncated };
     },
@@ -810,8 +812,8 @@ function octokitApi(github, owner, repo) {
 }
 
 // src/publish/build.ts
-var fs = __toESM(require("fs"));
-var path = __toESM(require("path"));
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
 
 // ../node_modules/.pnpm/fflate@0.8.3/node_modules/fflate/esm/index.mjs
 var import_module = require("module");
@@ -1447,8 +1449,8 @@ var DEFAULT_ARCHIVE_LIMITS = {
   maxJsonBytes: 20 * MB
 };
 var ArchiveRefused = class extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message2) {
+    super(message2);
     this.name = "ArchiveRefused";
   }
 };
@@ -1541,6 +1543,114 @@ function concat(chunks, size) {
     offset += chunk.length;
   }
   return out;
+}
+
+// src/publish/cache.ts
+var import_crypto = require("crypto");
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+var DIGEST = /^sha256:([0-9a-f]{64})$/i;
+var OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+var message = (error) => error instanceof Error ? error.message : String(error);
+function sha256Of(digest) {
+  const m = typeof digest === "string" ? DIGEST.exec(digest) : null;
+  return m ? m[1].toLowerCase() : void 0;
+}
+var hex = (bytes) => (0, import_crypto.createHash)("sha256").update(bytes).digest("hex");
+function entryName(artifactId) {
+  return Number.isSafeInteger(artifactId) && artifactId > 0 ? `${artifactId}.zip` : void 0;
+}
+function openReportCache(dir, { log, maxEntryBytes }) {
+  const stats = { hits: 0, hitBytes: 0, stored: 0, removed: 0 };
+  const used = /* @__PURE__ */ new Set();
+  let usable = true;
+  try {
+    const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
+    if (stat && !stat.isDirectory()) fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (error) {
+    usable = false;
+    log.warning(`The report cache ${dir} is not used (${message(error)}): every report is downloaded.`);
+  }
+  const remove = (file) => {
+    try {
+      fs.rmSync(file, { recursive: true, force: true });
+    } catch (error) {
+      log.warning(`The report cache could not remove ${path.basename(file)} (${message(error)}).`);
+    }
+  };
+  return {
+    stats,
+    read(artifactId, digest) {
+      const name = entryName(artifactId);
+      const want = sha256Of(digest);
+      if (!usable || !name || !want) return void 0;
+      const file = path.join(dir, name);
+      let bytes;
+      let unusable = "";
+      let fd2;
+      try {
+        fd2 = fs.openSync(file, OPEN_ENTRY);
+        const stat = fs.fstatSync(fd2);
+        if (!stat.isFile()) unusable = "is not a file";
+        else if (stat.size > maxEntryBytes) unusable = `is over the ${maxEntryBytes}-byte limit`;
+        else bytes = fs.readFileSync(fd2);
+      } catch (error) {
+        if (error.code === "ENOENT") return void 0;
+        unusable = `could not be read (${message(error)})`;
+      } finally {
+        if (fd2 !== void 0) fs.closeSync(fd2);
+      }
+      if (!bytes) {
+        log.info(`Report cache: ${name} ${unusable}: downloaded again.`);
+        remove(file);
+        return void 0;
+      }
+      if (hex(bytes) !== want) {
+        log.warning(`Report cache: ${name} is not the ZIP of artifact ${artifactId} (its SHA-256 is not the digest GitHub lists): downloaded again.`);
+        remove(file);
+        return void 0;
+      }
+      used.add(name);
+      stats.hits += 1;
+      stats.hitBytes += bytes.byteLength;
+      return bytes;
+    },
+    write(artifactId, digest, zip) {
+      const name = entryName(artifactId);
+      const want = sha256Of(digest);
+      if (!usable || !name || !want || zip.byteLength > maxEntryBytes) return;
+      if (hex(zip) !== want) {
+        log.warning(`The report downloaded for artifact ${artifactId} is not the one GitHub lists (its SHA-256 is not the digest): not kept in the report cache.`);
+        return;
+      }
+      const file = path.join(dir, name);
+      try {
+        remove(file);
+        fs.writeFileSync(file, zip, { flag: "wx" });
+        used.add(name);
+        stats.stored += 1;
+      } catch (error) {
+        log.warning(`Report cache: ${name} could not be written (${message(error)}).`);
+        remove(file);
+      }
+    },
+    prune() {
+      if (!usable) return;
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch (error) {
+        log.warning(`The report cache could not be listed (${message(error)}).`);
+        return;
+      }
+      for (const entry of entries) {
+        if (used.has(entry.name) && entry.isFile()) continue;
+        remove(path.join(dir, entry.name));
+        stats.removed += 1;
+      }
+    }
+  };
 }
 
 // src/publish/comments.ts
@@ -2708,52 +2818,52 @@ function parseReportData(json) {
 }
 var Invalid = class extends Error {
 };
-function fail(path3, problem) {
-  throw new Invalid(`${path3 || "results.json"}: ${problem}`);
+function fail(path4, problem) {
+  throw new Invalid(`${path4 || "results.json"}: ${problem}`);
 }
-function at(path3, key) {
-  return path3 ? `${path3}.${key}` : key;
+function at(path4, key) {
+  return path4 ? `${path4}.${key}` : key;
 }
 function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function record2(value, path3) {
-  if (!isRecord2(value)) fail(path3, "expected an object");
+function record2(value, path4) {
+  if (!isRecord2(value)) fail(path4, "expected an object");
   return value;
 }
-function num(value, path3, opts = {}) {
-  if (typeof value !== "number" || !Number.isFinite(value)) fail(path3, "expected a finite number");
-  if (opts.min !== void 0 && value < opts.min) fail(path3, `expected at least ${opts.min}`);
-  if (opts.whole && !Number.isInteger(value)) fail(path3, "expected a whole number");
+function num(value, path4, opts = {}) {
+  if (typeof value !== "number" || !Number.isFinite(value)) fail(path4, "expected a finite number");
+  if (opts.min !== void 0 && value < opts.min) fail(path4, `expected at least ${opts.min}`);
+  if (opts.whole && !Number.isInteger(value)) fail(path4, "expected a whole number");
   return value;
 }
-function count2(value, path3) {
-  return num(value, path3, { min: 0, whole: true });
+function count2(value, path4) {
+  return num(value, path4, { min: 0, whole: true });
 }
-function text2(value, path3, max2 = REPORT_DATA_LIMITS.textLength, min = 0) {
-  if (typeof value !== "string") fail(path3, "expected text");
-  if (value.length < min) fail(path3, "expected non-empty text");
-  if (value.length > max2) fail(path3, `longer than ${max2} characters`);
+function text2(value, path4, max2 = REPORT_DATA_LIMITS.textLength, min = 0) {
+  if (typeof value !== "string") fail(path4, "expected text");
+  if (value.length < min) fail(path4, "expected non-empty text");
+  if (value.length > max2) fail(path4, `longer than ${max2} characters`);
   return value;
 }
-function bool(value, path3) {
-  if (typeof value !== "boolean") fail(path3, "expected true or false");
+function bool(value, path4) {
+  if (typeof value !== "boolean") fail(path4, "expected true or false");
   return value;
 }
-function oneOf2(value, path3, allowed) {
+function oneOf2(value, path4, allowed) {
   if (typeof value !== "string" || !allowed.includes(value)) {
-    fail(path3, `expected one of ${allowed.join(", ")}`);
+    fail(path4, `expected one of ${allowed.join(", ")}`);
   }
   return value;
 }
-function list2(value, path3, max2, item) {
-  if (!Array.isArray(value)) fail(path3, "expected a list");
-  if (value.length > max2) fail(path3, `more than ${max2} items`);
-  return value.map((v, i2) => item(v, `${path3}[${i2}]`));
+function list2(value, path4, max2, item) {
+  if (!Array.isArray(value)) fail(path4, "expected a list");
+  if (value.length > max2) fail(path4, `more than ${max2} items`);
+  return value.map((v, i2) => item(v, `${path4}[${i2}]`));
 }
-function optional(target, key, source, path3, read) {
+function optional(target, key, source, path4, read) {
   const value = source[key];
-  if (value !== void 0) target[key] = read(value, at(path3, key));
+  if (value !== void 0) target[key] = read(value, at(path4, key));
 }
 function readReport(json) {
   const root = record2(json, "");
@@ -2783,76 +2893,76 @@ function readReport(json) {
   optional(data, "environment", root, "", (v, p) => readEnvironmentBlock(v, p));
   return data;
 }
-function readSummary(value, path3) {
-  const s = record2(value, path3);
+function readSummary(value, path4) {
+  const s = record2(value, path4);
   const summary = {
-    total: count2(s.total, at(path3, "total")),
-    passed: count2(s.passed, at(path3, "passed")),
-    changed: count2(s.changed, at(path3, "changed")),
-    newSnapshots: count2(s.newSnapshots, at(path3, "newSnapshots"))
+    total: count2(s.total, at(path4, "total")),
+    passed: count2(s.passed, at(path4, "passed")),
+    changed: count2(s.changed, at(path4, "changed")),
+    newSnapshots: count2(s.newSnapshots, at(path4, "newSnapshots"))
   };
-  optional(summary, "missing", s, path3, count2);
+  optional(summary, "missing", s, path4, count2);
   return summary;
 }
 var STATUSES = ["passed", "changed", "new"];
-function readSnapshot(value, path3) {
-  const s = record2(value, path3);
+function readSnapshot(value, path4) {
+  const s = record2(value, path4);
   const snapshot = {
-    name: text2(s.name, at(path3, "name"), REPORT_DATA_LIMITS.nameLength, 1),
-    status: oneOf2(s.status, at(path3, "status"), STATUSES),
-    diffPercent: num(s.diffPercent, at(path3, "diffPercent"), { min: 0 }),
-    diffCount: count2(s.diffCount, at(path3, "diffCount")),
-    totalPixels: count2(s.totalPixels, at(path3, "totalPixels"))
+    name: text2(s.name, at(path4, "name"), REPORT_DATA_LIMITS.nameLength, 1),
+    status: oneOf2(s.status, at(path4, "status"), STATUSES),
+    diffPercent: num(s.diffPercent, at(path4, "diffPercent"), { min: 0 }),
+    diffCount: count2(s.diffCount, at(path4, "diffCount")),
+    totalPixels: count2(s.totalPixels, at(path4, "totalPixels"))
   };
-  optional(snapshot, "dom", s, path3, readDom);
-  optional(snapshot, "regions", s, path3, (v, p) => list2(v, p, REPORT_DATA_LIMITS.regions, readRegion));
-  optional(snapshot, "masks", s, path3, (v, p) => list2(v, p, REPORT_DATA_LIMITS.masks, readMask));
-  optional(snapshot, "maskWarnings", s, path3, (v, p) => list2(v, p, REPORT_DATA_LIMITS.maskWarnings, (w, q) => text2(w, q)));
-  optional(snapshot, "pageShift", s, path3, readPageShift);
-  optional(snapshot, "autoPassed", s, path3, (v, p) => oneOf2(v, p, ["threshold", "noise", "shift"]));
-  optional(snapshot, "baselineApprovedAt", s, path3, (v, p) => text2(v, p, 64));
-  optional(snapshot, "sizeMismatch", s, path3, readSizeMismatch);
-  optional(snapshot, "environment", s, path3, readSnapshotEnvironment);
-  optional(snapshot, "captureHealth", s, path3, readCaptureHealth);
-  if (s.thumbPath !== void 0) text2(s.thumbPath, at(path3, "thumbPath"));
+  optional(snapshot, "dom", s, path4, readDom);
+  optional(snapshot, "regions", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.regions, readRegion));
+  optional(snapshot, "masks", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.masks, readMask));
+  optional(snapshot, "maskWarnings", s, path4, (v, p) => list2(v, p, REPORT_DATA_LIMITS.maskWarnings, (w, q) => text2(w, q)));
+  optional(snapshot, "pageShift", s, path4, readPageShift);
+  optional(snapshot, "autoPassed", s, path4, (v, p) => oneOf2(v, p, ["threshold", "noise", "shift"]));
+  optional(snapshot, "baselineApprovedAt", s, path4, (v, p) => text2(v, p, 64));
+  optional(snapshot, "sizeMismatch", s, path4, readSizeMismatch);
+  optional(snapshot, "environment", s, path4, readSnapshotEnvironment);
+  optional(snapshot, "captureHealth", s, path4, readCaptureHealth);
+  if (s.thumbPath !== void 0) text2(s.thumbPath, at(path4, "thumbPath"));
   return snapshot;
 }
-function readCaptureHealth(value, path3) {
-  const h = record2(value, path3);
+function readCaptureHealth(value, path4) {
+  const h = record2(value, path4);
   const block = (v, p) => parseHealth(v) ?? fail(p, "expected a capture health block");
   const lines = (v, p) => list2(v, p, REPORT_DATA_LIMITS.healthLines, (l, q) => text2(l, q));
-  const unhealthyPath = at(path3, "unhealthy");
+  const unhealthyPath = at(path4, "unhealthy");
   const health = {
     unhealthy: h.unhealthy === null ? null : oneOf2(h.unhealthy, unhealthyPath, ["candidate", "baseline", "both"]),
-    reasons: lines(h.reasons, at(path3, "reasons")),
-    warnings: lines(h.warnings, at(path3, "warnings"))
+    reasons: lines(h.reasons, at(path4, "reasons")),
+    warnings: lines(h.warnings, at(path4, "warnings"))
   };
-  optional(health, "candidate", h, path3, block);
-  optional(health, "baseline", h, path3, block);
+  optional(health, "candidate", h, path4, block);
+  optional(health, "baseline", h, path4, block);
   return { ...health.candidate ? { candidate: health.candidate } : {}, ...health.baseline ? { baseline: health.baseline } : {}, ...health };
 }
-function readSnapshotEnvironment(value, path3) {
-  const e = record2(value, path3);
+function readSnapshotEnvironment(value, path4) {
+  const e = record2(value, path4);
   const fields = (v, p) => list2(v, p, REPORT_DATA_LIMITS.environmentFields, (f, q) => text2(f, q, 100, 1));
   const env = {
-    delta: fields(e.delta, at(path3, "delta")),
-    renderingDelta: fields(e.renderingDelta, at(path3, "renderingDelta"))
+    delta: fields(e.delta, at(path4, "delta")),
+    renderingDelta: fields(e.renderingDelta, at(path4, "renderingDelta"))
   };
-  optional(env, "baseline", e, path3, readCaptureEnvironment);
-  optional(env, "candidate", e, path3, readCaptureEnvironment);
-  optional(env, "policy", e, path3, (v, p) => oneOf2(v, p, ["strict"]));
+  optional(env, "baseline", e, path4, readCaptureEnvironment);
+  optional(env, "candidate", e, path4, readCaptureEnvironment);
+  optional(env, "policy", e, path4, (v, p) => oneOf2(v, p, ["strict"]));
   return env;
 }
-function readCaptureEnvironment(value, path3) {
-  const block = readEnvironmentBlock(value, path3);
-  const section = (name) => record2(block[name], at(path3, name));
-  text2(section("os").platform, at(path3, "os.platform"), REPORT_DATA_LIMITS.environmentValueLength, 1);
-  text2(section("browser").name, at(path3, "browser.name"), REPORT_DATA_LIMITS.environmentValueLength, 1);
-  text2(section("adapter").captureMethod, at(path3, "adapter.captureMethod"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+function readCaptureEnvironment(value, path4) {
+  const block = readEnvironmentBlock(value, path4);
+  const section = (name) => record2(block[name], at(path4, name));
+  text2(section("os").platform, at(path4, "os.platform"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text2(section("browser").name, at(path4, "browser.name"), REPORT_DATA_LIMITS.environmentValueLength, 1);
+  text2(section("adapter").captureMethod, at(path4, "adapter.captureMethod"), REPORT_DATA_LIMITS.environmentValueLength, 1);
   return block;
 }
 var ENVIRONMENT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,49}$/;
-function readEnvironmentBlock(value, path3) {
+function readEnvironmentBlock(value, path4) {
   const plain = (v, p) => {
     if (v === null || typeof v === "boolean") return v;
     if (typeof v === "number") return num(v, p);
@@ -2865,10 +2975,10 @@ function readEnvironmentBlock(value, path3) {
     for (const key of k) if (!ENVIRONMENT_KEY.test(key)) fail(p, `field name ${JSON.stringify(key.slice(0, 50))} is not a plain name`);
     return k;
   };
-  const block = record2(value, path3);
+  const block = record2(value, path4);
   const out = {};
-  for (const sectionName of keys(block, path3)) {
-    const sectionPath = at(path3, sectionName);
+  for (const sectionName of keys(block, path4)) {
+    const sectionPath = at(path4, sectionName);
     const section = block[sectionName];
     if (!isRecord2(section)) {
       out[sectionName] = plain(section, sectionPath);
@@ -2889,15 +2999,15 @@ function readEnvironmentBlock(value, path3) {
   }
   return out;
 }
-function readDom(value, path3) {
-  const d = record2(value, path3);
+function readDom(value, path4) {
+  const d = record2(value, path4);
   const dom = {
-    changed: bool(d.changed, at(path3, "changed")),
-    noiseHint: bool(d.noiseHint, at(path3, "noiseHint")),
-    summary: d.summary === void 0 || d.summary === null ? null : readDomSummary(d.summary, at(path3, "summary"))
+    changed: bool(d.changed, at(path4, "changed")),
+    noiseHint: bool(d.noiseHint, at(path4, "noiseHint")),
+    summary: d.summary === void 0 || d.summary === null ? null : readDomSummary(d.summary, at(path4, "summary"))
   };
-  optional(dom, "styleCheck", d, path3, (v, p) => oneOf2(v, p, ["match", "mismatch", "unavailable"]));
-  optional(dom, "styleChanges", d, path3, (v, p) => {
+  optional(dom, "styleCheck", d, path4, (v, p) => oneOf2(v, p, ["match", "mismatch", "unavailable"]));
+  optional(dom, "styleChanges", d, path4, (v, p) => {
     const c = record2(v, p);
     return {
       count: count2(c.count, at(p, "count")),
@@ -2906,28 +3016,28 @@ function readDom(value, path3) {
   });
   return dom;
 }
-function readDomSummary(value, path3) {
-  const s = record2(value, path3);
+function readDomSummary(value, path4) {
+  const s = record2(value, path4);
   const summary = {
-    added: count2(s.added, at(path3, "added")),
-    removed: count2(s.removed, at(path3, "removed")),
-    attributeChanges: count2(s.attributeChanges, at(path3, "attributeChanges"))
+    added: count2(s.added, at(path4, "added")),
+    removed: count2(s.removed, at(path4, "removed")),
+    attributeChanges: count2(s.attributeChanges, at(path4, "attributeChanges"))
   };
-  optional(summary, "textChanges", s, path3, count2);
+  optional(summary, "textChanges", s, path4, count2);
   return summary;
 }
-function readRegion(value, path3) {
-  const r = record2(value, path3);
+function readRegion(value, path4) {
+  const r = record2(value, path4);
   const region = {
-    x: num(r.x, at(path3, "x")),
-    y: num(r.y, at(path3, "y")),
-    width: num(r.width, at(path3, "width"), { min: 0 }),
-    height: num(r.height, at(path3, "height"), { min: 0 }),
-    diffPixels: num(r.diffPixels, at(path3, "diffPixels"), { min: 0 }),
-    diffPercent: num(r.diffPercent, at(path3, "diffPercent"), { min: 0 })
+    x: num(r.x, at(path4, "x")),
+    y: num(r.y, at(path4, "y")),
+    width: num(r.width, at(path4, "width"), { min: 0 }),
+    height: num(r.height, at(path4, "height"), { min: 0 }),
+    diffPixels: num(r.diffPixels, at(path4, "diffPixels"), { min: 0 }),
+    diffPercent: num(r.diffPercent, at(path4, "diffPercent"), { min: 0 })
   };
-  optional(region, "classification", r, path3, (v, p) => oneOf2(v, p, ["shift", "change"]));
-  optional(region, "shift", r, path3, (v, p) => {
+  optional(region, "classification", r, path4, (v, p) => oneOf2(v, p, ["shift", "change"]));
+  optional(region, "shift", r, path4, (v, p) => {
     const s = record2(v, p);
     return { dx: num(s.dx, at(p, "dx")), dy: num(s.dy, at(p, "dy")) };
   });
@@ -2935,7 +3045,7 @@ function readRegion(value, path3) {
     region,
     "elements",
     r,
-    path3,
+    path4,
     (v, p) => list2(v, p, REPORT_DATA_LIMITS.elementsPerRegion, (e, q) => {
       const el = record2(e, q);
       return { selector: text2(el.selector, at(q, "selector")), role: oneOf2(el.role, at(q, "role"), ["shifted", "changed"]) };
@@ -2943,15 +3053,15 @@ function readRegion(value, path3) {
   );
   return region;
 }
-function readMask(value, path3) {
-  const m = record2(value, path3);
-  const source = record2(m.source, at(path3, "source"));
-  const sourcePath = at(path3, "source");
+function readMask(value, path4) {
+  const m = record2(value, path4);
+  const source = record2(m.source, at(path4, "source"));
+  const sourcePath = at(path4, "source");
   const mask = {
-    x: num(m.x, at(path3, "x")),
-    y: num(m.y, at(path3, "y")),
-    width: num(m.width, at(path3, "width"), { min: 0 }),
-    height: num(m.height, at(path3, "height"), { min: 0 }),
+    x: num(m.x, at(path4, "x")),
+    y: num(m.y, at(path4, "y")),
+    width: num(m.width, at(path4, "width"), { min: 0 }),
+    height: num(m.height, at(path4, "height"), { min: 0 }),
     source: {
       type: oneOf2(source.type, at(sourcePath, "type"), ["selector", "region", "edge"]),
       spec: readMaskSpec(source.spec, at(sourcePath, "spec")),
@@ -2960,30 +3070,30 @@ function readMask(value, path3) {
   };
   return mask;
 }
-function readMaskSpec(value, path3) {
-  if (typeof value === "string") return text2(value, path3);
-  const spec = record2(value, path3);
+function readMaskSpec(value, path4) {
+  if (typeof value === "string") return text2(value, path4);
+  const spec = record2(value, path4);
   const keys = Object.keys(spec);
-  if (keys.length > REPORT_DATA_LIMITS.maskSpecKeys) fail(path3, `more than ${REPORT_DATA_LIMITS.maskSpecKeys} keys`);
+  if (keys.length > REPORT_DATA_LIMITS.maskSpecKeys) fail(path4, `more than ${REPORT_DATA_LIMITS.maskSpecKeys} keys`);
   const out = {};
   for (const key of keys) {
-    text2(key, `${path3} key`, 50, 1);
+    text2(key, `${path4} key`, 50, 1);
     const v = spec[key];
-    out[key] = typeof v === "number" ? num(v, at(path3, key)) : text2(v, at(path3, key), 200);
+    out[key] = typeof v === "number" ? num(v, at(path4, key)) : text2(v, at(path4, key), 200);
   }
   return out;
 }
-function readPageShift(value, path3) {
-  const p = record2(value, path3);
-  return { dy: num(p.dy, at(path3, "dy")), belowY: num(p.belowY, at(path3, "belowY")), count: count2(p.count, at(path3, "count")) };
+function readPageShift(value, path4) {
+  const p = record2(value, path4);
+  return { dy: num(p.dy, at(path4, "dy")), belowY: num(p.belowY, at(path4, "belowY")), count: count2(p.count, at(path4, "count")) };
 }
-function readSizeMismatch(value, path3) {
-  const s = record2(value, path3);
+function readSizeMismatch(value, path4) {
+  const s = record2(value, path4);
   const size = (v, p) => {
     const d = record2(v, p);
     return { width: num(d.width, at(p, "width"), { min: 1 }), height: num(d.height, at(p, "height"), { min: 1 }) };
   };
-  return { baseline: size(s.baseline, at(path3, "baseline")), candidate: size(s.candidate, at(path3, "candidate")) };
+  return { baseline: size(s.baseline, at(path4, "baseline")), candidate: size(s.candidate, at(path4, "candidate")) };
 }
 
 // src/report-artifact.ts
@@ -3399,26 +3509,27 @@ var PUBLISH_LIMITS = {
 };
 function safeSitePath(root, rel) {
   if (!/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(?:html|png)$/.test(rel)) throw new Error(`not a site path: ${JSON.stringify(rel)}`);
-  return path.join(root, rel);
+  return path2.join(root, rel);
 }
 var mb2 = (bytes) => `${Math.round(bytes / MB3)} MB`;
+var mb1 = (bytes) => `${(bytes / MB3).toFixed(1)} MB`;
 var sizeOf = (f) => typeof f.data === "string" ? Buffer.byteLength(f.data) : f.data.byteLength;
 var RESERVED = /* @__PURE__ */ new Set(["pr", "main"]);
 function readInclude(include, maxBytes, log) {
   if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
     throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
   }
-  if (!fs.existsSync(include.dir) || !fs.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
+  if (!fs2.existsSync(include.dir) || !fs2.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
   const files = [];
   let bytes = 0;
   const walk = (rel) => {
-    for (const entry of fs.readdirSync(path.join(include.dir, rel), { withFileTypes: true })) {
+    for (const entry of fs2.readdirSync(path2.join(include.dir, rel), { withFileTypes: true })) {
       const child = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isSymbolicLink()) log.warning(`include-dir: ${child} is a symbolic link: skipped.`);
       else if (entry.isDirectory()) walk(child);
       else if (entry.isFile()) {
         files.push(child);
-        bytes += fs.statSync(path.join(include.dir, child)).size;
+        bytes += fs2.statSync(path2.join(include.dir, child)).size;
       }
     }
   };
@@ -3460,8 +3571,8 @@ async function buildSite(api, options) {
     limits: { runsPerPr: options.runsPerPr, maxSiteBytes: limits.maxSiteBytes, maxPrBytes: limits.maxPrBytes, artifactName: options.artifactName }
   });
   for (const d of plan.dropped) log.info(`Run ${d.runId}${d.pr ? ` (#${d.pr})` : ""} is not published: ${d.reason}.`);
-  fs.rmSync(options.siteDir, { recursive: true, force: true });
-  fs.mkdirSync(options.siteDir, { recursive: true });
+  fs2.rmSync(options.siteDir, { recursive: true, force: true });
+  fs2.mkdirSync(options.siteDir, { recursive: true });
   const site = { url: decision.siteUrl, repo: repo.fullName, serverUrl: options.serverUrl, defaultBranch: repo.defaultBranch };
   const artifactUrl = (r) => `${options.serverUrl}/${repo.fullName}/actions/runs/${r.runId}/artifacts/${r.artifactId}`;
   const order = [
@@ -3475,16 +3586,19 @@ async function buildSite(api, options) {
   let files = 0;
   if (include && options.include) {
     for (const rel of include.files) {
-      const to = path.join(options.siteDir, options.include.name, rel);
-      fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(path.join(options.include.dir, rel), to);
+      const to = path2.join(options.siteDir, options.include.name, rel);
+      fs2.mkdirSync(path2.dirname(to), { recursive: true });
+      fs2.copyFileSync(path2.join(options.include.dir, rel), to);
     }
     bytes += include.bytes;
     files += include.files.length;
     log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
   }
+  const cache = options.cacheDir ? openReportCache(options.cacheDir, { log, maxEntryBytes: limits.maxPrBytes }) : void 0;
+  const digests = new Map(artifacts.map((a) => [a.id, a.digest]));
+  const downloads = { count: 0, bytes: 0 };
   for (const { run, pr } of order) {
-    const archive = await fetchArchive(api, run);
+    const archive = await fetchArchive(api, run, { cache, digest: digests.get(run.artifactId), downloads });
     const built = buildRunReport({ site, run, ...pr ? { pr } : {}, artifactUrl: artifactUrl(run), archive });
     const size = built.files.reduce((n, f) => n + sizeOf(f), 0);
     if (bytes + size > limits.maxSiteBytes) {
@@ -3499,6 +3613,11 @@ async function buildSite(api, options) {
     outcomes.set(run.runId, built.outcome);
     log.info(`${built.outcome.url}: ${built.outcome.ok ? "published" : `could not be shown (${built.outcome.reason})`}`);
   }
+  cache?.prune();
+  const downloaded = `Reports: ${downloads.count} downloaded (${mb1(downloads.bytes)})`;
+  log.info(
+    cache ? `${downloaded}, ${cache.stats.hits} from the cache (${mb1(cache.stats.hitBytes)}); ${cache.stats.stored} added to the cache, ${cache.stats.removed} removed from it.` : `${downloaded}.`
+  );
   const published = {
     ...plan,
     ...plan.main && left.has(plan.main) ? { main: void 0 } : {},
@@ -3526,14 +3645,25 @@ async function buildSite(api, options) {
     }),
     site: publishedSite({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...options.include ? { include: options.include.name } : {} })
   };
-  return { published: true, reason: decision.reason, state, files, bytes };
+  const stats = {
+    downloaded: downloads.count,
+    downloadedBytes: downloads.bytes,
+    fromCache: cache?.stats.hits ?? 0,
+    cacheChanged: cache !== void 0 && cache.stats.stored + cache.stats.removed > 0
+  };
+  return { published: true, reason: decision.reason, state, files, bytes, downloads: stats };
 }
-async function fetchArchive(api, run) {
-  let zip;
-  try {
-    zip = await api.download(run.artifactId);
-  } catch (error) {
-    return { refused: `the report could not be downloaded (${error instanceof Error ? error.message : String(error)})` };
+async function fetchArchive(api, run, from) {
+  let zip = from.cache?.read(run.artifactId, from.digest);
+  if (!zip) {
+    try {
+      zip = await api.download(run.artifactId);
+    } catch (error) {
+      return { refused: `the report could not be downloaded (${error instanceof Error ? error.message : String(error)})` };
+    }
+    from.downloads.count += 1;
+    from.downloads.bytes += zip.byteLength;
+    from.cache?.write(run.artifactId, from.digest, zip);
   }
   try {
     return readReportArchive(zip);
@@ -3545,8 +3675,8 @@ async function fetchArchive(api, run) {
 function writeFiles(root, files) {
   for (const f of files) {
     const to = safeSitePath(root, f.path);
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.writeFileSync(to, f.data);
+    fs2.mkdirSync(path2.dirname(to), { recursive: true });
+    fs2.writeFileSync(to, f.data);
   }
 }
 async function mapLimit(items, limit, fn) {
@@ -3623,20 +3753,27 @@ function parseComment(value) {
   if (v === "false") return false;
   throw new Error(`comment must be true or false, not ${JSON.stringify(value)}`);
 }
+function parseCache(value) {
+  const v = value.trim().toLowerCase();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  throw new Error(`cache must be true or false, not ${JSON.stringify(value)}`);
+}
 function parseInclude(env) {
   const dir = (env.INCLUDE_DIR ?? "").trim();
   if (!dir) return void 0;
   const name = (env.INCLUDE_NAME ?? "").trim();
   if (!name) throw new Error("include-name is required with include-dir: the folder the pages go in on the site, such as demo");
-  return { dir: path2.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), name };
+  return { dir: path3.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), name };
 }
 async function build({ github, context, core, env }) {
   const runsPerPr = parseRunsPerPr(env.RUNS_PER_PR ?? "3");
   if (!env.RUNNER_TEMP) throw new Error("RUNNER_TEMP is not set: this runs as a GitHub Actions step");
-  const root = path2.join(env.RUNNER_TEMP, "testivai-pages");
-  const siteDir = path2.join(root, "site");
-  const stateFile = path2.join(root, "state.json");
+  const root = path3.join(env.RUNNER_TEMP, "testivai-pages");
+  const siteDir = path3.join(root, "site");
+  const stateFile = path3.join(root, "state.json");
   const include = parseInclude(env);
+  const cacheDir = parseCache(env.CACHE ?? "false") ? env.CACHE_DIR?.trim() || path3.join(root, "cache") : void 0;
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || "testivai-visual-report",
     runsPerPr,
@@ -3644,15 +3781,18 @@ async function build({ github, context, core, env }) {
     siteDir,
     serverUrl: context.serverUrl,
     ...include ? { include } : {},
+    ...cacheDir ? { cacheDir } : {},
     log: core
   });
   if (!result.published) {
     core.notice(result.reason);
     core.setOutput("published", "false");
+    core.setOutput("cache-save", "false");
     await writeJobSummary(core, publishSummary({ published: false, reason: result.reason }));
     return;
   }
-  fs2.writeFileSync(stateFile, JSON.stringify(result.state));
+  core.setOutput("cache-save", result.downloads.cacheChanged ? "true" : "false");
+  fs3.writeFileSync(stateFile, JSON.stringify(result.state));
   core.info(`Built the site: ${result.files} files, ${Math.round(result.bytes / 1024)} KB.`);
   core.setOutput("published", "true");
   core.setOutput("site-dir", siteDir);
@@ -3662,7 +3802,7 @@ async function build({ github, context, core, env }) {
 async function finish({ github, context, core, env }) {
   const comment = parseComment(env.COMMENT ?? "true");
   if (!env.STATE_FILE) throw new Error("STATE_FILE is not set: the build step did not publish");
-  const state = JSON.parse(fs2.readFileSync(env.STATE_FILE, "utf8"));
+  const state = JSON.parse(fs3.readFileSync(env.STATE_FILE, "utf8"));
   const { siteUrl } = await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
     state,
     pageUrl: env.PAGE_URL,
@@ -3677,6 +3817,7 @@ async function finish({ github, context, core, env }) {
 0 && (module.exports = {
   build,
   finish,
+  parseCache,
   parseComment,
   parseInclude,
   parseRunsPerPr
