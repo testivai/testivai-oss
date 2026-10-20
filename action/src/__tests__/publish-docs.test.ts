@@ -142,6 +142,19 @@ describe('GitHub Pages setup docs', () => {
     expect(ACTION.inputs.cache.default).toBe('true');
   });
 
+  it('says when the link appears: after the whole visual workflow, so a triage job in it holds the link, and which jobs can move out', () => {
+    // workflow_run fires when every job of the visual workflow has finished,
+    // not when the reporter has commented; measured on testivai-example.
+    const pages = DOC.indexOf('## Reports on GitHub Pages');
+    const setup = DOC.slice(DOC.indexOf('### Setup', pages), DOC.indexOf('### Inputs', pages));
+    expect(setup).toMatch(/whole\s+visual\s+workflow/);
+    expect(setup).toMatch(/about\s+a\s+minute\s+and\s+a\s+half\s+after\s+the\s+comment/);
+    expect(setup).toContain('#ai-triage-of-every-diff');
+    expect(setup).toMatch(/delays\s+it\s+until\s+the\s+review\s+finishes/);
+    expect(setup).toMatch(/separate\s+workflow/);
+    expect(setup).not.toMatch(/a\s+minute\s+or\s+two\s+after\s+the\s+reporter's\s+comment/);
+  });
+
   it('is linked from the README', () => {
     expect(read('README.md')).toContain('docs/github-action.md#reports-on-github-pages');
   });
