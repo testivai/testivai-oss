@@ -53,6 +53,30 @@ describe('assessHealth', () => {
     });
   });
 
+  it('a font file that failed while no face did (the face loaded from its next src): a warning, not unhealthy', () => {
+    const fallback: CaptureHealth = {
+      ...HEALTHY,
+      resources: { status: 'checked', failed: { font: { count: 1, entries: [{ url: 'example.com/fonts/missing.woff2', status: 404 }] } } },
+    };
+    expect(assessHealth(fallback)).toEqual({
+      unhealthy: false,
+      problems: [],
+      reasons: [],
+      warnings: ['font file example.com/fonts/missing.woff2 returned 404'],
+    });
+  });
+
+  it("a font file that failed with no Font Loading API to say whether a face fell back ('unavailable'): unhealthy", () => {
+    const a = assessHealth({
+      ...HEALTHY,
+      fonts: { status: 'unavailable', failed: [] },
+      resources: { status: 'checked', failed: { font: { count: 1, entries: [{ url: 'example.com/fonts/fancy.woff2', status: 404 }] } } },
+    });
+    expect(a.unhealthy).toBe(true);
+    expect(a.problems).toEqual(['a failed web font']);
+    expect(a.reasons).toEqual(['font file example.com/fonts/fancy.woff2 returned 404']);
+  });
+
   it('a web font that failed with no request to blame (a local() source): unhealthy', () => {
     const a = assessHealth({ ...HEALTHY, fonts: { status: 'loaded', failed: [{ family: 'Fancy', weight: '400', style: 'normal' }] } });
     expect(a.unhealthy).toBe(true);

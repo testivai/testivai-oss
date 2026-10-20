@@ -6,14 +6,20 @@
  *   (b) a <link rel=stylesheet> that answers 404 (its query string carries a
  *       "token" that must never be recorded),
  *   (c) a broken <img>,
- *   (d) a healthy page (a web font, a stylesheet and an image that all load).
+ *   (d) a healthy page (a web font, a stylesheet and an image that all load),
+ *   (e) a web font whose first source answers 404 and whose next one loads
+ *       (the face renders as built: a warning, not unhealthy),
+ *   (f) a <link rel=preload as=image> of an extensionless URL that answers
+ *       404 (not a stylesheet),
+ *   (g) a script request for a .css file that answers 404 (not a stylesheet
+ *       the page applied).
  *
  * 1. HEALTH_PROBE_EXPRESSION evaluated in each page (Playwright) must parse
  *    to exactly the expected health.
  * 2. `testivai witness <url>` (the standalone crawler: probe plus network
  *    evidence) must record the same health in each capture's metadata.json,
  *    and results.json must call the font and stylesheet pages unhealthy
- *    captures and the broken image a warning.
+ *    captures, and the broken image and (e) to (g) warnings.
  *
  * Needs a Chrome/Chromium (TESTIVAI_CHROME_PATH, or one on PATH) and a
  * TrueType font file to serve. Without either the test is skipped, loudly,
@@ -34,7 +40,7 @@ import { type CaptureHealth, HEALTH_PROBE_EXPRESSION, parseHealth } from '@testi
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures', 'health');
 const CLI = path.join(path.dirname(require.resolve('@testivai/witness')), 'bin', 'testivai.js');
-const PAGES = ['/font-404.html', '/css-404.html', '/img-404.html', '/healthy.html'];
+const PAGES = ['/font-404.html', '/css-404.html', '/img-404.html', '/healthy.html', '/font-fallback.html', '/preload-404.html', '/xhr-css-404.html'];
 
 function findChrome(): string | null {
   const fromEnv = process.env.TESTIVAI_CHROME_PATH;
@@ -112,6 +118,18 @@ function expected(host: string): Record<string, CaptureHealth> {
       resources: { status: 'checked', failed: { img: { count: 1, entries: [{ url: `${host}/img/missing.png`, status: 404 }] } } },
     },
     '/healthy.html': HEALTHY,
+    '/font-fallback.html': {
+      ...HEALTHY,
+      resources: { status: 'checked', failed: { font: { count: 1, entries: [{ url: `${host}/fonts/missing.woff2`, status: 404 }] } } },
+    },
+    '/preload-404.html': {
+      ...HEALTHY,
+      resources: { status: 'checked', failed: { other: { count: 1, entries: [{ url: `${host}/_next/image`, status: 404 }] } } },
+    },
+    '/xhr-css-404.html': {
+      ...HEALTHY,
+      resources: { status: 'checked', failed: { other: { count: 1, entries: [{ url: `${host}/css/theme.css`, status: 404 }] } } },
+    },
   };
 }
 
@@ -151,7 +169,9 @@ async function main(): Promise<void> {
       assert.deepStrictEqual(parseHealth(raw), want[page], `${page}: the probe's health`);
       await context.close();
     }
-    console.log('[e2e] ✓ The health probe reads a failed web font, a failed stylesheet, a broken image and a healthy page exactly.');
+    console.log(
+      '[e2e] ✓ The health probe reads a failed web font, a failed stylesheet, a broken image, a healthy page, a font source fallback, an image preload and a script request for a .css file exactly.',
+    );
 
     // 2. The standalone crawler records the same, with what it saw on the network.
     fs.mkdirSync(path.join(projectRoot, '.testivai'), { recursive: true });
@@ -167,7 +187,13 @@ async function main(): Promise<void> {
       const metaPath = path.join(projectRoot, '.testivai', 'temp', name, 'metadata.json');
       assert.ok(fs.existsSync(metaPath), `${page}: no capture\n${output}`);
       const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-      assert.deepStrictEqual(meta.health, want[page], `${page}: the crawler's health`);
+      // The network names what the preload requested (an image), which the
+      // page alone could not tell: the request moves to that group, once.
+      const crawled =
+        page === '/preload-404.html'
+          ? { ...want[page], resources: { status: 'checked', failed: { img: { count: 1, entries: [{ url: `${host}/_next/image`, status: 404 }] } } } }
+          : want[page];
+      assert.deepStrictEqual(meta.health, crawled, `${page}: the crawler's health`);
     }
     const results = JSON.parse(fs.readFileSync(path.join(projectRoot, 'visual-report', 'results.json'), 'utf-8'));
     const health = (name: string) => results.snapshots.find((s: { name: string }) => s.name === name)?.captureHealth;
@@ -177,6 +203,12 @@ async function main(): Promise<void> {
     assert.strictEqual(health('img-404_html')?.unhealthy, null);
     assert.deepStrictEqual(health('img-404_html')?.warnings, [`image ${host}/img/missing.png returned 404`]);
     assert.strictEqual(health('healthy_html')?.unhealthy, null);
+    assert.strictEqual(health('font-fallback_html')?.unhealthy, null, 'a face that loaded from its next source is not a failed web font');
+    assert.deepStrictEqual(health('font-fallback_html')?.warnings, [`font file ${host}/fonts/missing.woff2 returned 404`]);
+    assert.strictEqual(health('preload-404_html')?.unhealthy, null, 'an image preload is not a stylesheet');
+    assert.deepStrictEqual(health('preload-404_html')?.warnings, [`image ${host}/_next/image returned 404`]);
+    assert.strictEqual(health('xhr-css-404_html')?.unhealthy, null, 'a script request for a .css file is not a stylesheet');
+    assert.deepStrictEqual(health('xhr-css-404_html')?.warnings, [`request ${host}/css/theme.css returned 404`]);
     console.log('[e2e] ✓ testivai witness <url> records the same health per capture, and results.json reads it.');
   } finally {
     await browser.close();

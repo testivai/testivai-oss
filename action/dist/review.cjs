@@ -200,7 +200,10 @@ var HEALTH_PROBE_EXPRESSION = `(function () {
       return u.protocol;
     } catch (e) { return ''; }
   }
+  var sheetHrefs = {};
   function kindOf(url, initiator) {
+    if (initiator === 'fetch' || initiator === 'xmlhttprequest' || initiator === 'beacon') return 'other';
+    if (initiator === 'link' && sheetHrefs[url]) return 'css';
     var m = /\\.([a-z0-9]+)$/i.exec(url);
     var ext = m ? m[1].toLowerCase() : '';
     if (/^(woff2?|ttf|otf|eot)$/.test(ext)) return 'font';
@@ -208,7 +211,6 @@ var HEALTH_PROBE_EXPRESSION = `(function () {
     if (/^(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/.test(ext)) return 'img';
     if (/^m?js$/.test(ext)) return 'script';
     if (ext) return 'other';
-    if (initiator === 'link') return 'css';
     if (initiator === 'img' || initiator === 'image' || initiator === 'input') return 'img';
     if (initiator === 'script') return 'script';
     return 'other';
@@ -244,7 +246,9 @@ var HEALTH_PROBE_EXPRESSION = `(function () {
     for (var i = 0; i < links.length; i++) {
       var link = links[i];
       var rel = ' ' + String(link.getAttribute('rel') || '').toLowerCase().replace(/\\s+/g, ' ') + ' ';
-      if (rel.indexOf(' stylesheet ') === -1 || rel.indexOf(' alternate ') !== -1) continue;
+      if (rel.indexOf(' stylesheet ') === -1) continue;
+      if (link.getAttribute('href')) sheetHrefs[where(link.href)] = true;
+      if (rel.indexOf(' alternate ') !== -1) continue;
       if (link.disabled || !link.getAttribute('href')) continue;
       if (!link.sheet || statusByUrl[link.href] >= 400) {
         sheetsFailed++;

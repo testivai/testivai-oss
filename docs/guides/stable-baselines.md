@@ -327,13 +327,16 @@ therefore record, right after each screenshot, what failed to load:
   also adds what it saw on the network, cross-origin requests included.
 
 A capture is **unhealthy** when web fonts were still loading, a font face
-failed, a stylesheet failed, or a stylesheet or font request failed. The
+failed, a stylesheet failed, or a stylesheet request failed (a failed font
+file counts when its face failed too: a face whose first `src` fails and
+whose next one loads renders as built, so that is a warning). The
 report, the PR comment and the MCP verdicts then read **Unhealthy capture**
 with what failed, never "likely render noise", and no pass criterion
 (`noiseAutoPass`, `maxDiffPercent`, `shiftTolerance`) passes it while its pixels
 differ. An unhealthy baseline is called out on every compare against it.
-Broken images and failed scripts are warnings: shown, but they do not make a
-capture unhealthy on their own.
+Broken images, failed scripts and requests a script made (a `fetch()` of a
+`.css` file is not a stylesheet the page applied) are warnings: shown, but
+they do not make a capture unhealthy on their own.
 
 Fixes, in the order they usually help:
 

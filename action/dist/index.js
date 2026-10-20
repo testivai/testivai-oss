@@ -117187,8 +117187,13 @@ function assessHealth(health) {
     problems.add("a failed web font");
   }
   if (failed.font && failed.font.count > 0) {
-    reasons.push(...requestLines("font file", failed.font.entries, failed.font.count));
-    problems.add("a failed web font");
+    const lines = requestLines("font file", failed.font.entries, failed.font.count);
+    if (families.length > 0 || health.fonts.status === "unavailable") {
+      reasons.push(...lines);
+      problems.add("a failed web font");
+    } else {
+      warnings.push(...lines);
+    }
   }
   const css = failed.css ?? { count: 0, entries: [] };
   if (health.stylesheets.failed > 0) {

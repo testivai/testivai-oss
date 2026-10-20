@@ -3,17 +3,22 @@
  *
  * A capture is UNHEALTHY when what it shows is not the page as built: web
  * fonts were still loading, a web font failed to load (the page rendered with
- * a fallback font), a stylesheet failed to load, or a stylesheet or font
- * request answered 400 or more. Such a diff is a glitch of the capture or a
- * broken asset, never render noise: the DOM can be identical and the computed
- * styles match (the style digest hashes the declared font-family, not the font
- * that rendered), so without this the diff read "likely render noise".
+ * a fallback font), a stylesheet failed to load, or a stylesheet request
+ * answered 400 or more. Such a diff is a glitch of the capture or a broken
+ * asset, never render noise: the DOM can be identical and the computed styles
+ * match (the style digest hashes the declared font-family, not the font that
+ * rendered), so without this the diff read "likely render noise".
  *
- * Broken images, and failed scripts and other requests, are WARNINGS: recorded
- * and shown, but they do not make a capture unhealthy on their own. A broken
- * image shows as a changed region where it sits, which the pixel and DOM
- * layers already read; telling a broken image that matters from a tracking
- * pixel needs its position compared with the diff's regions (a follow-up).
+ * A font request that answered 400 or more makes the capture unhealthy only
+ * with a web font that failed, or with no Font Loading API to say none did: a
+ * face whose first `src` 404s and whose next one loads rendered as built.
+ *
+ * Broken images, failed scripts and other requests, and a failed font request
+ * while no web font failed, are WARNINGS: recorded and shown, but they do not
+ * make a capture unhealthy on their own. A broken image shows as a changed
+ * region where it sits, which the pixel and DOM layers already read; telling a
+ * broken image that matters from a tracking pixel needs its position compared
+ * with the diff's regions (a follow-up).
  *
  * Deterministic and read from results.json fields only (`captureHealth`), so
  * the report, @testivai/mcp and the GitHub Action agree. No Node dependencies.
@@ -29,7 +34,7 @@ export interface HealthAssessment {
   problems: string[];
   /** Why it is unhealthy, in plain words, most important first. */
   reasons: string[];
-  /** What else failed to load (images, scripts, other requests): shown, not unhealthy. */
+  /** What else failed to load (images, scripts, other requests, a font file a face fell back from): shown, not unhealthy. */
   warnings: string[];
 }
 
@@ -90,9 +95,17 @@ export function assessHealth(health: CaptureHealth): HealthAssessment {
     reasons.push(fontLine(families));
     problems.add('a failed web font');
   }
+  // A failed font request on its own is not a fallback font: the face can
+  // load from its next `src`. Unhealthy with a face that failed, or when the
+  // page had no Font Loading API to say whether one did.
   if (failed.font && failed.font.count > 0) {
-    reasons.push(...requestLines('font file', failed.font.entries, failed.font.count));
-    problems.add('a failed web font');
+    const lines = requestLines('font file', failed.font.entries, failed.font.count);
+    if (families.length > 0 || health.fonts.status === 'unavailable') {
+      reasons.push(...lines);
+      problems.add('a failed web font');
+    } else {
+      warnings.push(...lines);
+    }
   }
 
   // A failed <link> stylesheet is named once, with its request's status when

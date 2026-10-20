@@ -69,6 +69,12 @@ export const HEALTH_LIMITS = {
  * API never loses the rest; a part whose API is missing says 'unavailable'
  * where it can, never "loaded". URLs are recorded as host and path only: a
  * query string can carry tokens.
+ *
+ * A failed request is grouped by what it was: a fetch() or XHR is 'other'
+ * whatever its extension (the page never applied it); a request a <link>
+ * started is 'css' when a <link rel=stylesheet> names it, else by its
+ * extension (a 404 `<link rel=preload as=image>` is not a stylesheet); any
+ * other request by its extension, then by what started it.
  */
 export const HEALTH_PROBE_EXPRESSION = `(function () {
   var LIMIT = ${HEALTH_LIMITS.list};
@@ -83,7 +89,10 @@ export const HEALTH_PROBE_EXPRESSION = `(function () {
       return u.protocol;
     } catch (e) { return ''; }
   }
+  var sheetHrefs = {};
   function kindOf(url, initiator) {
+    if (initiator === 'fetch' || initiator === 'xmlhttprequest' || initiator === 'beacon') return 'other';
+    if (initiator === 'link' && sheetHrefs[url]) return 'css';
     var m = /\\.([a-z0-9]+)$/i.exec(url);
     var ext = m ? m[1].toLowerCase() : '';
     if (/^(woff2?|ttf|otf|eot)$/.test(ext)) return 'font';
@@ -91,7 +100,6 @@ export const HEALTH_PROBE_EXPRESSION = `(function () {
     if (/^(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/.test(ext)) return 'img';
     if (/^m?js$/.test(ext)) return 'script';
     if (ext) return 'other';
-    if (initiator === 'link') return 'css';
     if (initiator === 'img' || initiator === 'image' || initiator === 'input') return 'img';
     if (initiator === 'script') return 'script';
     return 'other';
@@ -127,7 +135,9 @@ export const HEALTH_PROBE_EXPRESSION = `(function () {
     for (var i = 0; i < links.length; i++) {
       var link = links[i];
       var rel = ' ' + String(link.getAttribute('rel') || '').toLowerCase().replace(/\\s+/g, ' ') + ' ';
-      if (rel.indexOf(' stylesheet ') === -1 || rel.indexOf(' alternate ') !== -1) continue;
+      if (rel.indexOf(' stylesheet ') === -1) continue;
+      if (link.getAttribute('href')) sheetHrefs[where(link.href)] = true;
+      if (rel.indexOf(' alternate ') !== -1) continue;
       if (link.disabled || !link.getAttribute('href')) continue;
       if (!link.sheet || statusByUrl[link.href] >= 400) {
         sheetsFailed++;
@@ -316,9 +326,11 @@ export function resourceTypeFromCdp(type: string | undefined): ResourceType {
  * Add what an adapter saw on the network (failed requests, cross-origin ones
  * included, which Resource Timing reports without a status) to a probe's
  * result, in the same shape. A request already recorded is not counted again;
- * a status replaces a failure recorded without one. Watching the network means
- * the requests were checked, so `resources.status` becomes 'checked'. Returns
- * a new block.
+ * a status replaces a failure recorded without one. The network's type is the
+ * request's destination, so a request the probe grouped by another type (an
+ * extensionless `<link rel=preload as=image>` reads 'other' in the page) moves
+ * to the network's. Watching the network means the requests were checked, so
+ * `resources.status` becomes 'checked'. Returns a new block.
  */
 export function mergeResourceFailures(health: CaptureHealth, failures: ResourceFailure[]): CaptureHealth {
   const failed: CaptureHealth['resources']['failed'] = {};
@@ -328,10 +340,19 @@ export function mergeResourceFailures(health: CaptureHealth, failures: ResourceF
   for (const failure of failures) {
     const url = hostPath(failure.url);
     if (!url) continue;
+    let entry: ResourceFailures['entries'][number] = { url, status: failure.status };
+    if (failure.status === 0 && failure.error) entry.error = failure.error.slice(0, HEALTH_LIMITS.text);
+    for (const [type, other] of Object.entries(failed) as Array<[ResourceType, ResourceFailures]>) {
+      if (type === failure.type) continue;
+      const at = other.entries.findIndex((e) => e.url === url);
+      if (at === -1) continue;
+      const [moved] = other.entries.splice(at, 1);
+      other.count--;
+      if (other.count === 0) delete failed[type];
+      if (failure.status === 0 && moved.status > 0) entry = moved;
+    }
     const group = failed[failure.type] ?? { count: 0, entries: [] };
     failed[failure.type] = group;
-    const entry: ResourceFailures['entries'][number] = { url, status: failure.status };
-    if (failure.status === 0 && failure.error) entry.error = failure.error.slice(0, HEALTH_LIMITS.text);
     const known = group.entries.findIndex((e) => e.url === url);
     if (known !== -1) {
       if (group.entries[known].status === 0 && failure.status > 0) group.entries[known] = entry;

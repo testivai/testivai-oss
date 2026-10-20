@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Font fallback</title>
+  <!-- The first source answers 404, the next one loads: the face renders as built. -->
+  <style>
+    @font-face { font-family: "Fallback"; src: url("/fonts/missing.woff2") format("woff2"), url("/fonts/fancy.ttf") format("truetype"); }
+    body { font-family: "Fallback", serif; }
+  </style>
+</head>
+<body><p>A web font whose first source answers 404 and whose next one loads.</p></body>
+</html>

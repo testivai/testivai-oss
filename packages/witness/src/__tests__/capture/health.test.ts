@@ -172,6 +172,8 @@ describe('HEALTH_PROBE_EXPRESSION', () => {
 
   it('groups failed requests by type: by extension first, then by what started the request', () => {
     const raw = probe({
+      // An extensionless stylesheet is css because a <link rel=stylesheet> names it.
+      links: [{ rel: 'stylesheet', href: 'https://example.com/styles', sheet: {} }],
       resources: [
         { name: 'https://example.com/a.css', initiatorType: 'link', responseStatus: 404 },
         { name: 'https://example.com/styles', initiatorType: 'link', responseStatus: 500 },
@@ -199,6 +201,62 @@ describe('HEALTH_PROBE_EXPRESSION', () => {
           entries: [
             { url: 'example.com/api/items', status: 503 },
             { url: 'example.com/manifest.json', status: 404 },
+          ],
+        },
+      },
+    });
+  });
+
+  it('a <link> request is css only when a <link rel=stylesheet> names it or it ends in .css: a 404 preload of an extensionless image is not a stylesheet', () => {
+    const raw = probe({
+      links: [
+        { rel: 'preload', href: '/_next/image?url=%2Fhero.png&w=1080', sheet: null },
+        { rel: 'modulepreload', href: '/_next/static/chunk', sheet: null },
+        { rel: 'stylesheet', href: '/theme?v=2', sheet: {} },
+      ],
+      resources: [
+        { name: 'https://example.com/_next/image?url=%2Fhero.png&w=1080', initiatorType: 'link', responseStatus: 404 },
+        { name: 'https://example.com/_next/static/chunk', initiatorType: 'link', responseStatus: 404 },
+        { name: 'https://example.com/theme?v=2', initiatorType: 'link', responseStatus: 404 },
+        { name: 'https://example.com/print.css', initiatorType: 'link', responseStatus: 404 },
+      ],
+    });
+    expect(parseHealth(raw)?.resources).toEqual({
+      status: 'checked',
+      failed: {
+        other: {
+          count: 2,
+          entries: [
+            { url: 'example.com/_next/image', status: 404 },
+            { url: 'example.com/_next/static/chunk', status: 404 },
+          ],
+        },
+        css: {
+          count: 2,
+          entries: [
+            { url: 'example.com/theme', status: 404 },
+            { url: 'example.com/print.css', status: 404 },
+          ],
+        },
+      },
+    });
+  });
+
+  it('a fetch() or XHR request is never a stylesheet, whatever its extension: the page did not apply it', () => {
+    const raw = probe({
+      resources: [
+        { name: 'https://example.com/theme.css', initiatorType: 'fetch', responseStatus: 404 },
+        { name: 'https://example.com/legacy.css', initiatorType: 'xmlhttprequest', responseStatus: 404 },
+      ],
+    });
+    expect(parseHealth(raw)?.resources).toEqual({
+      status: 'checked',
+      failed: {
+        other: {
+          count: 2,
+          entries: [
+            { url: 'example.com/theme.css', status: 404 },
+            { url: 'example.com/legacy.css', status: 404 },
           ],
         },
       },
@@ -324,6 +382,42 @@ describe('mergeResourceFailures (network-side evidence, same shape)', () => {
       { url: 'https://example.com/a.css', type: 'css', status: 404 },
     ]);
     expect(merged.resources.failed).toEqual({ css: { count: 1, entries: [{ url: 'example.com/a.css', status: 404 }] } });
+  });
+
+  it("a request the page grouped by another type moves to the network's (the request's destination): counted once", () => {
+    const fromProbe: CaptureHealth = {
+      ...HEALTHY,
+      resources: {
+        status: 'checked',
+        failed: {
+          // An extensionless <link rel=preload as=image> the page cannot tell from other requests.
+          other: {
+            count: 2,
+            entries: [
+              { url: 'example.com/_next/image', status: 404 },
+              { url: 'example.com/api/items', status: 503 },
+            ],
+          },
+          css: { count: 1, entries: [{ url: 'example.com/x', status: 404 }] },
+        },
+      },
+    };
+    const merged = mergeResourceFailures(fromProbe, [
+      { url: 'https://example.com/_next/image?url=%2Fhero.png', type: 'img', status: 404 },
+      // No status on the network side: the page's status is kept.
+      { url: 'https://example.com/x', type: 'other', status: 0, error: 'net::ERR_ABORTED' },
+    ]);
+    expect(merged.resources.failed).toEqual({
+      other: {
+        count: 2,
+        entries: [
+          { url: 'example.com/api/items', status: 503 },
+          { url: 'example.com/x', status: 404 },
+        ],
+      },
+      img: { count: 1, entries: [{ url: 'example.com/_next/image', status: 404 }] },
+    });
+    expect(fromProbe.resources.failed.other?.count).toBe(2); // not mutated
   });
 
   it('an empty list still says the requests were checked', () => {
