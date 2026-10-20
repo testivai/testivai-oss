@@ -15,10 +15,10 @@
  * can save an Actions cache under any key, so an entry is used only when its
  * SHA-256 is the digest GitHub lists for the artifact (upload-artifact v4 and
  * later); an artifact without one is never kept. Other bytes, a file cut
- * short, a symbolic link, a directory or a name that is not <number>.zip is
- * a miss: the report is downloaded again, and prune() removes the rest. The
- * cache never fails the publish: when the folder cannot be used, every
- * report is downloaded, as without it.
+ * short, a symbolic link, a named pipe, a directory or a name that is not
+ * <number>.zip is a miss: the report is downloaded again, and prune()
+ * removes the rest. The cache never fails the publish: when the folder
+ * cannot be used, every report is downloaded, as without it.
  */
 
 import { createHash } from 'crypto';
@@ -54,8 +54,14 @@ export interface ReportCacheOptions {
 
 const DIGEST = /^sha256:([0-9a-f]{64})$/i;
 
-/** Read-only, not through a symbolic link (Windows has no O_NOFOLLOW). */
-const OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
+/**
+ * Read-only, not through a symbolic link, and without waiting: tar restores a
+ * named pipe, and opening one to read would wait for a writer that never
+ * comes, so the publish would hang. With O_NONBLOCK the open returns at once
+ * and the type check makes the pipe a miss; on a regular file it changes
+ * nothing. (Windows has neither flag.)
+ */
+const OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -106,9 +112,10 @@ export function openReportCache(dir: string, { log, maxEntryBytes }: ReportCache
       const want = sha256Of(digest);
       if (!usable || !name || !want) return undefined;
       const file = path.join(dir, name);
-      // Opened once, never through a symbolic link (that open fails, ELOOP),
-      // and checked and read through that one descriptor: no other file can
-      // take its place between the check and the read.
+      // Opened once, never through a symbolic link (that open fails, ELOOP)
+      // nor waiting on a named pipe, and checked and read through that one
+      // descriptor: no other file can take its place between the check and
+      // the read.
       let bytes: Buffer | undefined;
       let unusable = '';
       let fd: number | undefined;

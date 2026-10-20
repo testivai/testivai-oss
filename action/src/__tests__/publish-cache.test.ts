@@ -9,6 +9,7 @@
  * fail.
  */
 
+import { execFileSync, spawnSync } from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -222,6 +223,43 @@ describe('read and write', () => {
     cache.write(30, sha256(ZIP), ZIP);
 
     expect(cache.read(30, sha256(ZIP))).toBeDefined();
+  });
+
+  // tar restores a named pipe, and opening one to read waits for a writer: a
+  // pipe in an entry's place would hang the publish until the job's timeout.
+  // That wait is a blocking call jest's own timeout cannot interrupt, so the
+  // read runs in a child process that is killed after a few seconds: a hang
+  // fails this test instead of hanging the suite.
+  (process.platform === 'win32' ? it.skip : it)('treats a named pipe in an entry’s place as a miss, at once, and removes it (no mkfifo on Windows)', () => {
+    const ts = jest.requireActual<typeof import('typescript')>('typescript');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'publish', 'cache.ts'), 'utf8');
+    const compiled = path.join(dir, 'cache.js');
+    fs.writeFileSync(
+      compiled,
+      ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText,
+    );
+    fs.mkdirSync(cacheDir);
+    const entry = path.join(cacheDir, '30.zip');
+    execFileSync('mkfifo', [entry]);
+    const script = `
+      const fs = require('fs');
+      const { openReportCache } = require(${JSON.stringify(compiled)});
+      const lines = [];
+      const log = { info: (m) => lines.push(m), notice: (m) => lines.push(m), warning: (m) => lines.push(m) };
+      const cache = openReportCache(${JSON.stringify(cacheDir)}, { log, maxEntryBytes: ${150 * MB} });
+      const read = cache.read(30, ${JSON.stringify(sha256(ZIP))});
+      process.stdout.write(JSON.stringify({ read: read === undefined ? null : read.length, hits: cache.stats.hits, lines,
+        left: fs.lstatSync(${JSON.stringify(entry)}, { throwIfNoEntry: false }) !== undefined }));
+    `;
+
+    const started = Date.now();
+    const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+
+    expect({ signal: child.signal, status: child.status, stderr: child.stderr }).toEqual({ signal: null, status: 0, stderr: '' });
+    expect(Date.now() - started).toBeLessThan(5000);
+    const out = JSON.parse(child.stdout);
+    expect(out).toMatchObject({ read: null, hits: 0, left: false });
+    expect(out.lines).toEqual([expect.stringMatching(/30\.zip is not a file: downloaded again/)]);
   });
 
   it('does not read an entry over the size limit, nor keep a download over it', () => {

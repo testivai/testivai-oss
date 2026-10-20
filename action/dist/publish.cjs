@@ -1376,7 +1376,7 @@ var import_crypto = require("crypto");
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var DIGEST = /^sha256:([0-9a-f]{64})$/i;
-var OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
+var OPEN_ENTRY = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
 var message = (error) => error instanceof Error ? error.message : String(error);
 function sha256Of(digest) {
   const m = typeof digest === "string" ? DIGEST.exec(digest) : null;
