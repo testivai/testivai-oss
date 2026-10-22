@@ -118,11 +118,11 @@ describe('GitHub Pages setup docs', () => {
       expect((w().on.push as { branches?: string[] }).branches).toEqual(['main']);
     });
 
-    it('builds the site in a job of its own that can only read, from the default branch, never the pull request', () => {
+    it('builds the site in a job of its own that can only read (pages: read, for site.github in the github-pages gem), from the default branch, never the pull request', () => {
       expect(block()).not.toMatch(/github\.event\.(pull_request|workflow_run)\.head|head_sha|head_ref|github\.head_ref/);
       const jobs = buildJobs();
       expect(jobs).toHaveLength(1);
-      expect(jobs[0].permissions).toEqual({ contents: 'read' });
+      expect(jobs[0].permissions).toEqual({ contents: 'read', pages: 'read' });
       const checkouts = jobs[0].steps!.filter((s) => s.uses?.startsWith('actions/checkout@'));
       expect(checkouts).toHaveLength(1);
       expect(checkouts[0].with?.ref).toBe('${{ github.event.repository.default_branch }}');

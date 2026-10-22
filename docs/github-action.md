@@ -690,7 +690,8 @@ output. With `reports-path: visual-reports` on `https://www.example.com/`:
 **Build the site from the default branch, never from a pull request.** The
 publish job holds `pages: write` and `id-token: write`, and a fork's code must
 never run with those, or get its pages onto your site. The example builds in
-a job that can only read, checking out
+a job that can only read (`contents: read`, and `pages: read` for the
+`github-pages` gem's `site.github` metadata), checking out
 `${{ github.event.repository.default_branch }}` on every event
 (`pull_request_target`'s own checkout is the pull request's base branch,
 which need not be the default branch), and hands the folder over as an
@@ -741,6 +742,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # site.github (the github-pages gem's metadata) reads the Pages
+      # settings; without this a page that uses it fails the build with 403.
+      pages: read
     steps:
       # The default branch on every event, never the pull request.
       - uses: actions/checkout@v7
