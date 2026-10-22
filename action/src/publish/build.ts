@@ -8,6 +8,14 @@
  * downloaded comes from the report cache instead (cache.ts), and its page is
  * rebuilt all the same. finishPublish runs after
  * actions/deploy-pages, so a comment never links a page that is not live.
+ *
+ * With a site of your own (site-dir), that site is copied as it is to the
+ * root, and everything TestivAI makes goes under reports-path: site.url (the
+ * base of every report link) is the site's address plus reports-path. No site
+ * file is ever written over: a site that already has reports-path is refused
+ * before anything is read from GitHub, and every file is created only if it
+ * does not exist. Where the settings refuse the reports but allow a deploy
+ * (canDeploySite), the site is deployed alone, and no report is downloaded.
  */
 
 import * as fs from 'fs';
@@ -16,7 +24,7 @@ import type { PublishApi } from './api';
 import { ArchiveRefused, readReportArchive, type ReportArchive } from './archive';
 import { openReportCache, type ReportCache } from './cache';
 import { commentFor, type PublishedPr } from './comments';
-import { decidePublish, pagesAddress } from './pages';
+import { canDeploySite, decidePublish, pagesAddress, siteAddress, type PagesInfo } from './pages';
 import { planSite, type PlannedRun, type PlanPr, type SitePlan } from './plan';
 import { buildIndexPages, buildRunReport, type RunOutcome, type SiteFile, type SiteInfo } from './site';
 import { publishedSite, type PublishedSite } from './summary';
@@ -53,6 +61,13 @@ export interface BuildOptions {
    */
   include?: { dir: string; name: string };
   /**
+   * A site of your own, already built from the default branch: published as
+   * it is at the root, with the reports under reportsPath (one to four
+   * lowercase folder names joined by '/'), which the site must not have.
+   * Not with include.
+   */
+  site?: { dir: string; reportsPath: string };
+  /**
    * A folder of report ZIPs kept between publishes (cache.ts; publish/action.yml
    * restores and saves it with actions/cache): a report found there, with the
    * SHA-256 GitHub lists for its artifact, is not downloaded again. Without
@@ -72,7 +87,12 @@ export interface DownloadStats {
 }
 
 export interface PublishState {
+  /** The site's address (its root), ending in '/'. */
   siteUrl: string;
+  /** With a site of your own: the folder the reports are in, under siteUrl. */
+  reportsPath?: string;
+  /** With a site of your own deployed without its reports: why they were not published. */
+  reportsSkipped?: string;
   visibility: 'public' | 'private';
   /** Each open pull request's latest published run. */
   prs: PublishedPr[];
@@ -80,9 +100,15 @@ export interface PublishState {
   site?: PublishedSite;
 }
 
+/** published: a site was built to deploy; reports: it holds the reports (false only for a site of your own deployed without them). */
 export type BuildResult =
   | { published: false; reason: string }
-  | { published: true; reason: string; state: PublishState; files: number; bytes: number; downloads: DownloadStats };
+  | { published: true; reports: boolean; reason: string; state: PublishState; files: number; bytes: number; downloads: DownloadStats };
+
+/** The address the reports are at: the site's, plus reports-path with a site of your own. */
+export function reportsAddress(state: Pick<PublishState, 'siteUrl' | 'reportsPath'>): string {
+  return state.reportsPath ? `${state.siteUrl}${state.reportsPath}/` : state.siteUrl;
+}
 
 /** root/rel, for a path made only of letters, digits, '-' and '_' segments ending in .html or .png. */
 export function safeSitePath(root: string, rel: string): string {
@@ -97,38 +123,93 @@ const sizeOf = (f: SiteFile) => (typeof f.data === 'string' ? Buffer.byteLength(
 /** Folder names the reports use. */
 const RESERVED = new Set(['pr', 'main']);
 
-/** The include folder's regular files (relative paths) and their total size; symbolic links are skipped. */
-function readInclude(include: { dir: string; name: string }, maxBytes: number, log: Log): { files: string[]; bytes: number } {
-  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
-    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
-  }
-  if (!fs.existsSync(include.dir) || !fs.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
+/** A folder's regular files (relative paths) and their total size; symbolic links are skipped. */
+function readFolder(dir: string, label: string, maxBytes: number, log: Log): { files: string[]; bytes: number } {
+  if (!fs.existsSync(dir) || !fs.lstatSync(dir).isDirectory()) throw new Error(`${label} ${dir} is not a folder`);
   const files: string[] = [];
   let bytes = 0;
   const walk = (rel: string) => {
-    for (const entry of fs.readdirSync(path.join(include.dir, rel), { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
       const child = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) log.warning(`include-dir: ${child} is a symbolic link: skipped.`);
+      if (entry.isSymbolicLink()) log.warning(`${label}: ${child} is a symbolic link: skipped.`);
       else if (entry.isDirectory()) walk(child);
       else if (entry.isFile()) {
         files.push(child);
-        bytes += fs.statSync(path.join(include.dir, child)).size;
+        bytes += fs.statSync(path.join(dir, child)).size;
       }
     }
   };
   walk('');
-  if (bytes > maxBytes) throw new Error(`include-dir ${include.dir} is ${mb(bytes)}, over the site's ${mb(maxBytes)} budget`);
+  if (bytes > maxBytes) throw new Error(`${label} ${dir} is ${mb(bytes)}, over the site's ${mb(maxBytes)} budget`);
   return { files, bytes };
+}
+
+function readInclude(include: { dir: string; name: string }, maxBytes: number, log: Log): { files: string[]; bytes: number } {
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
+    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
+  }
+  return readFolder(include.dir, 'include-dir', maxBytes, log);
+}
+
+const FOLDER = '[a-z0-9][a-z0-9_-]{0,39}';
+const REPORTS_PATH = new RegExp(`^${FOLDER}(?:/${FOLDER}){0,3}$`);
+
+/** The site's files, once reports-path is known to be free in it. */
+function readOwnSite(site: { dir: string; reportsPath: string }, maxBytes: number, log: Log): { files: string[]; bytes: number } {
+  if (!REPORTS_PATH.test(site.reportsPath)) {
+    throw new Error(
+      `reports-path must be one to four lowercase folder names (letters, digits, '-', '_') joined by '/', such as visual-reports; got ${JSON.stringify(site.reportsPath)}`,
+    );
+  }
+  if (!fs.existsSync(site.dir) || !fs.lstatSync(site.dir).isDirectory()) throw new Error(`site-dir ${site.dir} is not a folder`);
+  // Never write over a site file: reports-path, and every folder on the way to it, must be free or a folder.
+  const parts = site.reportsPath.split('/');
+  for (let i = 1; i <= parts.length; i++) {
+    const rel = parts.slice(0, i).join('/');
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(path.join(site.dir, rel));
+    } catch {
+      break;
+    }
+    if (i === parts.length || !stat.isDirectory()) {
+      throw new Error(
+        `site-dir ${site.dir} already has ${rel}${i === parts.length ? '' : `, which is not a folder`}: reports-path ${site.reportsPath} must be a path the site does not use, so that no site file is written over. Choose another reports-path, or take ${rel} out of the site.`,
+      );
+    }
+  }
+  return readFolder(site.dir, 'site-dir', maxBytes, log);
+}
+
+/** Copies files (relative paths) from one folder to another, never over an existing file. */
+export function copyFiles(from: string, to: string, files: string[]): void {
+  for (const rel of files) {
+    const target = path.join(to, rel);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(from, rel), target, fs.constants.COPYFILE_EXCL);
+  }
 }
 
 export async function buildSite(api: PublishApi, options: BuildOptions): Promise<BuildResult> {
   const { log } = options;
   const limits = { ...PUBLISH_LIMITS, ...options.limits };
+  if (options.site && options.include) {
+    throw new Error('include-dir cannot be used with site-dir: put those pages in the site, which is published as it is');
+  }
   const include = options.include ? readInclude(options.include, limits.maxSiteBytes, log) : undefined;
+  const own = options.site ? readOwnSite(options.site, limits.maxSiteBytes, log) : undefined;
 
   const repo = await api.repo();
-  const decision = decidePublish({ pages: await api.pages(), repoVisibility: repo.visibility, publicReportsConsent: options.consent });
-  if (!decision.publish || !decision.siteUrl || !decision.visibility) return { published: false, reason: decision.reason };
+  const pages = await api.pages();
+  const decision = decidePublish({ pages, repoVisibility: repo.visibility, publicReportsConsent: options.consent });
+  if (!decision.publish || !decision.siteUrl || !decision.visibility) {
+    if (!options.site || !own) return { published: false, reason: decision.reason };
+    if (!canDeploySite(pages)) {
+      const why = pages.found ? ' site-dir is not deployed either: the branch keeps serving the site.' : ' site-dir is not deployed either.';
+      return { published: false, reason: `${decision.reason}${why}` };
+    }
+    return deployOwnSiteAlone(options, own, pages, decision.reason);
+  }
   log.info(decision.reason);
 
   const prs = await api.openPrs();
@@ -165,7 +246,11 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
 
   fs.rmSync(options.siteDir, { recursive: true, force: true });
   fs.mkdirSync(options.siteDir, { recursive: true });
-  const site: SiteInfo = { url: decision.siteUrl, repo: repo.fullName, serverUrl: options.serverUrl, defaultBranch: repo.defaultBranch };
+  const reportsPath = options.site?.reportsPath;
+  // Where every file TestivAI makes goes, and the address all its links start from.
+  const reportsDir = reportsPath ? path.join(options.siteDir, ...reportsPath.split('/')) : options.siteDir;
+  const reportsUrl = reportsAddress({ siteUrl: decision.siteUrl, ...(reportsPath ? { reportsPath } : {}) });
+  const site: SiteInfo = { url: reportsUrl, repo: repo.fullName, serverUrl: options.serverUrl, defaultBranch: repo.defaultBranch };
   const artifactUrl = (r: PlannedRun) => `${options.serverUrl}/${repo.fullName}/actions/runs/${r.runId}/artifacts/${r.artifactId}`;
 
   // The most useful reports first, so a site over its size loses the older runs.
@@ -178,12 +263,14 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
   const left = new Set<PlannedRun>();
   let bytes = 0;
   let files = 0;
+  if (own && options.site) {
+    copyFiles(options.site.dir, options.siteDir, own.files);
+    bytes += own.bytes;
+    files += own.files.length;
+    log.info(`Published ${options.site.dir} at the site's root: ${own.files.length} files; the reports go under ${options.site.reportsPath}/.`);
+  }
   if (include && options.include) {
-    for (const rel of include.files) {
-      const to = path.join(options.siteDir, options.include.name, rel);
-      fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(path.join(options.include.dir, rel), to);
-    }
+    copyFiles(options.include.dir, path.join(options.siteDir, options.include.name), include.files);
     bytes += include.bytes;
     files += include.files.length;
     log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
@@ -201,7 +288,7 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
       log.warning(`Run ${run.runId} is not published: the site would be over its ${mb(limits.maxSiteBytes)} budget.`);
       continue;
     }
-    writeFiles(options.siteDir, built.files);
+    writeFiles(reportsDir, built.files);
     bytes += size;
     files += built.files.length;
     outcomes.set(run.runId, built.outcome);
@@ -220,13 +307,21 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     prs: plan.prs.map((p) => ({ pr: p.pr, runs: p.runs.filter((r) => !left.has(r)) })).filter((p) => p.runs.length > 0),
   };
 
-  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...(options.include ? { include: options.include.name } : {}) });
-  writeFiles(options.siteDir, index);
+  const index = buildIndexPages({
+    site,
+    plan: published,
+    outcomes,
+    runsPerPr: options.runsPerPr,
+    ...(options.include ? { include: options.include.name } : {}),
+    ...(options.site ? { notFoundPage: false } : {}),
+  });
+  writeFiles(reportsDir, index);
   bytes += index.reduce((n, f) => n + sizeOf(f), 0);
   files += index.length;
 
   const state: PublishState = {
     siteUrl: decision.siteUrl,
+    ...(reportsPath ? { reportsPath } : {}),
     visibility: decision.visibility,
     prs: published.prs.map(({ pr, runs: [latest] }) => {
       const outcome = outcomes.get(latest.runId) as RunOutcome;
@@ -249,7 +344,37 @@ export async function buildSite(api: PublishApi, options: BuildOptions): Promise
     fromCache: cache?.stats.hits ?? 0,
     cacheChanged: cache !== undefined && cache.stats.stored + cache.stats.removed > 0,
   };
-  return { published: true, reason: decision.reason, state, files, bytes, downloads: stats };
+  return { published: true, reports: true, reason: decision.reason, state, files, bytes, downloads: stats };
+}
+
+/**
+ * A site of your own, deployed without its reports: the settings allow a
+ * deploy but not the reports (pages.ts decidePublish says why). Nothing
+ * about the reports is read from GitHub, and nothing goes under reports-path,
+ * so reports an earlier publish put there are taken down.
+ */
+function deployOwnSiteAlone(options: BuildOptions, own: { files: string[]; bytes: number }, pages: PagesInfo, reason: string): BuildResult {
+  const site = options.site as { dir: string; reportsPath: string };
+  fs.rmSync(options.siteDir, { recursive: true, force: true });
+  fs.mkdirSync(options.siteDir, { recursive: true });
+  copyFiles(site.dir, options.siteDir, own.files);
+  options.log.info(`Published ${site.dir} at the site's root: ${own.files.length} files, without the reports.`);
+  const state: PublishState = {
+    siteUrl: siteAddress(pages.htmlUrl) ?? '',
+    visibility: pages.public === false ? 'private' : 'public',
+    reportsPath: site.reportsPath,
+    reportsSkipped: reason,
+    prs: [],
+  };
+  return {
+    published: true,
+    reports: false,
+    reason,
+    state,
+    files: own.files.length,
+    bytes: own.bytes,
+    downloads: { downloaded: 0, downloadedBytes: 0, fromCache: 0, cacheChanged: false },
+  };
 }
 
 /** The run's report: from the cache when it holds the artifact's ZIP, else downloaded (and kept there). */
@@ -277,11 +402,12 @@ async function fetchArchive(
   }
 }
 
-function writeFiles(root: string, files: SiteFile[]): void {
+/** Writes the files TestivAI makes; each is new ('wx'), so none is written over. */
+export function writeFiles(root: string, files: SiteFile[]): void {
   for (const f of files) {
     const to = safeSitePath(root, f.path);
     fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.writeFileSync(to, f.data);
+    fs.writeFileSync(to, f.data, { flag: 'wx' });
   }
 }
 
@@ -312,8 +438,16 @@ export interface FinishOptions {
   log: Log;
 }
 
-/** verified: whether the site answered; siteUrl: the address the links use (the deploy's, as https, else the build's). */
-export async function finishPublish(api: PublishApi, options: FinishOptions): Promise<{ verified: boolean | 'skipped'; siteUrl: string }> {
+/**
+ * verified: whether the site answered; siteUrl: the site's address (the
+ * deploy's, as https, else the build's); reportsUrl: where the reports are
+ * on it, which the links use (siteUrl plus reports-path with a site of your
+ * own), absent when the site was deployed without them.
+ */
+export async function finishPublish(
+  api: PublishApi,
+  options: FinishOptions,
+): Promise<{ verified: boolean | 'skipped'; siteUrl: string; reportsUrl?: string }> {
   const { log } = options;
   let { state } = options;
 
@@ -323,7 +457,11 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
     state = { ...state, siteUrl: deployed, prs: state.prs.map((p) => ({ ...p, url: deployed + p.url.slice(state.siteUrl.length) })) };
   }
 
-  // Only the address the deploy reports is opened: it is what GitHub says is live.
+  const reportsUrl = state.reportsSkipped === undefined ? reportsAddress(state) : undefined;
+  const result = (verified: boolean | 'skipped') => ({ verified, siteUrl: state.siteUrl, ...(reportsUrl ? { reportsUrl } : {}) });
+
+  // Only the address the deploy reports is opened: it is what GitHub says is
+  // live. The reports' front page when there are reports, else the site.
   let verified: boolean | 'skipped' = 'skipped';
   if (state.visibility !== 'public') {
     log.info('The site is private: it is not opened from here (it needs a GitHub sign-in).');
@@ -332,20 +470,22 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
   } else {
     const fetchFn = options.fetch ?? ((url: string) => fetch(url, { redirect: 'follow' }));
     const retries = options.retries ?? 6;
+    // state.siteUrl is the deployed address by now, so reportsUrl is on it.
+    const opened = reportsUrl ?? deployed;
     verified = false;
     for (let attempt = 1; attempt <= retries && !verified; attempt++) {
       try {
-        verified = (await fetchFn(deployed)).status === 200;
+        verified = (await fetchFn(opened)).status === 200;
       } catch {
         verified = false;
       }
       if (!verified && attempt < retries) await new Promise((r) => setTimeout(r, options.delayMs ?? 10_000));
     }
-    if (verified) log.info(`The site answers at ${deployed}.`);
-    else log.warning(`The site did not answer at ${deployed} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
+    if (verified) log.info(`The site answers at ${opened}.`);
+    else log.warning(`The site did not answer at ${opened} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
   }
 
-  if (!options.comment) return { verified, siteUrl: state.siteUrl };
+  if (!options.comment) return result(verified);
   for (const published of state.prs) {
     try {
       // A private site's images cannot be fetched for the comment (GitHub's image proxy has no sign-in).
@@ -365,5 +505,5 @@ export async function finishPublish(api: PublishApi, options: FinishOptions): Pr
       );
     }
   }
-  return { verified, siteUrl: state.siteUrl };
+  return result(verified);
 }

@@ -41,7 +41,7 @@ interface Workflow {
 const DOC = read('docs/github-action.md');
 const MB = 1024 * 1024;
 
-/** The doc's workflows that use the publish action: the basic one, then one with pages of your own. */
+/** The doc's workflows that use the publish action: the basic one, one with pages of your own, one with a website at the root (site-dir). */
 const workflows = (markdown: string): Workflow[] =>
   [...markdown.matchAll(/```ya?ml\n([\s\S]*?)```/g)]
     .map((m) => m[1])
@@ -53,25 +53,26 @@ const last = <T>(items: T[]): T => items[items.length - 1];
 const publishJobs = (w: Workflow) => Object.values(w.jobs).filter((j) => j.steps?.some((s) => s.uses?.startsWith('testivai/testivai-oss/publish@')));
 
 describe('GitHub Pages setup docs', () => {
-  it('shows the basic workflow and one with pages of your own', () => {
-    expect(ALL).toHaveLength(2);
+  it('shows the basic workflow, one with pages of your own and one with a website at the root', () => {
+    expect(ALL).toHaveLength(3);
+    expect(last(publishJobs(ALL[2])[0].steps!).with).toMatchObject({ 'site-dir': expect.any(String), 'reports-path': expect.any(String) });
     expect(last(publishJobs(ALL[1])[0].steps!).with).toMatchObject({ 'include-dir': expect.any(String), 'include-name': expect.any(String) });
   });
 
-  it.each([0, 1])('workflow %i runs after the visual workflow, when a pull request closes, and by hand', (i) => {
+  it.each([0, 1, 2])('workflow %i runs after the visual workflow, when a pull request closes, and by hand', (i) => {
     const w = ALL[i];
-    expect(Object.keys(w.on).sort()).toEqual(['pull_request_target', 'workflow_dispatch', 'workflow_run']);
+    expect(Object.keys(w.on).filter((e) => e !== 'push').sort()).toEqual(['pull_request_target', 'workflow_dispatch', 'workflow_run']);
     expect(w.on.workflow_run?.types).toEqual(['completed']);
     expect(w.on.workflow_run?.workflows?.length).toBeGreaterThan(0);
     expect(w.on.pull_request_target?.types).toEqual(['closed']);
   });
 
-  it.each([0, 1])('workflow %i runs one publish at a time, a newer one replacing a running one', (i) => {
+  it.each([0, 1, 2])('workflow %i runs one publish at a time, a newer one replacing a running one', (i) => {
     expect(ALL[i].concurrency?.group).toBeTruthy();
     expect(ALL[i].concurrency?.['cancel-in-progress']).toBe(true);
   });
 
-  it.each([0, 1])('workflow %i gives the job exactly what it needs, and deploys through the github-pages environment', (i) => {
+  it.each([0, 1, 2])('workflow %i gives the job exactly what it needs, and deploys through the github-pages environment', (i) => {
     for (const job of publishJobs(ALL[i])) {
       expect(job.permissions).toEqual({ contents: 'read', actions: 'read', pages: 'write', 'id-token': 'write', 'pull-requests': 'write' });
       expect(typeof job.environment === 'object' && job.environment.name).toBe('github-pages');
@@ -99,12 +100,60 @@ describe('GitHub Pages setup docs', () => {
     }
   });
 
-  it.each([0, 1])('workflow %i passes only inputs the action has, and the consent from the variable', (i) => {
+  it.each([0, 1, 2])('workflow %i passes only inputs the action has, and the consent from the variable', (i) => {
     for (const job of publishJobs(ALL[i])) {
       const step = last(job.steps!);
       for (const key of Object.keys(step.with ?? {})) expect(INPUTS).toContain(key);
       expect(step.with?.['public-reports']).toBe(`\${{ vars.${CONSENT_VARIABLE} }}`);
     }
+  });
+
+  describe('the workflow with a website at the root (site-dir)', () => {
+    const w = () => ALL[2];
+    const block = () => [...DOC.matchAll(/```ya?ml\n([\s\S]*?)```/g)].map((m) => m[1]).filter((b) => b.includes('testivai/testivai-oss/publish@'))[2];
+    const buildJobs = () => Object.values(w().jobs).filter((j) => !publishJobs(w()).includes(j));
+
+    it('also deploys when the default branch changes, since the site is on it', () => {
+      expect(Object.keys(w().on).sort()).toEqual(['pull_request_target', 'push', 'workflow_dispatch', 'workflow_run']);
+      expect((w().on.push as { branches?: string[] }).branches).toEqual(['main']);
+    });
+
+    it('builds the site in a job of its own that can only read, from the default branch, never the pull request', () => {
+      expect(block()).not.toMatch(/github\.event\.(pull_request|workflow_run)\.head|head_sha|head_ref|github\.head_ref/);
+      const jobs = buildJobs();
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].permissions).toEqual({ contents: 'read' });
+      const checkouts = jobs[0].steps!.filter((s) => s.uses?.startsWith('actions/checkout@'));
+      expect(checkouts).toHaveLength(1);
+      expect(checkouts[0].with?.ref).toBe('${{ github.event.repository.default_branch }}');
+      expect(checkouts[0].with?.repository).toBeUndefined();
+      expect(jobs[0].steps!.some((s) => s.uses?.startsWith('actions/upload-artifact@'))).toBe(true);
+    });
+
+    it('deploys from a job that checks out and runs nothing: it downloads the built site and publishes it', () => {
+      const [job] = publishJobs(w());
+      expect((job as Job & { needs?: string | string[] }).needs).toBeDefined();
+      expect(job.steps!.map((s) => s.uses?.replace(/@.*/, ''))).toEqual(['actions/download-artifact', 'testivai/testivai-oss/publish']);
+      for (const step of job.steps!) expect(step.run).toBeUndefined();
+      const download = job.steps![0];
+      expect(last(job.steps!).with?.['site-dir']).toBe(download.with?.path);
+    });
+
+    it('says what happens to the website: never a file overwritten, the site deployed without reports when they are refused, nothing from a branch source', () => {
+      const start = DOC.indexOf('### A website at the root, reports under a path');
+      expect(start).toBeGreaterThan(DOC.indexOf('### Pages of your own on the same site'));
+      const section = DOC.slice(start, DOC.indexOf('\n### ', start + 1)).replace(/\s+/g, ' ');
+      expect(section).toMatch(/already has/);
+      expect(section).toMatch(/deploys the site without the reports/);
+      expect(section).toMatch(/builds from a branch/);
+      expect(section).toMatch(/noindex/);
+      expect(section).toMatch(/404/);
+      expect(section).toMatch(/symbolic links/i);
+      expect(section).toMatch(/hidden files/);
+      expect(section).toMatch(/reports-published/);
+      expect(section).toMatch(/never from a pull request/);
+      expect(section).toContain(CONSENT_VARIABLE);
+    });
   });
 
   it('states the limits the code has', () => {

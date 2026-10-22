@@ -281,7 +281,9 @@ runs, forks included, and the default branch's latest run to the repository's
 GitHub Pages site, and adds the links to the comment. Each page is rebuilt from
 the run's checked `results.json` and PNGs. Who can open the site is GitHub's
 Pages setting: a private repository's reports go on a public site only when
-an admin says so. It replaces the repository's whole Pages site. See
+an admin says so. It replaces the repository's whole Pages site; when that
+site is your website, pass the built site as `site-dir` and the reports go
+under a path of it (`reports-path`, unreleased). See
 [Reports on GitHub Pages](docs/github-action.md#reports-on-github-pages).
 
 ### Approve changed baselines

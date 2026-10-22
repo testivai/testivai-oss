@@ -472,7 +472,10 @@ publish, and nothing needs cleaning up.
 
 **It replaces the repository's whole GitHub Pages site.** GitHub gives a
 repository one site, and each publish deploys a new one. Use it in a
-repository whose Pages site is free for it, not one that serves your docs.
+repository whose Pages site is free for it, or, when the Pages site is your
+website or docs, hand the action the built site with `site-dir` and the
+reports go under a path of it
+([below](#a-website-at-the-root-reports-under-a-path)).
 
 ### Who can open the reports
 
@@ -586,6 +589,8 @@ published, why not and what an admin can change.
 | `comment` | `true` | `false` leaves comments alone. |
 | `include-dir` | `''` | A folder of your own pages to publish with the reports ([below](#pages-of-your-own-on-the-same-site)). |
 | `include-name` | `''` | The folder `include-dir` goes in on the site, such as `demo`. Required with `include-dir`. |
+| `site-dir` | `''` | Unreleased. An already-built website to deploy at the root, with the reports under `reports-path` ([below](#a-website-at-the-root-reports-under-a-path)). Not with `include-dir`. |
+| `reports-path` | `''` | Unreleased. The folder the reports go in on the `site-dir` site, such as `visual-reports`. Required with `site-dir`. |
 | `github-token` | `github.token` | Reads runs, artifacts and Pages settings, and writes the comments. The deploy always uses the job's own token. |
 
 ### Pages of your own on the same site
@@ -643,6 +648,140 @@ jobs:
           public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
           include-dir: demo
           include-name: demo
+```
+
+### A website at the root, reports under a path
+
+:::note Unreleased
+On `main`, not yet in a `publish@v1` release.
+:::
+
+When the repository's Pages site is a website (a portfolio, a blog, docs),
+build it in a job of its own and pass the built folder as `site-dir`. The
+action deploys it at the root, every file as it is, and puts everything it
+makes under `reports-path`: the reports' front page, `pr/<number>/…`,
+`main/`, the links in pull request comments and in the
+[approve reply](#approving-changes-from-pr-feedback), and the `page-url`
+output. With `reports-path: visual-reports` on `https://www.example.com/`:
+
+| | |
+|---|---|
+| `https://www.example.com/` | your site, as you built it |
+| `https://www.example.com/visual-reports/` | the reports' front page |
+| `https://www.example.com/visual-reports/pr/14/39150236166-1/` | a run's report, as the comment links it |
+
+- **No site file is ever written over.** If `site-dir` already has
+  `reports-path` (a file, a folder or a symbolic link), or a file where a
+  folder of it would go, the publish fails before it reads anything from
+  GitHub and says so: choose another `reports-path`, or take that path out of
+  the site.
+- Symbolic links in `site-dir` are skipped, as with `include-dir`, and its
+  size counts toward the site's 900 MB: when the site and the reports would
+  be over it, older reports go first, never the site.
+- The site is published as it is, hidden files included (`.well-known/`,
+  say; `upload-pages-artifact` always leaves `.git` and `.github` out). Only
+  the report pages say `noindex`: the action never changes a page of yours.
+- GitHub serves only the site root's `404.html`, which is your site's, so a
+  link to a report that is no longer published shows your 404 page.
+- A custom domain stays as it is set under Settings → Pages; a deploy from
+  Actions does not read a `CNAME` file, so it neither needs nor breaks one.
+- Not with `include-dir`: put those pages in the site.
+
+**Build the site from the default branch, never from a pull request.** The
+publish job holds `pages: write` and `id-token: write`, and a fork's code must
+never run with those, or get its pages onto your site. The example builds in
+a job that can only read, checking out
+`${{ github.event.repository.default_branch }}` on every event
+(`pull_request_target`'s own checkout is the pull request's base branch,
+which need not be the default branch), and hands the folder over as an
+artifact; the publish job runs nothing.
+
+**When the settings refuse the reports, it deploys the site without the
+reports.** A private repository's public site without
+`TESTIVAI_PUBLIC_REPORTS=true` ([who can open the reports](#who-can-open-the-reports)),
+or a custom domain without Enforce HTTPS (report links must be https): the
+site is deployed, nothing goes under `reports-path` (reports an earlier
+publish put there are taken down), no report is downloaded, and no comment is
+touched. The website keeps deploying either way; the `reports-published`
+output says `false`, `page-url` is the site's address, and the job summary
+and a notice say why. Where Pages is off, or Settings → Pages → Source still
+builds from a branch, nothing is deployed: the branch keeps serving the site.
+That makes the switch safe in this order:
+
+1. Merge the workflow while the source is still the branch. Its runs deploy
+   nothing and say "builds from a branch".
+2. An admin sets Settings → Pages → Source to **GitHub Actions**.
+3. Right away, run the workflow by hand (`workflow_dispatch`) and check the
+   site: GitHub does not document what the site serves between the switch
+   and the first deploy from Actions, so keep that gap short. With a private
+   repository it deploys the site alone until an admin sets
+   `TESTIVAI_PUBLIC_REPORTS=true`.
+
+```yaml
+# .github/workflows/site.yml
+name: Site and TestivAI reports
+
+on:
+  # The site is on the default branch: deploy when it changes.
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Visual Regression]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+
+concurrency:
+  group: testivai-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # The default branch on every event, never the pull request.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      # GitHub's own Jekyll build (the github-pages gem), as a branch source
+      # builds it; or your own build step.
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site
+          path: _site
+          include-hidden-files: true
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page-url }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: _site
+      - id: publish
+        uses: testivai/testivai-oss/publish@v1
+        with:
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+          site-dir: _site
+          reports-path: visual-reports
 ```
 
 ### What gets published, and what does not

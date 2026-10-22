@@ -11,7 +11,7 @@
  * environment, passed in as publicReportsConsent).
  */
 
-import { decidePublish } from '../publish/pages';
+import { canDeploySite, decidePublish, siteAddress } from '../publish/pages';
 
 const SITE = 'https://testivai.github.io/testivai-example/';
 
@@ -137,5 +137,33 @@ describe('decidePublish', () => {
     });
 
     expect(d.siteUrl).toBe('https://reports.example.com/');
+  });
+});
+
+describe('canDeploySite (site-dir: the site deploys even when its reports are not published)', () => {
+  it('is true only when Pages is on with the source "GitHub Actions"', () => {
+    expect(canDeploySite({ found: true, buildType: 'workflow', public: true, htmlUrl: SITE })).toBe(true);
+    // Settings that refuse the reports do not stop the site.
+    expect(canDeploySite({ found: true, buildType: 'workflow', public: true })).toBe(true);
+    expect(canDeploySite({ found: true, buildType: 'workflow', public: true, htmlUrl: 'http://www.example.com/' })).toBe(true);
+    // A branch serves the site: an Actions deploy is not the site's.
+    expect(canDeploySite({ found: true, buildType: 'legacy', public: true, htmlUrl: SITE })).toBe(false);
+    expect(canDeploySite({ found: true, public: true, htmlUrl: SITE })).toBe(false);
+    expect(canDeploySite({ found: false })).toBe(false);
+  });
+});
+
+describe('siteAddress (the address of a site deployed without reports)', () => {
+  it.each([
+    ['https://www.budisugianto.com', 'https://www.budisugianto.com/'],
+    ['http://testivai.github.io/testivai-example', 'https://testivai.github.io/testivai-example/'],
+    // A custom domain without Enforce HTTPS: the reports need https, the site does not.
+    ['http://www.example.com/', 'http://www.example.com/'],
+  ])('reads %s as %s', (raw, address) => {
+    expect(siteAddress(raw)).toBe(address);
+  });
+
+  it.each([undefined, '', 'not a url', 'ftp://www.example.com/', 'javascript:alert(1)//', 'http://www.example.com/"><x'])('has none for %p', (raw) => {
+    expect(siteAddress(raw)).toBeUndefined();
   });
 });

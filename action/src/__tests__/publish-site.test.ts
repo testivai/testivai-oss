@@ -468,6 +468,12 @@ describe('buildIndexPages', () => {
     }
   });
 
+  it("writes no 404 page under a site of your own: GitHub serves only the site root's, which is the site's", () => {
+    const files = buildIndexPages({ site: SITE, plan, outcomes, runsPerPr: 3, notFoundPage: false });
+
+    expect(files.map((f) => f.path).sort()).toEqual(['index.html', 'pr/14/index.html', 'pr/15/index.html']);
+  });
+
   it('explains a link to a report that is no longer published, with an absolute link home', () => {
     const html = htmlAt(pages(), '404.html');
 
