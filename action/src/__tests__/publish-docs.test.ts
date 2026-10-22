@@ -118,11 +118,11 @@ describe('GitHub Pages setup docs', () => {
       expect((w().on.push as { branches?: string[] }).branches).toEqual(['main']);
     });
 
-    it('builds the site in a job of its own that can only read, from the default branch, never the pull request', () => {
+    it('builds the site in a job of its own that can only read (pages: read, for site.github in the github-pages gem), from the default branch, never the pull request', () => {
       expect(block()).not.toMatch(/github\.event\.(pull_request|workflow_run)\.head|head_sha|head_ref|github\.head_ref/);
       const jobs = buildJobs();
       expect(jobs).toHaveLength(1);
-      expect(jobs[0].permissions).toEqual({ contents: 'read' });
+      expect(jobs[0].permissions).toEqual({ contents: 'read', pages: 'read' });
       const checkouts = jobs[0].steps!.filter((s) => s.uses?.startsWith('actions/checkout@'));
       expect(checkouts).toHaveLength(1);
       expect(checkouts[0].with?.ref).toBe('${{ github.event.repository.default_branch }}');
@@ -181,8 +181,8 @@ describe('GitHub Pages setup docs', () => {
     expect(limits).toContain('#approve-with-a-token-that-re-runs-ci');
   });
 
-  it('documents the report cache, unreleased: what it saves, what it checks, its trust boundary and how to turn it on', () => {
-    const start = DOC.indexOf('#### Unreleased: reports reused between publishes');
+  it('documents the report cache (since v1.6.0): what it saves, what it checks, its trust boundary and how to turn it on', () => {
+    const start = DOC.indexOf('#### Reports reused between publishes');
     expect(start).toBeGreaterThan(DOC.indexOf('### Limits'));
     const section = DOC.slice(start, DOC.indexOf('\n## ', start));
     expect(section).toMatch(/downloads only the runs it has not built before; the rest come\s+from the Actions cache/);
@@ -197,7 +197,7 @@ describe('GitHub Pages setup docs', () => {
   });
 
   it('documents what the report cache costs: a new full copy per changed publish, until GitHub evicts it', () => {
-    const start = DOC.indexOf('#### Unreleased: reports reused between publishes');
+    const start = DOC.indexOf('#### Reports reused between publishes');
     const section = DOC.slice(start, DOC.indexOf('\n## ', start)).replace(/\s+/g, ' ');
     expect(section).toMatch(/new full copy/);
     expect(section).toMatch(/900 MB/);

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-22
+
 ### Added
 
 - The reporter writes a job summary on the workflow run's page, for every event: its PR comment (the summary line, the ZIP or report link, the changed, new and missing snapshots with their hints) without the hidden markers and the `/testivai approve` commands (the code blocks and the approve-all line), since nobody can comment from a run page. It is written before the comment is posted, so a token that cannot comment (a fork's pull request, no `pull-requests: write`) still leaves it. A push to the default branch, which has no comment, now shows its result there. It is built from the comment's own markdown (`summaryFromComment`), so the two cannot drift. A summary that cannot be written only warns

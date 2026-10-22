@@ -146,7 +146,7 @@ A single comment per PR (identified by the `<!-- testivai-visual-report -->` mar
 
 The DOM noise hint is the same signal the local HTML report shows. When the underlying DOM is structurally identical to baseline, the computed styles were compared and match, and the diff is small and scattered, the comment says "likely render noise" (likely, not proven) so reviewers can triage it faster. When the DOM and styles match but the diff is concentrated in one area or over 1% of pixels, it says **DOM and styles unchanged, but the diff is concentrated in one area** (or **is large**): a bad capture, or a change the style check does not cover (size, overflow, transform, images…), so compare the images before approving. When only the computed styles changed, it flags a style-only change, which is real. When the DOM is identical but the styles were not compared (no comparable style digests on both sides, as with `testivai witness <url>` captures), it says **DOM unchanged, styles not compared**: render noise and a stylesheet-only change are both still possible, so compare the images before approving. When the DOM also differs, it shows added / removed / attribute-change counts.
 
-:::note Unreleased
+:::note Since v1.6.0
 The same comment is also the job summary on the workflow run's page, for every event (so a push to the default branch, which has no pull request to comment on, shows its result and report link there), without the hidden markers and the `/testivai approve` commands, since nobody can comment from a run page. It is written before the comment is posted, so a run whose token cannot comment still shows its result there.
 :::
 
@@ -434,7 +434,7 @@ its card in the report:
 
 > **[Open the visual report](https://example.github.io/my-app/pr/14/39150236166-1/)** — baseline, current and diff side by side · or [download it as a ZIP](https://github.com/example/my-app/actions/runs/39150236166/artifacts/4402)
 
-**Unreleased** (the next action release, with reports from `@testivai/witness`
+**Since v1.6.0** (with reports from `@testivai/witness`
 2.6.0 or later): each changed snapshot's row also shows the changed area
 itself, baseline | current | diff side by side (`thumb.png`, at most
 800×400 px, linked to the snapshot's card). The publish puts the pictures in
@@ -571,7 +571,7 @@ a newer run is left for that run's publish. A fork's CI run cannot comment
 (its token is read-only), so on a fork's pull request the action posts a
 comment of its own with the link, the run and the counts.
 
-:::note Unreleased
+:::note Since v1.6.0
 The publish run's job summary says what it did: the site's address, the
 default branch's latest run and each open pull request's (a fork's with
 numbers and links only), and the runs left out and why; or, when nothing is
@@ -589,8 +589,8 @@ published, why not and what an admin can change.
 | `comment` | `true` | `false` leaves comments alone. |
 | `include-dir` | `''` | A folder of your own pages to publish with the reports ([below](#pages-of-your-own-on-the-same-site)). |
 | `include-name` | `''` | The folder `include-dir` goes in on the site, such as `demo`. Required with `include-dir`. |
-| `site-dir` | `''` | Unreleased. An already-built website to deploy at the root, with the reports under `reports-path` ([below](#a-website-at-the-root-reports-under-a-path)). Not with `include-dir`. |
-| `reports-path` | `''` | Unreleased. The folder the reports go in on the `site-dir` site, such as `visual-reports`. Required with `site-dir`. |
+| `site-dir` | `''` | Since v1.6.0. An already-built website to deploy at the root, with the reports under `reports-path` ([below](#a-website-at-the-root-reports-under-a-path)). Not with `include-dir`. |
+| `reports-path` | `''` | Since v1.6.0. The folder the reports go in on the `site-dir` site, such as `visual-reports`. Required with `site-dir`. |
 | `github-token` | `github.token` | Reads runs, artifacts and Pages settings, and writes the comments. The deploy always uses the job's own token. |
 
 ### Pages of your own on the same site
@@ -652,8 +652,8 @@ jobs:
 
 ### A website at the root, reports under a path
 
-:::note Unreleased
-On `main`, not yet in a `publish@v1` release.
+:::note Since v1.6.0
+`site-dir` and `reports-path` are in `publish@v1` from v1.6.0.
 :::
 
 When the repository's Pages site is a website (a portfolio, a blog, docs),
@@ -690,7 +690,8 @@ output. With `reports-path: visual-reports` on `https://www.example.com/`:
 **Build the site from the default branch, never from a pull request.** The
 publish job holds `pages: write` and `id-token: write`, and a fork's code must
 never run with those, or get its pages onto your site. The example builds in
-a job that can only read, checking out
+a job that can only read (`contents: read`, and `pages: read` for the
+`github-pages` gem's `site.github` metadata), checking out
 `${{ github.event.repository.default_branch }}` on every event
 (`pull_request_target`'s own checkout is the pull request's base branch,
 which need not be the default branch), and hands the folder over as an
@@ -741,6 +742,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # site.github (the github-pages gem's metadata) reads the Pages
+      # settings; without this a page that uses it fails the build with 403.
+      pages: read
     steps:
       # The default branch on every event, never the pull request.
       - uses: actions/checkout@v7
@@ -824,7 +828,8 @@ report template.
   The pull request's page lists what was left out and why.
 - Only the 1000 newest report artifacts are read: a pull request whose last
   report is older than those is not published.
-- Each publish downloads every published report again. With the default
+- Each publish downloads every published report again, unless `cache: true`
+  ([below](#reports-reused-between-publishes)). With the default
   `GITHUB_TOKEN` (1,000 API requests an hour per repository), that is plenty
   for a few dozen open pull requests; lower `runs-per-pr` beyond that.
 - A run that `GITHUB_TOKEN` started gets no publish: GitHub starts no
@@ -837,10 +842,9 @@ report template.
   avoids it: the approve push then starts the pull request's workflow as the
   token's owner, and the publish follows.
 
-#### Unreleased: reports reused between publishes
+#### Reports reused between publishes
 
-On `main`, not yet in a `publish@v1` release. Once released, this replaces
-the "downloads every published report again" limit above.
+Since v1.6.0, with `cache: true`.
 
 - Each publish downloads only the runs it has not built before; the rest come
   from the Actions cache. A run's report never changes (a re-run uploads a new
