@@ -60,7 +60,9 @@ export interface PublishedSite {
 export type PublishSummaryInput =
   | { published: false; reason: string }
   /** siteUrl: the address the comments link (the deploy's, else the build's), ending in '/'. */
-  | { published: true; siteUrl: string; site?: PublishedSite };
+  | { published: true; siteUrl: string; site?: PublishedSite }
+  /** A site of your own (site-dir) deployed without its reports: its address, and why the reports were not published. */
+  | { published: true; siteUrl: string; reportsSkipped: string };
 
 /** From what buildSite published: the plan without the runs left out, and each run's outcome. */
 export function publishedSite(input: { site: SiteInfo; plan: SitePlan; outcomes: Map<number, RunOutcome>; runsPerPr: number; include?: string }): PublishedSite {
@@ -130,6 +132,9 @@ function outcomeText(run: SummaryRun, fork: boolean): string {
 
 export function publishSummary(input: PublishSummaryInput): string {
   if (!input.published) return `### TestivAI reports not published\n\n${escapeMarkdown(input.reason)}\n`;
+  if ('reportsSkipped' in input) {
+    return `### Site deployed; TestivAI reports not published\n\n**${link('Open the site', input.siteUrl)}**\n\n${escapeMarkdown(input.reportsSkipped)}\n`;
+  }
 
   const { siteUrl, site } = input;
   const about = site ? ` — the last ${whole(site.runsPerPr)} runs of each open pull request, and the latest run on ${escapeMarkdown(site.defaultBranch)}.` : '';

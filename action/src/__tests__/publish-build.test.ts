@@ -12,7 +12,7 @@ import * as path from 'path';
 import { strToU8, zipSync } from 'fflate';
 import { buildComment, UPSERT_MARKER } from '../comment';
 import type { ApiArtifact, OpenPr, PublishApi, RepoInfo } from '../publish/api';
-import { buildSite, finishPublish, safeSitePath, type PublishState } from '../publish/build';
+import { buildSite, copyFiles, finishPublish, safeSitePath, writeFiles, type PublishState } from '../publish/build';
 import type { ExistingComment } from '../publish/comments';
 import type { PagesInfo } from '../publish/pages';
 import type { PlanRun } from '../publish/plan';
@@ -409,6 +409,267 @@ describe('buildSite with pages of your own (include)', () => {
   });
 });
 
+describe('buildSite with a site of your own at the root (site)', () => {
+  const ROOT = 'https://www.budisugianto.com/';
+  const REPORTS = `${ROOT}visual-reports/`;
+  const CUSTOM: PagesInfo = { found: true, buildType: 'workflow', public: true, htmlUrl: ROOT };
+
+  /** A built site like Jekyll's _site: a front page, a 404 page, a section, assets and a hidden file. */
+  function builtSite(): string {
+    const own = path.join(dir, '_site');
+    fs.mkdirSync(path.join(own, 'tip', 'first-post'), { recursive: true });
+    fs.mkdirSync(path.join(own, 'img'), { recursive: true });
+    fs.mkdirSync(path.join(own, '.well-known'), { recursive: true });
+    fs.writeFileSync(path.join(own, 'index.html'), '<!DOCTYPE html><html><head><title>Portfolio</title></head><body>Hi</body></html>');
+    fs.writeFileSync(path.join(own, '404.html'), '<h1>Not here</h1>');
+    fs.writeFileSync(path.join(own, 'CNAME'), 'www.budisugianto.com');
+    fs.writeFileSync(path.join(own, 'tip', 'index.html'), '<h1>Testing in Progress</h1>');
+    fs.writeFileSync(path.join(own, 'tip', 'first-post', 'index.html'), '<h1>First</h1>');
+    fs.writeFileSync(path.join(own, 'img', 'me.png'), PNG);
+    fs.writeFileSync(path.join(own, '.well-known', 'security.txt'), 'Contact: mailto:me@example.com');
+    return own;
+  }
+  const withSite = (own: string, over: object = {}) => options({ site: { dir: own, reportsPath: 'visual-reports' }, ...over });
+  const files = (root: string) => new Map(tree(root).map((f) => [f, fs.readFileSync(path.join(root, f))]));
+  const SITE_FILES = ['.well-known/security.txt', '404.html', 'CNAME', 'img/me.png', 'index.html', 'tip/first-post/index.html', 'tip/index.html'];
+
+  it('publishes the site as it is at the root, and every report page under reports-path', async () => {
+    const own = builtSite();
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    const result = await buildSite(api, withSite(own));
+
+    expect(result.published).toBe(true);
+    expect(tree(siteDir())).toEqual([
+      ...SITE_FILES,
+      'visual-reports/index.html',
+      'visual-reports/main/images/0/current.png',
+      'visual-reports/main/index.html',
+      'visual-reports/pr/14/2-1/images/0/current.png',
+      'visual-reports/pr/14/2-1/index.html',
+      'visual-reports/pr/14/3-1/images/0/current.png',
+      'visual-reports/pr/14/3-1/index.html',
+      'visual-reports/pr/14/index.html',
+      'visual-reports/pr/15/4-1/images/0/current.png',
+      'visual-reports/pr/15/4-1/index.html',
+      'visual-reports/pr/15/index.html',
+    ]);
+  });
+
+  it("never changes a site file: the site's pages are byte for byte, with no noindex, and its own 404 page stays", async () => {
+    const own = builtSite();
+    const before = files(own);
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await buildSite(api, withSite(own));
+
+    const published = files(siteDir());
+    for (const [f, bytes] of before) expect({ f, same: bytes.equals(published.get(f) as Buffer) }).toEqual({ f, same: true });
+    expect(published.get('index.html')?.toString()).not.toContain('noindex');
+    // The source folder is left as it was.
+    expect([...files(own).keys()]).toEqual([...before.keys()]);
+    // Report pages, and only those, ask search engines not to index them.
+    for (const f of tree(siteDir()).filter((x) => x.startsWith('visual-reports/') && x.endsWith('.html'))) {
+      expect({ f, noindex: fs.readFileSync(path.join(siteDir(), f), 'utf8').includes('<meta name="robots" content="noindex') }).toEqual({ f, noindex: true });
+    }
+  });
+
+  it('links every report under reports-path: the state for the comments, the front page, and the pages back to it', async () => {
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    const result = await buildSite(api, withSite(builtSite()));
+
+    expect(result.published && result.state).toMatchObject({
+      siteUrl: ROOT,
+      reportsPath: 'visual-reports',
+      prs: [
+        { pr: 14, runId: 3, url: `${REPORTS}pr/14/3-1/` },
+        { pr: 15, runId: 4, url: `${REPORTS}pr/15/4-1/` },
+      ],
+    });
+    expect(result.published && result.reports).toBe(true);
+    const front = fs.readFileSync(path.join(siteDir(), 'visual-reports/index.html'), 'utf8');
+    expect(front).toContain('href="main/"');
+    expect(front).toContain('href="pr/14/3-1/"');
+    const page = fs.readFileSync(path.join(siteDir(), 'visual-reports/pr/14/3-1/index.html'), 'utf8');
+    expect(page).toContain(`${REPORTS}pr/14/`);
+    expect(page).toContain(`href="${REPORTS}"`);
+    expect(page).not.toContain(`href="${ROOT}"`);
+    const prPage = fs.readFileSync(path.join(siteDir(), 'visual-reports/pr/14/index.html'), 'utf8');
+    expect(prPage).toContain(`href="${REPORTS}"`);
+  });
+
+  it('accepts a reports-path of several folders', async () => {
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    const result = await buildSite(api, options({ site: { dir: builtSite(), reportsPath: 'testing/visual' } }));
+
+    expect(fs.existsSync(path.join(siteDir(), 'testing/visual/pr/14/3-1/index.html'))).toBe(true);
+    expect(result.published && result.state.prs[0].url).toBe(`${ROOT}testing/visual/pr/14/3-1/`);
+  });
+
+  it.each([
+    ['a folder', (own: string) => fs.mkdirSync(path.join(own, 'visual-reports'))],
+    ['a file', (own: string) => fs.writeFileSync(path.join(own, 'visual-reports'), 'x')],
+    ['a symbolic link', (own: string) => fs.symlinkSync(path.join(own, 'tip'), path.join(own, 'visual-reports'))],
+  ])('refuses a site that already has %s at reports-path, before reading anything from GitHub', async (_, make) => {
+    const own = builtSite();
+    make(own);
+    const { api, calls } = fakeApi(world({ pages: CUSTOM }));
+    const pages = jest.spyOn(api, 'pages');
+
+    await expect(buildSite(api, withSite(own))).rejects.toThrow(/site-dir .*_site already has visual-reports.*reports-path/);
+    expect(pages).not.toHaveBeenCalled();
+    expect(calls.download).toEqual([]);
+  });
+
+  it('refuses a reports-path inside a file of the site', async () => {
+    const own = builtSite();
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await expect(buildSite(api, options({ site: { dir: own, reportsPath: 'tip/index.html/x' } }))).rejects.toThrow(/reports-path/);
+    fs.writeFileSync(path.join(own, 'feed'), '<rss/>');
+    await expect(buildSite(api, options({ site: { dir: own, reportsPath: 'feed/visual' } }))).rejects.toThrow(/site-dir .*already has feed, which is not a folder/);
+  });
+
+  it('puts reports-path in a folder the site already has, next to its files, without touching them', async () => {
+    const own = builtSite();
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await buildSite(api, options({ site: { dir: own, reportsPath: 'tip/visual' } }));
+
+    expect(fs.readFileSync(path.join(siteDir(), 'tip/index.html'), 'utf8')).toBe('<h1>Testing in Progress</h1>');
+    expect(fs.existsSync(path.join(siteDir(), 'tip/visual/index.html'))).toBe(true);
+  });
+
+  it.each(['', '/', '.', '..', '../x', 'a/../b', 'a//b', '.hidden', 'Visual', 'my reports', 'a\\b', '/visual', 'visual/', '-x', 'a/b/c/d/e', 'x'.repeat(41)])(
+    'refuses the reports-path %j',
+    async (reportsPath) => {
+      const { api } = fakeApi(world({ pages: CUSTOM }));
+
+      await expect(buildSite(api, options({ site: { dir: builtSite(), reportsPath } }))).rejects.toThrow(/reports-path must be/);
+    },
+  );
+
+  it('refuses a site-dir that is not a folder', async () => {
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await expect(buildSite(api, options({ site: { dir: path.join(dir, 'nope'), reportsPath: 'visual-reports' } }))).rejects.toThrow(/site-dir .*nope.* is not a folder/);
+  });
+
+  it('refuses include-dir with site-dir: pages of your own go in the site', async () => {
+    const own = builtSite();
+    const demo = path.join(dir, 'demo');
+    fs.mkdirSync(demo);
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await expect(buildSite(api, withSite(own, { include: { dir: demo, name: 'demo' } }))).rejects.toThrow(/include-dir .*site-dir/);
+  });
+
+  it('skips a symbolic link in the site, so nothing outside it is published', async () => {
+    const own = builtSite();
+    const secret = path.join(dir, 'secret.txt');
+    fs.writeFileSync(secret, 'token');
+    fs.symlinkSync(secret, path.join(own, 'leak.txt'));
+    fs.symlinkSync(dir, path.join(own, 'tip', 'up'));
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await buildSite(api, withSite(own));
+
+    expect(fs.existsSync(path.join(siteDir(), 'leak.txt'))).toBe(false);
+    expect(fs.existsSync(path.join(siteDir(), 'tip/up'))).toBe(false);
+    expect(log.warning).toHaveBeenCalledWith(expect.stringMatching(/site-dir: leak\.txt is a symbolic link: skipped/));
+  });
+
+  it("counts the site's size first, so reports that would not fit are left out, and the site never is", async () => {
+    const own = builtSite();
+    fs.writeFileSync(path.join(own, 'video.bin'), new Uint8Array(3 * MB));
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    const result = await buildSite(api, withSite(own, { limits: { maxSiteBytes: 3 * MB + 2048 } }));
+
+    expect(fs.existsSync(path.join(siteDir(), 'video.bin'))).toBe(true);
+    expect(fs.existsSync(path.join(siteDir(), 'visual-reports/main/index.html'))).toBe(false);
+    expect(result.published && result.state.prs).toEqual([]);
+  });
+
+  it('refuses a site bigger than the whole budget', async () => {
+    const own = builtSite();
+    fs.writeFileSync(path.join(own, 'video.bin'), new Uint8Array(2 * MB));
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await expect(buildSite(api, withSite(own, { limits: { maxSiteBytes: 1 * MB } }))).rejects.toThrow(/site-dir .* over the site's/);
+  });
+
+  it('starts from an empty folder: reports of a closed pull request are gone, and so is a file the site dropped', async () => {
+    fs.mkdirSync(path.join(siteDir(), 'visual-reports/pr/7/1-1'), { recursive: true });
+    fs.writeFileSync(path.join(siteDir(), 'visual-reports/pr/7/1-1/index.html'), 'old');
+    fs.writeFileSync(path.join(siteDir(), 'old-page.html'), 'old');
+    const { api } = fakeApi(world({ pages: CUSTOM }));
+
+    await buildSite(api, withSite(builtSite()));
+
+    expect(fs.existsSync(path.join(siteDir(), 'visual-reports/pr/7'))).toBe(false);
+    expect(fs.existsSync(path.join(siteDir(), 'old-page.html'))).toBe(false);
+  });
+
+  describe('when the settings refuse the reports, the site still deploys, without them', () => {
+    it.each([
+      ['a private repository with a public site, without an admin\'s yes', { repo: { ...REPO, visibility: 'private' as const }, pages: CUSTOM }, ROOT, /TESTIVAI_PUBLIC_REPORTS/],
+      ['a custom domain without Enforce HTTPS', { pages: { ...CUSTOM, htmlUrl: 'http://www.budisugianto.com/' } }, 'http://www.budisugianto.com/', /Enforce HTTPS/],
+    ])('%s', async (_, over, siteUrl, why) => {
+      const own = builtSite();
+      const { api, calls } = fakeApi(world(over));
+      const artifacts = jest.spyOn(api, 'artifacts');
+
+      const result = await buildSite(api, withSite(own));
+
+      expect(result).toMatchObject({ published: true, reports: false, reason: expect.stringMatching(why) });
+      expect(result.published && result.state).toEqual({ siteUrl, visibility: 'public', reportsPath: 'visual-reports', reportsSkipped: expect.stringMatching(why), prs: [] });
+      expect(tree(siteDir())).toEqual(SITE_FILES);
+      // Not a single report or screenshot is read.
+      expect(artifacts).not.toHaveBeenCalled();
+      expect(calls.run).toEqual([]);
+      expect(calls.download).toEqual([]);
+      expect(result.published && result.downloads).toEqual({ downloaded: 0, downloadedBytes: 0, fromCache: 0, cacheChanged: false });
+    });
+
+    it('takes down the reports an earlier publish put there, when the consent goes', async () => {
+      const own = builtSite();
+      await buildSite(fakeApi(world({ repo: { ...REPO, visibility: 'private' }, pages: CUSTOM })).api, withSite(own, { consent: 'true' }));
+      expect(fs.existsSync(path.join(siteDir(), 'visual-reports/index.html'))).toBe(true);
+
+      await buildSite(fakeApi(world({ repo: { ...REPO, visibility: 'private' }, pages: CUSTOM })).api, withSite(own));
+
+      expect(tree(siteDir())).toEqual(SITE_FILES);
+    });
+
+    it("says the site's reports are on a private site when the site is private", async () => {
+      const own = builtSite();
+      const result = await buildSite(fakeApi(world({ repo: { ...REPO, visibility: 'private' }, pages: { ...CUSTOM, public: false } })).api, withSite(own));
+
+      expect(result.published && result.reports).toBe(true);
+      expect(result.published && result.state.visibility).toBe('private');
+    });
+  });
+
+  describe('when the site cannot be deployed from here, nothing is', () => {
+    it.each([
+      ['Pages is off', { found: false } as PagesInfo, /not enabled[\s\S]*site-dir is not deployed either/],
+      ['the site builds from a branch', { ...CUSTOM, buildType: 'legacy' }, /builds from a branch[\s\S]*site-dir is not deployed either: the branch keeps serving the site/],
+    ])('%s', async (_, pages, why) => {
+      const own = builtSite();
+      const { api, calls } = fakeApi(world({ pages }));
+
+      const result = await buildSite(api, withSite(own));
+
+      expect(result).toEqual({ published: false, reason: expect.stringMatching(why) });
+      expect(fs.existsSync(siteDir())).toBe(false);
+      expect(calls.download).toEqual([]);
+    });
+  });
+});
+
 describe('buildSite with a report cache (cacheDir)', () => {
   const sha256 = (bytes: Uint8Array) => `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
   /** The digest GitHub lists for each artifact (upload-artifact v4+): the SHA-256 of its ZIP. */
@@ -589,6 +850,28 @@ describe('buildSite with a report cache (cacheDir)', () => {
     await buildSite(fakeApi(world()).api, options());
 
     expect(log.info).toHaveBeenCalledWith(expect.stringMatching(/^Reports: 4 downloaded \(\d+(\.\d+)? MB\)\.$/));
+  });
+});
+
+describe('never writing over a file (copyFiles, writeFiles)', () => {
+  // The second line of defense behind the reports-path check: a file that is already there is an error, never replaced.
+  it('copyFiles refuses to replace a file, and leaves it as it was', () => {
+    const from = path.join(dir, 'from');
+    const to = path.join(dir, 'to');
+    fs.mkdirSync(from);
+    fs.mkdirSync(to);
+    fs.writeFileSync(path.join(from, 'index.html'), 'new');
+    fs.writeFileSync(path.join(to, 'index.html'), 'site');
+
+    expect(() => copyFiles(from, to, ['index.html'])).toThrow(/EEXIST/);
+    expect(fs.readFileSync(path.join(to, 'index.html'), 'utf8')).toBe('site');
+  });
+
+  it('writeFiles refuses to replace a file, and leaves it as it was', () => {
+    fs.writeFileSync(path.join(dir, 'index.html'), 'site');
+
+    expect(() => writeFiles(dir, [{ path: 'index.html', data: 'report' }])).toThrow(/EEXIST/);
+    expect(fs.readFileSync(path.join(dir, 'index.html'), 'utf8')).toBe('site');
   });
 });
 
@@ -775,6 +1058,81 @@ describe('finishPublish', () => {
     }
 
     expect(calls.update.map(([, body]) => body.includes('(https://testivai.github.io/testivai-example/pr/14/3-1/)'))).toEqual([true, true]);
+  });
+
+  describe('with the reports under a site of your own (site-dir)', () => {
+    const ROOT = 'https://www.budisugianto.com/';
+    const REPORTS = `${ROOT}visual-reports/`;
+    const SUB: PublishState = {
+      ...STATE,
+      siteUrl: ROOT,
+      reportsPath: 'visual-reports',
+      prs: STATE.prs.map((p) => ({ ...p, url: p.url.replace(STATE.siteUrl, REPORTS) })),
+    };
+
+    it('opens the reports front page, links each run under reports-path, and returns both addresses', async () => {
+      const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+      const fetched: string[] = [];
+
+      const result = await finishPublish(api, {
+        state: SUB,
+        pageUrl: ROOT,
+        comment: true,
+        marker: UPSERT_MARKER,
+        fetch: async (url) => {
+          fetched.push(url);
+          return ok();
+        },
+        delayMs: 0,
+        log,
+      });
+
+      expect(fetched).toEqual([REPORTS]);
+      expect(result).toEqual({ verified: true, siteUrl: ROOT, reportsUrl: REPORTS });
+      expect(calls.update[0][1]).toContain(`[Open the visual report](${REPORTS}pr/14/3-1/)`);
+      expect(calls.create[0][1]).toContain(`(${REPORTS}pr/15/4-1/)`);
+      expect(log.warning).not.toHaveBeenCalled();
+    });
+
+    it('keeps reports-path when the deploy reports another address', async () => {
+      const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+
+      const result = await finishPublish(api, { state: SUB, pageUrl: 'https://mcbuddy.github.io/', comment: true, marker: UPSERT_MARKER, fetch: ok, delayMs: 0, log });
+
+      expect(result.reportsUrl).toBe('https://mcbuddy.github.io/visual-reports/');
+      expect(calls.update[0][1]).toContain('(https://mcbuddy.github.io/visual-reports/pr/14/3-1/)');
+    });
+
+    it('with the site deployed without reports: opens the site, adds no links, and has no reports address', async () => {
+      const { api, calls } = fakeApi(world({ comments: new Map([[14, [reporterComment('3-1')]]]) }));
+      const fetched: string[] = [];
+      const siteOnly: PublishState = { siteUrl: ROOT, visibility: 'public', reportsPath: 'visual-reports', reportsSkipped: 'not allowed', prs: [] };
+
+      const result = await finishPublish(api, {
+        state: siteOnly,
+        pageUrl: ROOT,
+        comment: true,
+        marker: UPSERT_MARKER,
+        fetch: async (url) => {
+          fetched.push(url);
+          return ok();
+        },
+        delayMs: 0,
+        log,
+      });
+
+      expect(fetched).toEqual([ROOT]);
+      expect(result).toEqual({ verified: true, siteUrl: ROOT });
+      expect([...calls.update, ...calls.create]).toEqual([]);
+    });
+  });
+
+  it('returns the reports address as the site address without site-dir', async () => {
+    const { api } = fakeApi(world());
+
+    const result = await finishPublish(api, { state: STATE, pageUrl: DEPLOYED, comment: false, marker: UPSERT_MARKER, fetch: ok, delayMs: 0, log });
+
+    expect(result.reportsUrl).toBe(DEPLOYED);
   });
 
   it('adds no links when comments are turned off', async () => {

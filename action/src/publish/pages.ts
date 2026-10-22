@@ -114,3 +114,36 @@ export function pagesAddress(raw?: string): string | undefined {
   if (!url.pathname.endsWith('/')) url.pathname += '/';
   return url.toString();
 }
+
+/**
+ * Whether this action can deploy a site here at all: Pages is on with the
+ * source "GitHub Actions". With a site of your own (site-dir), that is what
+ * decides the deploy, and decidePublish only whether the reports go on it:
+ * settings that refuse the reports must not stop the website from deploying.
+ * A site that builds from a branch is the branch's: deploying here would not
+ * be it, and the branch keeps serving it.
+ */
+export function canDeploySite(pages: PagesInfo): boolean {
+  return pages.found && pages.buildType === 'workflow';
+}
+
+/**
+ * The address of a site deployed without reports: pagesAddress, or else an
+ * http one (a custom domain without Enforce HTTPS serves the site, though
+ * report links need https), ending in '/'.
+ */
+export function siteAddress(raw?: string): string | undefined {
+  const https = pagesAddress(raw);
+  if (https || !raw || /[\s"'<>()`\\]/.test(raw)) return https;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'http:') return undefined;
+  url.hash = '';
+  url.search = '';
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return url.toString();
+}

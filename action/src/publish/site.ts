@@ -299,10 +299,15 @@ export interface IndexInput {
   runsPerPr: number;
   /** The folder of the repository's own pages (the include input), linked from the front page. */
   include?: string;
+  /**
+   * Write 404.html (default true). Off under a site of your own (site-dir):
+   * GitHub serves only the site root's 404.html, and that one is the site's.
+   */
+  notFoundPage?: boolean;
 }
 
 /** The front page, a page per pull request, and the 404 page. */
-export function buildIndexPages({ site, plan, outcomes, runsPerPr, include }: IndexInput): SiteFile[] {
+export function buildIndexPages({ site, plan, outcomes, runsPerPr, include, notFoundPage = true }: IndexInput): SiteFile[] {
   const files: SiteFile[] = [];
   const about = `Published by TestivAI: the last ${runsPerPr} runs of each open pull request, and the latest run on ${esc(site.defaultBranch)}. A closed pull request's reports go with the next publish.`;
 
@@ -354,6 +359,7 @@ export function buildIndexPages({ site, plan, outcomes, runsPerPr, include }: In
     });
   }
 
+  if (!notFoundPage) return files;
   files.push({
     path: '404.html',
     data: layout(

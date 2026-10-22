@@ -5,7 +5,9 @@ description: >
   last runs of each open pull request (forks included) and the latest run on
   the default branch, each page rebuilt from its run's results and
   screenshots. The site is rebuilt from scratch every time, so a closed pull
-  request's reports go with the next publish. Who can open the site is
+  request's reports go with the next publish. With site-dir, a website of
+  your own goes at the root, as it is, and the reports under reports-path.
+  Who can open the site is
   GitHub's setting: it publishes only where an admin set Settings → Pages →
   Source to "GitHub Actions", and a private repository's reports go on a
   public site only with TESTIVAI_PUBLIC_REPORTS=true. It never checks out or
@@ -80,6 +82,30 @@ inputs:
     required: false
     default: ''
 
+  site-dir:
+    description: >
+      An already-built website to deploy at the root of the Pages site, with
+      the reports under reports-path: for a repository whose Pages site is a
+      website. Build it in an earlier job from the default branch, never from
+      a pull request, relative to the workspace. Published as it is, every
+      file byte for byte (hidden files included; symbolic links skipped), and
+      its size counts toward the site's. It must not have reports-path. Where
+      the settings refuse the reports (a private repository's public site
+      without TESTIVAI_PUBLIC_REPORTS, or an address without https), the site
+      is deployed without them; where Pages builds from a branch, nothing is
+      deployed. Not with include-dir.
+    required: false
+    default: ''
+
+  reports-path:
+    description: >
+      The folder the reports go in on a site-dir site, such as visual-reports:
+      one to four lowercase folder names (letters, digits, '-', '_') joined by
+      '/'. The front page, each pull request's pages, the default branch's
+      and every link to them go there. Required with site-dir.
+    required: false
+    default: ''
+
   comment:
     description: >
       true (the default) adds the report links to the TestivAI comment on
@@ -111,11 +137,17 @@ outputs:
   published:
     description: "'true' when the site was built and deployed, 'false' when the repository's settings say not to."
     value: ${{ steps.build.outputs.published }}
+  reports-published:
+    description: >
+      'true' when the reports are on the deployed site. 'false' when nothing
+      was deployed, or a site-dir site was deployed without them.
+    value: ${{ steps.build.outputs.reports-published }}
   page-url:
     description: >
-      The site's https address: the one the deploy reports (GitHub gives a
-      github.io address as http, read here as https), else the one from the
-      repository's Pages settings.
+      The reports' https address: the site's, under reports-path with
+      site-dir; the one the deploy reports (GitHub gives a github.io address
+      as http, read here as https), else the one from the repository's Pages
+      settings. With site-dir and no reports, the site's own address.
     value: ${{ steps.finish.outputs.page-url || steps.build.outputs.page-url }}
 
 runs:
@@ -148,6 +180,8 @@ runs:
         PUBLIC_REPORTS: ${{ inputs.public-reports }}
         INCLUDE_DIR: ${{ inputs.include-dir }}
         INCLUDE_NAME: ${{ inputs.include-name }}
+        SITE_DIR: ${{ inputs.site-dir }}
+        REPORTS_PATH: ${{ inputs.reports-path }}
         CACHE: ${{ inputs.cache }}
         CACHE_DIR: ${{ runner.temp }}/testivai-pages/cache
       with:
@@ -169,11 +203,15 @@ runs:
         path: ${{ runner.temp }}/testivai-pages/cache
         key: testivai-pages-reports-v1-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+    # A site-dir site is published as it is, hidden files included (.git and
+    # .github are always left out); the reports site has none.
     - name: Upload the site
+      id: upload
       if: steps.build.outputs.published == 'true'
       uses: actions/upload-pages-artifact@v5
       with:
         path: ${{ steps.build.outputs.site-dir }}
+        include-hidden-files: ${{ inputs.site-dir != '' }}
 
     # Needs pages:write and id-token:write, and the job's environment set to
     # github-pages.

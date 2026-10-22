@@ -92,6 +92,12 @@ describe('findReportUrl', () => {
     }
   });
 
+  it('takes the link to a report under a site of your own (publish@v1 site-dir and reports-path)', () => {
+    const sub = 'https://www.budisugianto.com/visual-reports/pr/17/123-2/';
+
+    expect(findReportUrl([reporterComment('123-2', sub)], { pr: 17, runKey: '123-2' })).toBe(sub);
+  });
+
   it("takes the page from a snapshot's link when that is the only one, without its #fragment", () => {
     const body = `<!-- testivai-run:123-2 -->\n| home | changed | [open](${REPORT}#snap-home) |`;
 

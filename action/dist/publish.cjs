@@ -35,7 +35,8 @@ __export(publish_exports, {
   parseCache: () => parseCache,
   parseComment: () => parseComment,
   parseInclude: () => parseInclude,
-  parseRunsPerPr: () => parseRunsPerPr
+  parseRunsPerPr: () => parseRunsPerPr,
+  parseSite: () => parseSite
 });
 module.exports = __toCommonJS(publish_exports);
 var fs3 = __toESM(require("fs"));
@@ -1804,6 +1805,24 @@ function pagesAddress(raw) {
   if (!url.pathname.endsWith("/")) url.pathname += "/";
   return url.toString();
 }
+function canDeploySite(pages) {
+  return pages.found && pages.buildType === "workflow";
+}
+function siteAddress(raw) {
+  const https = pagesAddress(raw);
+  if (https || !raw || /[\s"'<>()`\\]/.test(raw)) return https;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return void 0;
+  }
+  if (url.protocol !== "http:") return void 0;
+  url.hash = "";
+  url.search = "";
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.toString();
+}
 
 // src/publish/plan.ts
 var MB2 = 1024 * 1024;
@@ -3359,7 +3378,7 @@ function fallbackPage(input, reason) {
   <p>The run's own report is in its ZIP. ${links.join(" \xB7 ")}</p>`
   );
 }
-function buildIndexPages({ site, plan, outcomes, runsPerPr, include }) {
+function buildIndexPages({ site, plan, outcomes, runsPerPr, include, notFoundPage = true }) {
   const files = [];
   const about = `Published by TestivAI: the last ${runsPerPr} runs of each open pull request, and the latest run on ${esc(site.defaultBranch)}. A closed pull request's reports go with the next publish.`;
   const sections = [];
@@ -3411,6 +3430,7 @@ ${sections.join("\n")}`)
       )
     });
   }
+  if (!notFoundPage) return files;
   files.push({
     path: "404.html",
     data: layout(
@@ -3479,6 +3499,14 @@ function publishSummary(input) {
 
 ${escapeMarkdown(input.reason)}
 `;
+  if ("reportsSkipped" in input) {
+    return `### Site deployed; TestivAI reports not published
+
+**${link("Open the site", input.siteUrl)}**
+
+${escapeMarkdown(input.reportsSkipped)}
+`;
+  }
   const { siteUrl, site } = input;
   const about = site ? ` \u2014 the last ${whole(site.runsPerPr)} runs of each open pull request, and the latest run on ${escapeMarkdown(site.defaultBranch)}.` : "";
   const lines = ["### TestivAI reports published", "", `**${link("Open the reports site", siteUrl)}**${about}`];
@@ -3529,6 +3557,9 @@ var PUBLISH_LIMITS = {
   /** Pages of 100 artifacts read, newest first. */
   maxArtifactPages: 10
 };
+function reportsAddress(state) {
+  return state.reportsPath ? `${state.siteUrl}${state.reportsPath}/` : state.siteUrl;
+}
 function safeSitePath(root, rel) {
   if (!/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(?:html|png)$/.test(rel)) throw new Error(`not a site path: ${JSON.stringify(rel)}`);
   return path2.join(root, rel);
@@ -3537,35 +3568,83 @@ var mb2 = (bytes) => `${Math.round(bytes / MB3)} MB`;
 var mb1 = (bytes) => `${(bytes / MB3).toFixed(1)} MB`;
 var sizeOf = (f) => typeof f.data === "string" ? Buffer.byteLength(f.data) : f.data.byteLength;
 var RESERVED = /* @__PURE__ */ new Set(["pr", "main"]);
-function readInclude(include, maxBytes, log) {
-  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
-    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
-  }
-  if (!fs2.existsSync(include.dir) || !fs2.lstatSync(include.dir).isDirectory()) throw new Error(`include-dir ${include.dir} is not a folder`);
+function readFolder(dir, label, maxBytes, log) {
+  if (!fs2.existsSync(dir) || !fs2.lstatSync(dir).isDirectory()) throw new Error(`${label} ${dir} is not a folder`);
   const files = [];
   let bytes = 0;
   const walk = (rel) => {
-    for (const entry of fs2.readdirSync(path2.join(include.dir, rel), { withFileTypes: true })) {
+    for (const entry of fs2.readdirSync(path2.join(dir, rel), { withFileTypes: true })) {
       const child = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) log.warning(`include-dir: ${child} is a symbolic link: skipped.`);
+      if (entry.isSymbolicLink()) log.warning(`${label}: ${child} is a symbolic link: skipped.`);
       else if (entry.isDirectory()) walk(child);
       else if (entry.isFile()) {
         files.push(child);
-        bytes += fs2.statSync(path2.join(include.dir, child)).size;
+        bytes += fs2.statSync(path2.join(dir, child)).size;
       }
     }
   };
   walk("");
-  if (bytes > maxBytes) throw new Error(`include-dir ${include.dir} is ${mb2(bytes)}, over the site's ${mb2(maxBytes)} budget`);
+  if (bytes > maxBytes) throw new Error(`${label} ${dir} is ${mb2(bytes)}, over the site's ${mb2(maxBytes)} budget`);
   return { files, bytes };
+}
+function readInclude(include, maxBytes, log) {
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(include.name) || RESERVED.has(include.name)) {
+    throw new Error(`include-name must be a lowercase folder name (letters, digits, '-', '_'), not pr or main; got ${JSON.stringify(include.name)}`);
+  }
+  return readFolder(include.dir, "include-dir", maxBytes, log);
+}
+var FOLDER = "[a-z0-9][a-z0-9_-]{0,39}";
+var REPORTS_PATH = new RegExp(`^${FOLDER}(?:/${FOLDER}){0,3}$`);
+function readOwnSite(site, maxBytes, log) {
+  if (!REPORTS_PATH.test(site.reportsPath)) {
+    throw new Error(
+      `reports-path must be one to four lowercase folder names (letters, digits, '-', '_') joined by '/', such as visual-reports; got ${JSON.stringify(site.reportsPath)}`
+    );
+  }
+  if (!fs2.existsSync(site.dir) || !fs2.lstatSync(site.dir).isDirectory()) throw new Error(`site-dir ${site.dir} is not a folder`);
+  const parts = site.reportsPath.split("/");
+  for (let i2 = 1; i2 <= parts.length; i2++) {
+    const rel = parts.slice(0, i2).join("/");
+    let stat;
+    try {
+      stat = fs2.lstatSync(path2.join(site.dir, rel));
+    } catch {
+      break;
+    }
+    if (i2 === parts.length || !stat.isDirectory()) {
+      throw new Error(
+        `site-dir ${site.dir} already has ${rel}${i2 === parts.length ? "" : `, which is not a folder`}: reports-path ${site.reportsPath} must be a path the site does not use, so that no site file is written over. Choose another reports-path, or take ${rel} out of the site.`
+      );
+    }
+  }
+  return readFolder(site.dir, "site-dir", maxBytes, log);
+}
+function copyFiles(from, to, files) {
+  for (const rel of files) {
+    const target = path2.join(to, rel);
+    fs2.mkdirSync(path2.dirname(target), { recursive: true });
+    fs2.copyFileSync(path2.join(from, rel), target, fs2.constants.COPYFILE_EXCL);
+  }
 }
 async function buildSite(api, options) {
   const { log } = options;
   const limits = { ...PUBLISH_LIMITS, ...options.limits };
+  if (options.site && options.include) {
+    throw new Error("include-dir cannot be used with site-dir: put those pages in the site, which is published as it is");
+  }
   const include = options.include ? readInclude(options.include, limits.maxSiteBytes, log) : void 0;
+  const own = options.site ? readOwnSite(options.site, limits.maxSiteBytes, log) : void 0;
   const repo = await api.repo();
-  const decision = decidePublish({ pages: await api.pages(), repoVisibility: repo.visibility, publicReportsConsent: options.consent });
-  if (!decision.publish || !decision.siteUrl || !decision.visibility) return { published: false, reason: decision.reason };
+  const pages = await api.pages();
+  const decision = decidePublish({ pages, repoVisibility: repo.visibility, publicReportsConsent: options.consent });
+  if (!decision.publish || !decision.siteUrl || !decision.visibility) {
+    if (!options.site || !own) return { published: false, reason: decision.reason };
+    if (!canDeploySite(pages)) {
+      const why = pages.found ? " site-dir is not deployed either: the branch keeps serving the site." : " site-dir is not deployed either.";
+      return { published: false, reason: `${decision.reason}${why}` };
+    }
+    return deployOwnSiteAlone(options, own, pages, decision.reason);
+  }
   log.info(decision.reason);
   const prs = await api.openPrs();
   const { artifacts, truncated } = await api.artifacts(options.artifactName, limits.maxArtifactPages);
@@ -3595,7 +3674,10 @@ async function buildSite(api, options) {
   for (const d of plan.dropped) log.info(`Run ${d.runId}${d.pr ? ` (#${d.pr})` : ""} is not published: ${d.reason}.`);
   fs2.rmSync(options.siteDir, { recursive: true, force: true });
   fs2.mkdirSync(options.siteDir, { recursive: true });
-  const site = { url: decision.siteUrl, repo: repo.fullName, serverUrl: options.serverUrl, defaultBranch: repo.defaultBranch };
+  const reportsPath = options.site?.reportsPath;
+  const reportsDir = reportsPath ? path2.join(options.siteDir, ...reportsPath.split("/")) : options.siteDir;
+  const reportsUrl = reportsAddress({ siteUrl: decision.siteUrl, ...reportsPath ? { reportsPath } : {} });
+  const site = { url: reportsUrl, repo: repo.fullName, serverUrl: options.serverUrl, defaultBranch: repo.defaultBranch };
   const artifactUrl = (r) => `${options.serverUrl}/${repo.fullName}/actions/runs/${r.runId}/artifacts/${r.artifactId}`;
   const order = [
     ...plan.main ? [{ run: plan.main }] : [],
@@ -3606,12 +3688,14 @@ async function buildSite(api, options) {
   const left = /* @__PURE__ */ new Set();
   let bytes = 0;
   let files = 0;
+  if (own && options.site) {
+    copyFiles(options.site.dir, options.siteDir, own.files);
+    bytes += own.bytes;
+    files += own.files.length;
+    log.info(`Published ${options.site.dir} at the site's root: ${own.files.length} files; the reports go under ${options.site.reportsPath}/.`);
+  }
   if (include && options.include) {
-    for (const rel of include.files) {
-      const to = path2.join(options.siteDir, options.include.name, rel);
-      fs2.mkdirSync(path2.dirname(to), { recursive: true });
-      fs2.copyFileSync(path2.join(options.include.dir, rel), to);
-    }
+    copyFiles(options.include.dir, path2.join(options.siteDir, options.include.name), include.files);
     bytes += include.bytes;
     files += include.files.length;
     log.info(`Published ${options.include.dir} as ${options.include.name}/: ${include.files.length} files.`);
@@ -3629,7 +3713,7 @@ async function buildSite(api, options) {
       log.warning(`Run ${run.runId} is not published: the site would be over its ${mb2(limits.maxSiteBytes)} budget.`);
       continue;
     }
-    writeFiles(options.siteDir, built.files);
+    writeFiles(reportsDir, built.files);
     bytes += size;
     files += built.files.length;
     outcomes.set(run.runId, built.outcome);
@@ -3645,12 +3729,20 @@ async function buildSite(api, options) {
     ...plan.main && left.has(plan.main) ? { main: void 0 } : {},
     prs: plan.prs.map((p) => ({ pr: p.pr, runs: p.runs.filter((r) => !left.has(r)) })).filter((p) => p.runs.length > 0)
   };
-  const index = buildIndexPages({ site, plan: published, outcomes, runsPerPr: options.runsPerPr, ...options.include ? { include: options.include.name } : {} });
-  writeFiles(options.siteDir, index);
+  const index = buildIndexPages({
+    site,
+    plan: published,
+    outcomes,
+    runsPerPr: options.runsPerPr,
+    ...options.include ? { include: options.include.name } : {},
+    ...options.site ? { notFoundPage: false } : {}
+  });
+  writeFiles(reportsDir, index);
   bytes += index.reduce((n, f) => n + sizeOf(f), 0);
   files += index.length;
   const state = {
     siteUrl: decision.siteUrl,
+    ...reportsPath ? { reportsPath } : {},
     visibility: decision.visibility,
     prs: published.prs.map(({ pr, runs: [latest] }) => {
       const outcome = outcomes.get(latest.runId);
@@ -3673,7 +3765,30 @@ async function buildSite(api, options) {
     fromCache: cache?.stats.hits ?? 0,
     cacheChanged: cache !== void 0 && cache.stats.stored + cache.stats.removed > 0
   };
-  return { published: true, reason: decision.reason, state, files, bytes, downloads: stats };
+  return { published: true, reports: true, reason: decision.reason, state, files, bytes, downloads: stats };
+}
+function deployOwnSiteAlone(options, own, pages, reason) {
+  const site = options.site;
+  fs2.rmSync(options.siteDir, { recursive: true, force: true });
+  fs2.mkdirSync(options.siteDir, { recursive: true });
+  copyFiles(site.dir, options.siteDir, own.files);
+  options.log.info(`Published ${site.dir} at the site's root: ${own.files.length} files, without the reports.`);
+  const state = {
+    siteUrl: siteAddress(pages.htmlUrl) ?? "",
+    visibility: pages.public === false ? "private" : "public",
+    reportsPath: site.reportsPath,
+    reportsSkipped: reason,
+    prs: []
+  };
+  return {
+    published: true,
+    reports: false,
+    reason,
+    state,
+    files: own.files.length,
+    bytes: own.bytes,
+    downloads: { downloaded: 0, downloadedBytes: 0, fromCache: 0, cacheChanged: false }
+  };
 }
 async function fetchArchive(api, run, from) {
   let zip = from.cache?.read(run.artifactId, from.digest);
@@ -3698,7 +3813,7 @@ function writeFiles(root, files) {
   for (const f of files) {
     const to = safeSitePath(root, f.path);
     fs2.mkdirSync(path2.dirname(to), { recursive: true });
-    fs2.writeFileSync(to, f.data);
+    fs2.writeFileSync(to, f.data, { flag: "wx" });
   }
 }
 async function mapLimit(items, limit, fn) {
@@ -3721,6 +3836,8 @@ async function finishPublish(api, options) {
     log.warning(`GitHub deployed the site at ${deployed}, not ${state.siteUrl} as its settings said before; the comments link ${deployed}.`);
     state = { ...state, siteUrl: deployed, prs: state.prs.map((p) => ({ ...p, url: deployed + p.url.slice(state.siteUrl.length) })) };
   }
+  const reportsUrl = state.reportsSkipped === void 0 ? reportsAddress(state) : void 0;
+  const result = (verified2) => ({ verified: verified2, siteUrl: state.siteUrl, ...reportsUrl ? { reportsUrl } : {} });
   let verified = "skipped";
   if (state.visibility !== "public") {
     log.info("The site is private: it is not opened from here (it needs a GitHub sign-in).");
@@ -3729,19 +3846,20 @@ async function finishPublish(api, options) {
   } else {
     const fetchFn = options.fetch ?? ((url) => fetch(url, { redirect: "follow" }));
     const retries = options.retries ?? 6;
+    const opened = reportsUrl ?? deployed;
     verified = false;
     for (let attempt = 1; attempt <= retries && !verified; attempt++) {
       try {
-        verified = (await fetchFn(deployed)).status === 200;
+        verified = (await fetchFn(opened)).status === 200;
       } catch {
         verified = false;
       }
       if (!verified && attempt < retries) await new Promise((r) => setTimeout(r, options.delayMs ?? 1e4));
     }
-    if (verified) log.info(`The site answers at ${deployed}.`);
-    else log.warning(`The site did not answer at ${deployed} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
+    if (verified) log.info(`The site answers at ${opened}.`);
+    else log.warning(`The site did not answer at ${opened} after ${retries} tries. GitHub reported the deploy as done, so the links are added anyway.`);
   }
-  if (!options.comment) return { verified, siteUrl: state.siteUrl };
+  if (!options.comment) return result(verified);
   for (const published of state.prs) {
     try {
       const action = commentFor(published, await api.comments(published.pr), options.marker, { thumbnails: state.visibility === "public" });
@@ -3760,7 +3878,7 @@ async function finishPublish(api, options) {
       );
     }
   }
-  return { verified, siteUrl: state.siteUrl };
+  return result(verified);
 }
 
 // src/publish.ts
@@ -3788,6 +3906,14 @@ function parseInclude(env) {
   if (!name) throw new Error("include-name is required with include-dir: the folder the pages go in on the site, such as demo");
   return { dir: path3.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), name };
 }
+function parseSite(env) {
+  const dir = (env.SITE_DIR ?? "").trim();
+  const reportsPath = (env.REPORTS_PATH ?? "").trim().replace(/^\/+|\/+$/g, "");
+  if (!dir && !reportsPath) return void 0;
+  if (!dir) throw new Error("reports-path needs site-dir: the reports go under a path of a site of your own, published at the root");
+  if (!reportsPath) throw new Error("reports-path is required with site-dir: the folder the reports go in on the site, such as visual-reports");
+  return { dir: path3.resolve(env.GITHUB_WORKSPACE || process.cwd(), dir), reportsPath };
+}
 async function build({ github, context, core, env }) {
   const runsPerPr = parseRunsPerPr(env.RUNS_PER_PR ?? "3");
   if (!env.RUNNER_TEMP) throw new Error("RUNNER_TEMP is not set: this runs as a GitHub Actions step");
@@ -3795,6 +3921,7 @@ async function build({ github, context, core, env }) {
   const siteDir = path3.join(root, "site");
   const stateFile = path3.join(root, "state.json");
   const include = parseInclude(env);
+  const site = parseSite(env);
   const cacheDir = parseCache(env.CACHE ?? "false") ? env.CACHE_DIR?.trim() || path3.join(root, "cache") : void 0;
   const result = await buildSite(octokitApi(github, context.repo.owner, context.repo.repo), {
     artifactName: env.ARTIFACT_NAME || "testivai-visual-report",
@@ -3803,37 +3930,44 @@ async function build({ github, context, core, env }) {
     siteDir,
     serverUrl: context.serverUrl,
     ...include ? { include } : {},
+    ...site ? { site } : {},
     ...cacheDir ? { cacheDir } : {},
     log: core
   });
   if (!result.published) {
     core.notice(result.reason);
     core.setOutput("published", "false");
+    core.setOutput("reports-published", "false");
     core.setOutput("cache-save", "false");
     await writeJobSummary(core, publishSummary({ published: false, reason: result.reason }));
     return;
   }
+  if (!result.reports) core.notice(`The site is deployed without the reports: ${result.reason}`);
   core.setOutput("cache-save", result.downloads.cacheChanged ? "true" : "false");
   fs3.writeFileSync(stateFile, JSON.stringify(result.state));
   core.info(`Built the site: ${result.files} files, ${Math.round(result.bytes / 1024)} KB.`);
   core.setOutput("published", "true");
+  core.setOutput("reports-published", result.reports ? "true" : "false");
   core.setOutput("site-dir", siteDir);
   core.setOutput("state-file", stateFile);
-  core.setOutput("page-url", result.state.siteUrl);
+  core.setOutput("page-url", result.reports ? reportsAddress(result.state) : result.state.siteUrl);
 }
 async function finish({ github, context, core, env }) {
   const comment = parseComment(env.COMMENT ?? "true");
   if (!env.STATE_FILE) throw new Error("STATE_FILE is not set: the build step did not publish");
   const state = JSON.parse(fs3.readFileSync(env.STATE_FILE, "utf8"));
-  const { siteUrl } = await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
+  const { siteUrl, reportsUrl } = await finishPublish(octokitApi(github, context.repo.owner, context.repo.repo), {
     state,
     pageUrl: env.PAGE_URL,
     comment,
     marker: resolveUpsertMarker(resolveStatusContext(env.STATUS_CONTEXT ?? "")),
     log: core
   });
-  core.setOutput("page-url", siteUrl);
-  await writeJobSummary(core, publishSummary({ published: true, siteUrl, ...state.site ? { site: state.site } : {} }));
+  core.setOutput("page-url", reportsUrl ?? siteUrl);
+  await writeJobSummary(
+    core,
+    state.reportsSkipped !== void 0 || !reportsUrl ? publishSummary({ published: true, siteUrl, reportsSkipped: state.reportsSkipped ?? "" }) : publishSummary({ published: true, siteUrl: reportsUrl, ...state.site ? { site: state.site } : {} })
+  );
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
@@ -3842,5 +3976,6 @@ async function finish({ github, context, core, env }) {
   parseCache,
   parseComment,
   parseInclude,
-  parseRunsPerPr
+  parseRunsPerPr,
+  parseSite
 });

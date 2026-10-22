@@ -60,6 +60,22 @@ describe('inputs and outputs', () => {
     expect(ACTION.inputs['status-context'].default).toBe('');
     expect(ACTION.inputs['include-dir'].default).toBe('');
     expect(ACTION.inputs['include-name'].default).toBe('');
+    expect(ACTION.inputs['site-dir'].default).toBe('');
+    expect(ACTION.inputs['reports-path'].default).toBe('');
+  });
+
+  it('says site-dir is built from the default branch, never a pull request, and goes at the root as it is', () => {
+    const text = ACTION.inputs['site-dir'].description.replace(/\s+/g, ' ');
+    expect(text).toMatch(/default branch/);
+    expect(text).toMatch(/never from a pull request/);
+    expect(text).toMatch(/root/);
+    expect(text).toMatch(/reports-path/);
+    expect(ACTION.inputs['reports-path'].description.replace(/\s+/g, ' ')).toMatch(/Required with site-dir/);
+  });
+
+  it('outputs whether the reports were published, apart from whether the site was deployed', () => {
+    expect(ACTION.outputs['reports-published'].value).toBe('${{ steps.build.outputs.reports-published }}');
+    expect(ACTION.outputs['page-url'].description.replace(/\s+/g, ' ')).toMatch(/reports-path/);
   });
 
   it('has no ${{ }} expression in any description: the runner parses them and refuses the action', () => {
@@ -100,6 +116,15 @@ describe('steps', () => {
     for (const s of site.slice(1)) expect(s.if).toBe("steps.build.outputs.published == 'true'");
     expect(byId('deploy')).toBe(site[2]);
     expect(site[1].with?.path).toBe('${{ steps.build.outputs.site-dir }}');
+  });
+
+  it("uploads hidden files only for a site of your own (site-dir), which is published as it is; never otherwise, as before", () => {
+    expect(byId('upload').with?.['include-hidden-files']).toBe("${{ inputs.site-dir != '' }}");
+  });
+
+  it('hands the build site-dir and reports-path through the environment', () => {
+    expect(byId('build').env?.SITE_DIR).toBe('${{ inputs.site-dir }}');
+    expect(byId('build').env?.REPORTS_PATH).toBe('${{ inputs.reports-path }}');
   });
 
   it('never checks out or runs code: every step is a pinned action, none a shell command', () => {
@@ -211,13 +236,13 @@ const REPORT_ZIP = zipSync({ 'results.json': strToU8(JSON.stringify(RESULTS)), '
 const REPORT_DIGEST = `sha256:${crypto.createHash('sha256').update(REPORT_ZIP).digest('hex')}`;
 
 /** A repository with Pages on, and one fork pull request with one run. */
-function fakeGithub(pages: 'on' | 'off') {
+function fakeGithub(pages: 'on' | 'off', over: { visibility?: string; htmlUrl?: string } = {}) {
   const posted: Array<{ route: string; params: Record<string, any> }> = [];
   const routes: Record<string, (p: Record<string, any>) => unknown> = {
-    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: 'public', default_branch: 'main' }),
+    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: over.visibility ?? 'public', default_branch: 'main' }),
     'GET /repos/{owner}/{repo}/pages': () => {
       if (pages === 'off') throw Object.assign(new Error('Not Found'), { status: 404 });
-      return { build_type: 'workflow', public: true, html_url: 'https://testivai.github.io/testivai-example/' };
+      return { build_type: 'workflow', public: true, html_url: over.htmlUrl ?? 'https://testivai.github.io/testivai-example/' };
     },
     'GET /repos/{owner}/{repo}/pulls': () => [
       { number: 15, title: 'Typo', user: { login: 'someone' }, head: { ref: 'patch-1', sha: 'd'.repeat(40), repo: { id: 9, full_name: 'someone/testivai-example' } } },
@@ -306,6 +331,8 @@ describe('the scripts load dist/publish.cjs and run', () => {
     'inputs.include-dir': '',
     'inputs.include-name': '',
     'inputs.cache': 'true',
+    'inputs.site-dir': '',
+    'inputs.reports-path': '',
     'runner.temp': temp,
     ...over,
   });
@@ -327,6 +354,7 @@ describe('the scripts load dist/publish.cjs and run', () => {
     await runScript(byId('build'), values(), { github, context, core });
 
     expect(outputs.published).toBe('true');
+    expect(outputs['reports-published']).toBe('true');
     expect(outputs['page-url']).toBe('https://testivai.github.io/testivai-example/');
     expect(fs.existsSync(path.join(outputs['site-dir'], 'pr/15/4-1/index.html'))).toBe(true);
     expect(fs.existsSync(path.join(outputs['site-dir'], 'index.html'))).toBe(true);
@@ -476,5 +504,95 @@ describe('the scripts load dist/publish.cjs and run', () => {
     const { github } = fakeGithub('on');
 
     await expect(runScript(byId('build'), values({ 'inputs.cache': 'yes' }), { github, context, core: fakeCore().core })).rejects.toThrow(/cache must be true or false/);
+  });
+  describe('a site of your own at the root, reports under reports-path (site-dir)', () => {
+    const ROOT = 'https://www.budisugianto.com/';
+    const REPORTS = `${ROOT}visual-reports/`;
+    let workspace: string;
+    const savedWorkspace = process.env.GITHUB_WORKSPACE;
+    beforeEach(() => {
+      workspace = path.join(temp, 'workspace');
+      fs.mkdirSync(path.join(workspace, '_site', 'tip'), { recursive: true });
+      fs.writeFileSync(path.join(workspace, '_site', 'index.html'), '<h1>Portfolio</h1>');
+      fs.writeFileSync(path.join(workspace, '_site', 'tip', 'index.html'), '<h1>TIP</h1>');
+      fs.writeFileSync(path.join(workspace, '_site', 'CNAME'), 'www.budisugianto.com');
+      process.env.GITHUB_WORKSPACE = workspace;
+    });
+    afterEach(() => {
+      if (savedWorkspace === undefined) delete process.env.GITHUB_WORKSPACE;
+      else process.env.GITHUB_WORKSPACE = savedWorkspace;
+    });
+    const site = (over: Record<string, string> = {}) => values({ 'inputs.site-dir': '_site', 'inputs.reports-path': 'visual-reports', ...over });
+
+    it('build then finish: the site at the root, the reports under reports-path, and every link there', async () => {
+      const { github, posted } = fakeGithub('on', { htmlUrl: ROOT });
+      const { core, outputs } = fakeCore();
+
+      await runScript(byId('build'), site(), { github, context, core });
+
+      expect(outputs.published).toBe('true');
+      expect(outputs['reports-published']).toBe('true');
+      expect(outputs['page-url']).toBe(REPORTS);
+      expect(fs.readFileSync(path.join(outputs['site-dir'], 'index.html'), 'utf8')).toBe('<h1>Portfolio</h1>');
+      expect(fs.readFileSync(path.join(outputs['site-dir'], 'tip', 'index.html'), 'utf8')).toBe('<h1>TIP</h1>');
+      expect(fs.existsSync(path.join(outputs['site-dir'], 'visual-reports/pr/15/4-1/index.html'))).toBe(true);
+      expect(fs.existsSync(path.join(outputs['site-dir'], 'visual-reports/index.html'))).toBe(true);
+      expect(fs.existsSync(path.join(outputs['site-dir'], '404.html'))).toBe(false);
+
+      await runScript(byId('finish'), site({ 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': ROOT }), { github, context, core });
+
+      expect(fetched).toEqual([REPORTS]);
+      expect(outputs['page-url']).toBe(REPORTS);
+      expect(posted).toHaveLength(1);
+      expect(posted[0].params.body).toContain(`(${REPORTS}pr/15/4-1/)`);
+    });
+
+    it('takes reports-path with a slash at either end', async () => {
+      const { github } = fakeGithub('on', { htmlUrl: ROOT });
+      const { core, outputs } = fakeCore();
+
+      await runScript(byId('build'), site({ 'inputs.reports-path': '/visual-reports/' }), { github, context, core });
+
+      expect(outputs['page-url']).toBe(REPORTS);
+    });
+
+    it('build then finish, where the settings refuse the reports: the site alone is deployed, and no comment is touched', async () => {
+      const { github, posted } = fakeGithub('on', { htmlUrl: ROOT, visibility: 'private' });
+      const downloads = countingDownloads(github);
+      const { core, outputs, notices } = fakeCore();
+
+      await runScript(byId('build'), site(), { github: downloads.github, context, core });
+
+      expect(outputs.published).toBe('true');
+      expect(outputs['reports-published']).toBe('false');
+      expect(outputs['page-url']).toBe(ROOT);
+      expect(outputs['cache-save']).toBe('false');
+      expect(notices[0]).toMatch(/TESTIVAI_PUBLIC_REPORTS/);
+      expect(downloads.downloads).toEqual([]);
+      expect(fs.readdirSync(outputs['site-dir']).sort()).toEqual(['CNAME', 'index.html', 'tip']);
+
+      await runScript(byId('finish'), site({ 'steps.build.outputs.state-file': outputs['state-file'], 'steps.deploy.outputs.page_url': ROOT }), { github, context, core });
+
+      expect(fetched).toEqual([ROOT]);
+      expect(outputs['page-url']).toBe(ROOT);
+      expect(posted).toEqual([]);
+    });
+
+    it('build: needs reports-path with site-dir, site-dir with reports-path, and no include-dir with them', async () => {
+      const { github } = fakeGithub('on', { htmlUrl: ROOT });
+
+      await expect(runScript(byId('build'), site({ 'inputs.reports-path': '' }), { github, context, core: fakeCore().core })).rejects.toThrow(/reports-path is required with site-dir/);
+      await expect(runScript(byId('build'), values({ 'inputs.reports-path': 'visual-reports' }), { github, context, core: fakeCore().core })).rejects.toThrow(/reports-path needs site-dir/);
+      await expect(
+        runScript(byId('build'), site({ 'inputs.include-dir': '_site', 'inputs.include-name': 'demo' }), { github, context, core: fakeCore().core }),
+      ).rejects.toThrow(/include-dir .*site-dir/);
+    });
+
+    it('build: refuses a site that already has reports-path', async () => {
+      fs.mkdirSync(path.join(workspace, '_site', 'visual-reports'));
+      const { github } = fakeGithub('on', { htmlUrl: ROOT });
+
+      await expect(runScript(byId('build'), site(), { github, context, core: fakeCore().core })).rejects.toThrow(/already has visual-reports/);
+    });
   });
 });

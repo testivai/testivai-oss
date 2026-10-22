@@ -201,6 +201,39 @@ describe('publishSummary', () => {
     expect(publishSummary({ published: true, siteUrl: SITE })).toBe(`### TestivAI reports published\n\n**[Open the reports site](${SITE})**\n`);
   });
 
+  describe('a site of your own deployed without its reports (site-dir)', () => {
+    const ROOT = 'https://www.budisugianto.com/';
+
+    it('says the site was deployed, links it, and says why the reports were not', () => {
+      const { reason } = decidePublish({ pages: { ...PAGES, htmlUrl: ROOT }, repoVisibility: 'private' });
+
+      const summary = publishSummary({ published: true, siteUrl: ROOT, reportsSkipped: reason });
+
+      expect(summary.startsWith(`### Site deployed; TestivAI reports not published\n\n**[Open the site](${ROOT})**\n\n`)).toBe(true);
+      expect(rendered(summary)).toContain(reason);
+      expect(summary).not.toContain('Open the reports site');
+    });
+
+    it('escapes the reason', () => {
+      const summary = publishSummary({ published: true, siteUrl: ROOT, reportsSkipped: 'site at http://x.example/<b>[x](y)</b>' });
+
+      expect(summary.split('\n\n').slice(2).join('\n\n')).not.toMatch(UNESCAPED);
+    });
+
+    it('links the reports under reports-path when they are published', async () => {
+      const own = path.join(dir, '_site');
+      fs.mkdirSync(own);
+      fs.writeFileSync(path.join(own, 'index.html'), '<h1>Portfolio</h1>');
+      const state = await stateOf(world({ pages: { ...PAGES, htmlUrl: ROOT } }), { site: { dir: own, reportsPath: 'visual-reports' } });
+
+      const summary = publishSummary({ published: true, siteUrl: `${ROOT}visual-reports/`, site: state.site });
+
+      expect(summary).toContain(`[Open the reports site](${ROOT}visual-reports/)`);
+      expect(summary).toContain(`[latest run](${ROOT}visual-reports/pr/14/3-1/)`);
+      expect(summary).toContain(`[all 2 runs](${ROOT}visual-reports/pr/14/)`);
+    });
+  });
+
   describe('when nothing was published', () => {
     it.each([
       ['Pages is off', { pages: { found: false }, repoVisibility: 'public' as const }],
@@ -305,13 +338,13 @@ describe('escapeMarkdown', () => {
 // ── the writes ──────────────────────────────────────────────────────────────
 
 /** A repository with Pages on and one fork pull request with one run (publish-action.test.ts). */
-function fakeGithub(pages: 'on' | 'off'): { github: OctokitLike; posted: string[] } {
+function fakeGithub(pages: 'on' | 'off', over: { visibility?: string; htmlUrl?: string } = {}): { github: OctokitLike; posted: string[] } {
   const posted: string[] = [];
   const routes: Record<string, () => unknown> = {
-    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: 'public', default_branch: 'main' }),
+    'GET /repos/{owner}/{repo}': () => ({ id: 1, full_name: 'testivai/testivai-example', visibility: over.visibility ?? 'public', default_branch: 'main' }),
     'GET /repos/{owner}/{repo}/pages': () => {
       if (pages === 'off') throw Object.assign(new Error('Not Found'), { status: 404 });
-      return { build_type: 'workflow', public: true, html_url: SITE };
+      return { build_type: 'workflow', public: true, html_url: over.htmlUrl ?? SITE };
     },
     'GET /repos/{owner}/{repo}/pulls': () => [
       { number: 15, title: '<b>Typo</b>', user: { login: 'someone' }, head: { ref: 'patch-1', sha: 'd'.repeat(40), repo: { id: 9, full_name: 'someone/testivai-example' } } },
@@ -441,6 +474,25 @@ describe('the publish steps write the summary', () => {
     // The fork's title never reaches it.
     expect(written[0]).not.toContain('Typo');
     expect(written[0]).toContain(`[latest run](${SITE}pr/15/4-1/)`);
+  });
+
+  it('finish, with a site of your own deployed without its reports: the site, and why the reports are not on it', async () => {
+    const ROOT = 'https://www.budisugianto.com/';
+    const own = path.join(dir, '_site');
+    fs.mkdirSync(own);
+    fs.writeFileSync(path.join(own, 'index.html'), '<h1>Portfolio</h1>');
+    const { github, posted } = fakeGithub('on', { visibility: 'private', htmlUrl: ROOT });
+    const built = stubCore();
+    await build({ github, context, core: built.core, env: { ...env, SITE_DIR: own, REPORTS_PATH: 'visual-reports' } });
+    expect(built.written).toEqual([]);
+    const { core, written, outputs } = stubCore();
+
+    await finish({ github, context, core, env: { STATE_FILE: built.outputs['state-file'], PAGE_URL: ROOT, COMMENT: 'true', STATUS_CONTEXT: '' } });
+
+    const { reason } = decidePublish({ pages: { ...PAGES, htmlUrl: ROOT }, repoVisibility: 'private' });
+    expect(written).toEqual([publishSummary({ published: true, siteUrl: ROOT, reportsSkipped: reason })]);
+    expect(outputs['page-url']).toBe(ROOT);
+    expect(posted).toEqual([]);
   });
 
   it('a summary that cannot be written only warns: the outputs are set and the step does not fail', async () => {
