@@ -20,9 +20,11 @@ Everything here runs **fully locally** — no account, no API key, no server.
 1. **pnpm only.** Never run `npm install` or `yarn` in the workspace root or any package.
    `action/` is a workspace package too: add its dependencies with `pnpm --filter testivai-action add`.
 
-2. **Local-first, OSS-only.** There is no hosted service. Never reference a cloud
-   product, dashboard, account, or API key in docs or code. AI explanation is
-   bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
+2. **Local-first.** The packages need no account or API key, send nothing anywhere
+   and have no telemetry. Today there is no hosted product: never reference one, and
+   never describe a feature as paid or gated. TestivAI is free to use
+   (`docs/philosophy.md`, "Free and open source"); keep wording consistent with it.
+   AI explanation is bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
    Core vocabulary: pixel diff, DOM diff, noise hint, layered analysis, baselines, threshold.
 
 3. **`action/dist/` must always be committed.** After any change to `action/src/`,

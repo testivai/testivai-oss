@@ -20,6 +20,7 @@ The repo follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conven
 - `CHANGELOG.md` (this file) — repo-level history.
 
 ### Changed
+- `docs/philosophy.md` gains a "Free and open source" section (MIT, free to use including commercially, no account, no caps); `docs/maintenance.md`, `ROADMAP.md`, `CLAUDE.md`, `AGENTS.md` and `REVIEW.md` drop the "no paid tier / no pricing page" forever-statements. Nothing changes in the software or the license. A guard test (`packages/witness/src/__tests__/promise-wording.test.ts`) now enforces the wording.
 - `docs/README.md` — rewritten as a navigable index that lists what actually ships (Playwright + WDIO + GitHub Action), not the aspirational set.
 - `docs/intro.md` — Path A is now "dedicated adapters (Playwright + WebdriverIO)"; Path B is labeled experimental sidecar with cross-link to the new caveats doc.
 

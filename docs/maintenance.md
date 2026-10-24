@@ -12,9 +12,9 @@ is that answer.
 ## Who builds this
 
 TestivAI is built by **[Budi Sugianto](https://github.com/mcbuddy)**, a solo
-developer. There is no company behind it, no funding round, and no sales team —
-which is exactly why there's no hosted service to upsell you and no pricing page
-waiting to appear.
+developer. There is no company behind it, no funding round, and no sales team.
+TestivAI is [free to use](./philosophy.md#free-and-open-source), including
+commercially.
 
 It exists because visual regression tools kept failing the same way: a diff says
 *0.4% of pixels changed* and you're left squinting at two screenshots trying to

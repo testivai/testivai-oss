@@ -156,8 +156,8 @@ teams that want stricter or looser rasterization tolerance.
 
 ---
 
-**What we deliberately don't build:** a hosted service, dashboards, or
-anything that needs an account — TestivAI is local-first by
+**What we deliberately don't build into these packages:** a hosted service,
+dashboards, or anything that needs an account — TestivAI is local-first by
 [philosophy](./docs/philosophy.md). Collaboration happens through git
 (committed baselines), the PR workflow, and shareable single-file reports.
 

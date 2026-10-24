@@ -42,8 +42,9 @@ Report at most five Nits per review.
   the other two is Important
 - A change to `action/src/` comes with a rebuilt `action/dist/`
 - New behaviour has a unit test, and a new public export has JSDoc
-- No reference to a hosted service, dashboard, account or API key: TestivAI
-  is local-first and OSS-only (`docs/philosophy.md`); AI explanation is
+- No reference to a hosted product, dashboard, account or API key, and no
+  feature described as paid or gated: the packages are local-first and free
+  to use (`docs/philosophy.md`, "Free and open source"); AI explanation is
   bring-your-own-model through `@testivai/mcp`
 - `pnpm` everywhere except inside `action/`, which uses plain `npm`
 - Verdict wording stays consistent across the HTML report

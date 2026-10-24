@@ -18,7 +18,7 @@ DOM snapshots never need to leave your repo:
 - **The contract is public** — `results.json` is a semver-governed schema
   (status, diff %, region→selector attribution, DOM/style signals) that any
   tool can consume.
-- **No account, ever.** There is nothing to sign up for.
+- **No account.** There is nothing to sign up for, and the packages never ask.
 
 Local-first isn't a limitation — it's what makes TestivAI usable inside CI
 sandboxes, air-gapped environments, and AI-agent loops without provisioning
@@ -50,4 +50,10 @@ TestivAI free, private, and permanently un-lock-in-able.
 | AI explanations of diffs | The [MCP server](./guides/ai-agents.md) + your own agent |
 | Fewer false positives | [Stable baselines guide](./guides/stable-baselines.md) — stabilized captures, ignore modes, noise auto-pass |
 
-Everything above is MIT-licensed and works offline. That's the whole product.
+Everything above is MIT-licensed and works offline.
+
+## Free and open source
+
+TestivAI is open source under the MIT license and free to use, including
+commercially. No account, no registration, and no cap on snapshots, pages or
+runs, in any package, the GitHub Actions or the MCP server.
