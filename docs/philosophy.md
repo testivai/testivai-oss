@@ -50,26 +50,10 @@ TestivAI free, private, and permanently un-lock-in-able.
 | AI explanations of diffs | The [MCP server](./guides/ai-agents.md) + your own agent |
 | Fewer false positives | [Stable baselines guide](./guides/stable-baselines.md) — stabilized captures, ignore modes, noise auto-pass |
 
-Everything above is MIT-licensed and works offline — and it stays that way:
-see [What stays free](#what-stays-free).
+Everything above is MIT-licensed and works offline.
 
-## What stays free
+## Free and open source
 
-The MIT-licensed packages are complete on their own: capture, comparison,
-every verdict, the HTML report, the GitHub Actions, the MCP server and the
-`results.json` contract. They need no account, send nothing anywhere, and keep
-working offline on the version you pinned.
-
-That is not a launch-week promise. Whatever this project becomes:
-
-- **Nothing moves out of the free packages.** A feature that is free today
-  stays free, and the license of anything already released never changes.
-- **Nothing in your CI will ever depend on an account, a key or a license.**
-  Capture, compare, report and approve run the same whether or not anyone
-  pays for anything.
-- **No telemetry.** The software never phones home.
-
-Today there is no paid product and no hosted service. If one ever exists it
-will be built *around* the packages — support, maintenance commitments,
-tooling on top — never *out of* them, and it will be announced on this page
-before it exists, not discovered in a changelog.
+TestivAI is open source under the MIT license and free to use, including
+commercially. No account, no registration, and no cap on snapshots, pages or
+runs, in any package, the GitHub Actions or the MCP server.

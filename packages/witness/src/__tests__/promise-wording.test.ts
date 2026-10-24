@@ -1,7 +1,7 @@
 /**
- * What stays free is promised in one place: the "What stays free" section of
- * docs/philosophy.md. Older wording mixed promises about the software (MIT,
- * no account, no telemetry) with forever-promises about money ("no paid tier",
+ * What TestivAI costs is said once, plainly, in docs/philosophy.md ("Free and
+ * open source"): MIT, free to use including commercially, no account, no caps.
+ * Older wording mixed that with forever-promises about money ("no paid tier",
  * "no pricing page waiting to appear"). This test keeps the second kind from
  * coming back anywhere a reader or a coding agent looks. CHANGELOGs are
  * history and are never scanned.
@@ -143,14 +143,10 @@ describe('promise wording', () => {
     expect(found).toEqual([]);
   });
 
-  it('docs/philosophy.md carries the "What stays free" promise', () => {
+  it('docs/philosophy.md says plainly that TestivAI is free to use', () => {
     const philosophy = read('docs/philosophy.md');
-    expect(philosophy).toMatch(/^## What stays free$/m);
-    expect(philosophy).toContain('**Nothing moves out of the free packages.**');
-    expect(philosophy).toContain(
-      '**Nothing in your CI will ever depend on an account, a key or a license.**',
-    );
-    expect(philosophy).toContain('**No telemetry.**');
-    expect(philosophy).toMatch(/(?:^|[.!?]\s+)Today there is no paid product/m);
+    expect(philosophy).toMatch(/^## Free and open source$/m);
+    expect(philosophy).toMatch(/free to use, including\s+commercially/);
+    expect(philosophy).toMatch(/No account, no registration/);
   });
 });

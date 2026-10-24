@@ -22,8 +22,8 @@ Everything here runs **fully locally** — no account, no API key, no server.
 
 2. **Local-first.** The packages need no account or API key, send nothing anywhere
    and have no telemetry. Today there is no hosted product: never reference one, and
-   never describe a feature as paid or gated. The promise about what stays free is
-   `docs/philosophy.md` ("What stays free"); keep wording consistent with it.
+   never describe a feature as paid or gated. TestivAI is free to use
+   (`docs/philosophy.md`, "Free and open source"); keep wording consistent with it.
    AI explanation is bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
    Core vocabulary: pixel diff, DOM diff, noise hint, layered analysis, baselines, threshold.
 

@@ -340,7 +340,7 @@ Exit-code contract (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 c
 ## Terminology
 
 - Core vocabulary: pixel diff, DOM diff, noise hint, layered analysis, baselines, threshold, heatmap.
-- TestivAI's packages are **local-first**: no account, no API key, nothing sent anywhere, no telemetry. Today there is no hosted product — never invent one in docs or code, and never describe a feature as paid or gated. The project's promise about what stays free is `docs/philosophy.md` ("What stays free"); keep any wording about money consistent with it. AI-powered explanation is bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
+- TestivAI's packages are **local-first**: no account, no API key, nothing sent anywhere, no telemetry. Today there is no hosted product — never invent one in docs or code, and never describe a feature as paid or gated. TestivAI is free to use (`docs/philosophy.md`, "Free and open source"); keep wording about cost consistent with it. AI-powered explanation is bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
 
 ## PR conventions
 
