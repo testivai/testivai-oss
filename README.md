@@ -26,7 +26,7 @@ Pixel-only visual testing drowns you in false positives — a font re-hint or an
 - **First-class adapters** — Playwright (TS/JS **and Python**, Java experimental) and WebdriverIO, using each framework's native APIs; every language shares one set of baselines and one report.
 - **Mobile web, no extra package** — Playwright device emulation works through the same `witness()` call: one project per device profile, baselines keyed per device automatically, and the DOM and computed-style attribution survives emulation, so a change behind a `@media` query is caught on mobile and correctly passes on desktop. See the [mobile web guide](docs/guides/mobile-web.md).
 - **PR-native workflow** — a GitHub Action posts the diff and approves baselines from a `/testivai approve` comment, and a companion action can publish each run's report to the repository's [GitHub Pages](docs/github-action.md#reports-on-github-pages), linked from the comment.
-- **No lock-in** — MIT license, baselines live in your git, and `results.json` is a semver-governed public contract.
+- **No lock-in** — MIT license, baselines live in your git, and `results.json` is a semver-governed public contract. What stays free is written down: [philosophy](docs/philosophy.md#what-stays-free).
 
 > **Evaluating this for a team?** [Maintenance & roadmap](docs/maintenance.md)
 > covers who builds it, the release cadence, and what happens to your setup if
