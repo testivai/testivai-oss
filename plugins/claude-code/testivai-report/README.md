@@ -61,6 +61,10 @@ claude plugin validate plugins/claude-code/testivai-report
 claude plugin test plugins/claude-code/testivai-report
 ```
 
+`tsconfig.json` points your editor and `tsc --noEmit -p .` at the engine's
+types, which Claude Code writes to `.claude-plugin/types/` (git-ignored) when
+it loads the plugin.
+
 `tests/report.test.ts` covers the readings, `results.json` parsing, image
 inlining and where the report is; `tests/plugin.test.tsx` runs the command,
 the pane on the terminal, desktop, VS Code and mobile surfaces, and the
