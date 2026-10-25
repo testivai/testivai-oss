@@ -1,0 +1,11 @@
+{
+  "name": "testivai",
+  "owner": { "name": "TestivAI" },
+  "plugins": [
+    {
+      "name": "testivai-report",
+      "source": "./plugins/claude-code/testivai-report",
+      "description": "The TestivAI visual report inside Claude Code: a pane with every snapshot's verdict, and the full report as a whole page in the side panel."
+    }
+  ]
+}

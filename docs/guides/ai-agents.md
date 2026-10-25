@@ -120,6 +120,28 @@ must never reach for them on its own initiative. Both tool descriptions say
 so, and the `review-visual-changes` prompt repeats it. See
 [the approval rule](#the-approval-rule) below.
 
+## Claude Code — the report as a whole page in the app
+
+The MCP server gives the agent the evidence. For you, the
+[`testivai-report` plugin](../../plugins/claude-code/testivai-report) puts
+the report itself in Claude Code:
+
+```
+/plugin install testivai-report --marketplace testivai/testivai-oss
+```
+
+- `/testivai-report` shows the full HTML report, screenshots included, as a
+  whole page in the side panel. The plugin inlines the report's images into
+  one standalone file in your project; nothing is uploaded.
+- A pane beside the chat lists every snapshot with its reading (DOM changed,
+  style-only change, likely render noise, rendering drift, unhealthy
+  capture, size change), changed first, with a button for the full report.
+- After Claude runs your visual tests, the pane refreshes and a toast says
+  what the run found. The plugin never approves a baseline.
+
+It works with any adapter: it reads `visual-report/results.json` and
+`index.html`, the files every TestivAI run writes.
+
 ## Level 3 — Zero-test-suite apps (agent-generated code)
 
 Apps built by agents usually have no test framework. They don't need one:

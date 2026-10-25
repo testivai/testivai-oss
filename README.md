@@ -46,7 +46,7 @@ If an AI agent (Claude Code, Cursor, Copilot, …) writes your UI code, someone 
 - **Explanations, bring-your-own-model** — the MCP `explain_snapshot` tool hands your agent layered evidence (which selectors shifted vs changed, whole-page shift detection, style-only changes) and your model writes the narrative: *"card #2 shifted +24px — likely the banner injected above it."* No hosted AI service in the loop.
 - **Human approval stays in the PR** — the agent iterates locally; you approve baselines with one `/testivai approve` comment.
 
-Paste this into your project's `AGENTS.md` / `CLAUDE.md` to wire it up (full guide with MCP setup, a real agent transcript, and the approval rule: [docs/guides/ai-agents.md](./docs/guides/ai-agents.md)):
+Paste this into your project's `AGENTS.md` / `CLAUDE.md` to wire it up (full guide with MCP setup, a real agent transcript, and the approval rule: [docs/guides/ai-agents.md](./docs/guides/ai-agents.md)). In Claude Code, the [`testivai-report` plugin](./plugins/claude-code/testivai-report) shows the report itself in the app, screenshots included (`/plugin install testivai-report --marketplace testivai/testivai-oss`):
 
 ```markdown
 ## Visual verification

@@ -18,6 +18,8 @@ approve/       testivai/testivai-oss/approve@v1 — GitHub Action: /testivai app
 review/        testivai/testivai-oss/review@v1  — GitHub Action: Claude triages each diff (glitch / intended change / bug / possible bug); advisory, `enabled: false` turns it off
 publish/       testivai/testivai-oss/publish@v1 — GitHub Action: publishes reports to the repository's GitHub Pages site, rebuilt from checked data, and links them in PR comments
 
+plugins/claude-code/testivai-report/ — Claude Code plugin (function hooks): `/testivai-report` shows the report whole in the app (images inlined into report.standalone.html, shown with SendUserFile), a pane lists each snapshot's reading, a toast after a run; tests with `claude plugin test`, listed by `.claude-plugin/marketplace.json`
+
 examples/      minimal working examples per framework
 docs/          public Markdown documentation
 e2e/           OSS smoke E2E test suite

@@ -6,6 +6,9 @@ The repo follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conven
 
 ## Unreleased
 
+### Added
+- `plugins/claude-code/testivai-report/` — a Claude Code plugin that shows the TestivAI report in the app: `/testivai-report` opens the full report, screenshots inlined, as a whole page in the side panel (nothing uploaded); a pane lists every snapshot with its reading, changed first; after Claude runs the visual tests, the pane refreshes and a toast says what the run found. Installed with `/plugin install testivai-report --marketplace testivai/testivai-oss` (`.claude-plugin/marketplace.json`). Its tests run against the Claude Code engine (`claude plugin test`), in CI too, pinned to the Claude Code version they were written against.
+
 ### Fixed
 - `docs/guides/docker.md` and `docs/guides/headless.md` — replaced the "Coming Soon" placeholders, which were published on testiv.ai/docs, with real guides: one Docker image for capture and approval, the official Playwright image, Chromium for `testivai witness <url>`, the root/sandbox variables, and keeping headless capture conditions identical.
 - `docs/maintenance.md` — dropped the version and release counts, which had gone stale; the releases page is the live record.
