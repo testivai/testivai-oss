@@ -24,17 +24,23 @@ decision: `npx testivai approve <name>`, or the approve tools of
 
 ## Install
 
-At the prompt of a Claude Code session:
-
-```
-/plugin install testivai-report --marketplace testivai/testivai-oss
-```
-
-From a shell:
+From a terminal on your computer:
 
 ```bash
 claude plugin install testivai-report --marketplace testivai/testivai-oss
 ```
+
+That adds this repository as a plugin marketplace (named `testivai`) and
+installs the plugin for your user, so sessions you start on that computer
+load it: the terminal, VS Code and the desktop app's local sessions, which
+read the same settings. Within a session, `/plugin install testivai-report
+--marketplace testivai/testivai-oss` (Claude Code v2.1.275 or later) does the
+same after you pick a scope.
+
+Cloud sessions (claude.ai/code, or a cloud session in the desktop app) cannot
+load it: they have no `/plugin` command ("Plugins aren't available in this
+environment"), and they don't install plugins that a repository's
+`.claude/settings.json` turns on.
 
 Then run your visual tests as usual. The report is read from
 `visual-report/` under the session's working directory (the TestivAI

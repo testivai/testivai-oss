@@ -123,12 +123,25 @@ so, and the `review-visual-changes` prompt repeats it. See
 ## Claude Code — the report as a whole page in the app
 
 The MCP server gives the agent the evidence. For you, the
-[`testivai-report` plugin](../../plugins/claude-code/testivai-report) puts
-the report itself in Claude Code:
+[`testivai-report` plugin](https://github.com/testivai/testivai-oss/tree/main/plugins/claude-code/testivai-report)
+puts the report itself in Claude Code. Install it from a terminal on your
+computer:
 
+```bash
+claude plugin install testivai-report --marketplace testivai/testivai-oss
 ```
-/plugin install testivai-report --marketplace testivai/testivai-oss
-```
+
+That adds this repository as a plugin marketplace (named `testivai`) and
+installs the plugin for your user. Sessions you start on that computer load
+it: in the terminal, in VS Code and in the desktop app's local sessions,
+which read the same settings. Within a session, `/plugin install
+testivai-report --marketplace testivai/testivai-oss` (Claude Code v2.1.275 or
+later) does the same after you pick a scope.
+
+Cloud sessions (claude.ai/code, or a cloud session in the desktop app)
+cannot load it: they have no `/plugin` command ("Plugins aren't available in
+this environment"), and they don't install plugins that a repository's
+`.claude/settings.json` turns on.
 
 - `/testivai-report` shows the full HTML report, screenshots included, as a
   whole page in the side panel. The plugin inlines the report's images into
