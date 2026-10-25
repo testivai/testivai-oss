@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "testivai": {
+      "source": { "source": "github", "repo": "testivai/testivai-oss" }
+    }
+  },
+  "enabledPlugins": {
+    "testivai-report@testivai": true
+  }
+}
