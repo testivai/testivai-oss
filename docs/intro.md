@@ -262,8 +262,9 @@ visual-report/
 - **[vs. rolling your own (Selenium)](./vs-selenium-tooling.md)** — for Selenium suites, where there is no built-in
 - **[Philosophy](./philosophy.md)** — local-first detection, bring-your-own-model AI
 - **[MCP server](./mcp.md)** — hand your agent the evidence; your model does the reasoning
+- **[Claude Code plugin](./guides/ai-agents.md#claude-code--the-report-as-a-whole-page-in-the-app)** — the whole report, screenshots included, inside Claude Code
 - **[Maintenance & roadmap](./maintenance.md)** — who builds this, cadence, and what happens if it stops
 - **[Playwright adapter](./frameworks/playwright.md)** / **[WebdriverIO adapter](./frameworks/webdriverio.md)**
-- **[GitHub Action](./github-action.md)** — post results to PRs, approve from a comment, and publish each run's report to [GitHub Pages](./github-action.md#reports-on-github-pages)
+- **[GitHub Action](./github-action.md)** — post results to PRs, approve from a comment, publish each run's report to [GitHub Pages](./github-action.md#reports-on-github-pages), and have Claude triage each diff with `review@v1` ([AI triage](./github-action.md#ai-triage-of-every-diff))
 - **[Extension API](./extension-api.md)** — write a community adapter for your framework
 - **[Guides: CI/CD](./guides/ci-cd.md)** — running OSS lane in GitHub Actions

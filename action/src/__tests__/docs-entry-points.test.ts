@@ -128,3 +128,21 @@ describe('links into docs/github-action.md', () => {
     }
   });
 });
+
+// The docs index and Getting started list what TestivAI plugs into. Both name
+// the AI triage action and the Claude Code plugin, linking where each is set up.
+const PLUGIN_SECTION = 'guides/ai-agents.md#claude-code--the-report-as-a-whole-page-in-the-app';
+
+describe('the docs index and Getting started list the AI triage action and the Claude Code plugin', () => {
+  it('the plugin section id is a heading of the AI agents guide', () => {
+    expect(headingIds(read('docs/guides/ai-agents.md'))).toContain(PLUGIN_SECTION.split('#')[1]);
+  });
+
+  it.each(['docs/README.md', 'docs/intro.md'])('%s', (file) => {
+    const doc = read(file);
+    const action = doc.match(/\*\*\[GitHub Action\]\([^)]*\)\*\*[^\n]*/)?.[0] ?? '';
+    expect(action).toMatch(/review@v1/);
+    expect(action).toMatch(/github-action\.md#ai-triage-of-every-diff/);
+    expect(doc).toContain(`./${PLUGIN_SECTION}`);
+  });
+});

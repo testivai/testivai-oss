@@ -8,6 +8,7 @@ The documentation for `@testivai/witness` and the framework adapters. Everything
 - **[How It Works](./how-it-works.md)** — high-level architecture
 - **[vs. Playwright's built-in screenshots](./vs-playwright-builtin.md)** — what `toHaveScreenshot()` covers, and when TestivAI is worth the dependency
 - **[MCP server](./mcp.md)** — visual results for AI agents, with a real `explain_snapshot` output
+- **[Claude Code plugin](./guides/ai-agents.md#claude-code--the-report-as-a-whole-page-in-the-app)** — `/testivai-report` shows the whole report, screenshots included, inside Claude Code
 - **[Maintenance & roadmap](./maintenance.md)** — who builds this, release cadence, and what happens if it stops
 - **[Ruby (Capybara / RSpec)](./frameworks/ruby.md)** — native adapter, no sidecar
 - **[vs. rolling your own (Selenium)](./vs-selenium-tooling.md)** — Selenium ships no visual comparison; what you'd otherwise build yourself
@@ -37,7 +38,7 @@ Pick the framework you use:
 ## Reference
 
 - **[`results.json` schema + on-disk layout (Extension API)](./extension-api.md)** — the contract for community adapters and third-party reporters
-- **[GitHub Action](./github-action.md)** — `testivai/testivai-oss@v1` for PR comments + commit status, `approve@v1` for `/testivai approve`, and `publish@v1` for [reports on GitHub Pages](./github-action.md#reports-on-github-pages) linked from the comment
+- **[GitHub Action](./github-action.md)** — `testivai/testivai-oss@v1` for PR comments + commit status, `approve@v1` for `/testivai approve`, `publish@v1` for [reports on GitHub Pages](./github-action.md#reports-on-github-pages) linked from the comment, and `review@v1` for [Claude's triage of every diff](./github-action.md#ai-triage-of-every-diff)
 - **[`testivai run` experimental sidecar](./sidecar-testivai-run.md)** — what it is, why it's labeled experimental, when to use it anyway
 
 ## Guides
