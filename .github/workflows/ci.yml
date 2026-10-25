@@ -249,3 +249,28 @@ jobs:
             TESTIVAI_CHROME_PATH="$(command -v google-chrome || command -v chromium-browser)" \
             npx testivai witness http://localhost:3001 --pages "/"
           test -f visual-report/results.json
+
+  claude-plugin:
+    name: Claude Code plugin (testivai-report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # The function-hooks API the plugin uses is early access and can change
+      # between Claude Code releases, so the version is pinned to the one the
+      # plugin's tests were written against. Bump it on purpose, with the tests.
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.310
+
+      # validate reads the manifest and the hooks module as the engine will;
+      # test runs tests/*.test.ts(x) against the engine itself, no account needed.
+      - name: Validate and test the plugin
+        run: |
+          claude plugin validate plugins/claude-code/testivai-report
+          claude plugin test plugins/claude-code/testivai-report

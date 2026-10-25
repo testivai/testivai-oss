@@ -1,0 +1,9 @@
+{
+  "name": "testivai-report",
+  "version": "0.1.0",
+  "description": "Shows the TestivAI visual report in Claude Code: a pane with every snapshot's verdict, and the full report (screenshots included) as a whole page.",
+  "author": { "name": "TestivAI", "url": "https://github.com/testivai" },
+  "license": "MIT",
+  "repository": "https://github.com/testivai/testivai-oss",
+  "types": "./types/index.d.ts"
+}
