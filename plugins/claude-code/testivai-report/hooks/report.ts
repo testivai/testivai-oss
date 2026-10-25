@@ -104,7 +104,10 @@ export function parseResults(text: string, dir: string, mtimeMs: number): Report
 
 const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }
 
-const unescapeAttr = (v: string) => v.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+const ENTITIES: Record<string, string> = { amp: '&', quot: '"', '#39': "'", '#039': "'", lt: '<', gt: '>' }
+
+/** An attribute value as written in the HTML, unescaped once: `&amp;lt;` is `&lt;`, never `<`. */
+const unescapeAttr = (v: string) => v.replace(/&(amp|quot|#39|#039|lt|gt);/g, (whole, name: string) => ENTITIES[name] ?? whole)
 
 /**
  * Every `<img src="…">` with a relative path becomes a data URI, read through

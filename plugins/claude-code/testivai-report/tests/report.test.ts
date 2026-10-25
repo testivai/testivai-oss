@@ -141,6 +141,17 @@ describe('inlineImages', () => {
     expect(out.html).not.toMatch(/src="images\//)
   })
 
+  test('unescapes an attribute once: an entity that spells another entity stays what it spelled', async () => {
+    // "a&amp;lt;b.png" is the HTML for the path "a&lt;b.png" (a literal ampersand), never "a<b.png".
+    const asked: string[] = []
+    await inlineImages('<img src="images/a&amp;lt;b.png"><img src="images/q&quot;&amp;amp;.png">', async rel => {
+      asked.push(rel)
+      return 'UE5H'
+    })
+
+    expect(asked).toEqual(['images/a&lt;b.png', 'images/q"&amp;.png'])
+  })
+
   test('keeps the path of an image it cannot read, and names it', async () => {
     const out = await inlineImages(html, async rel => (rel.includes('diff') ? undefined : 'UE5H'))
 
