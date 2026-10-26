@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A report artifact that cannot be uploaded no longer hides the visual result. The upload ran before the PR comment and the commit status, and its error failed the step before either was posted, so the pull request showed nothing from TestivAI (seen on testivai/testivai-site#33: `Failed to CreateArtifact: Artifact storage quota has been hit.`, with 5 changed and 3 passed snapshots). Now the comment, the job summary, the check run and the commit status are still posted from `results.json`. The comment says the report could not be uploaded, quoting the error (one line, at most 500 characters, as code), and has no ZIP link. When there are changed or new snapshots, it also says `/testivai approve` needs that artifact, so approving will not work until a re-run uploads it. The step then fails with the upload error, so CI stays red for a reason you can see. A successful upload, or `upload-artifact: false`, changes nothing
+
 ## [1.6.0] - 2026-10-22
 
 ### Added
