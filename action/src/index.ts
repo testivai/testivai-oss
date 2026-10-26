@@ -24,7 +24,59 @@ function collectFilesRecursively(dir: string): string[] {
   });
 }
 
+/**
+ * Upload the report directory as the artifact; resolves to the link the
+ * comment gives for it (undefined outside a workflow run). Throws when the
+ * upload fails.
+ */
+async function uploadReportArtifact(reportDir: string, artifactName: string, retentionDays: number): Promise<string | undefined> {
+  const artifactClient = new artifact.DefaultArtifactClient();
+  // Stamp the run and attempt next to results.json, so a step reading the
+  // report can tell an earlier attempt's (report-artifact.ts).
+  writeRunStamp(reportDir, process.env);
+  const files = collectFilesRecursively(reportDir);
+
+  // On a re-run, replaces the earlier attempts' report of the same name.
+  const uploadResult = await uploadReport({
+    client: artifactClient,
+    name: artifactName,
+    files,
+    rootDir: reportDir,
+    retentionDays,
+    runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || '1'),
+    log: core,
+  });
+
+  core.info(`Uploaded ${files.length} files as artifact '${artifactName}'`);
+
+  // Expose artifact ID as an output for downstream steps
+  if (uploadResult.id) {
+    core.setOutput('artifact-id', String(uploadResult.id));
+  }
+
+  // Build a direct ZIP download link for the artifact
+  const runId = process.env.GITHUB_RUN_ID;
+  const context = github.context;
+  if (runId && uploadResult.id) {
+    // Direct link triggers artifact ZIP download
+    const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts/${uploadResult.id}`;
+    core.info(`Report link: ${url}`);
+    return url;
+  }
+  if (runId) {
+    // Fallback: link to the workflow run page (artifact ID unavailable)
+    const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+    core.info(`Report link (fallback): ${url}`);
+    return url;
+  }
+  return undefined;
+}
+
 async function run(): Promise<void> {
+  // Why the report artifact could not be uploaded, when it could not. The
+  // step fails for it last, whatever else happened.
+  let uploadError: string | undefined;
+  let artifactName = 'testivai-visual-report';
   try {
     // Read inputs
     const token = core.getInput('github-token', { required: true });
@@ -34,7 +86,7 @@ async function run(): Promise<void> {
     const failOnMissing = (core.getInput('fail-on-missing') || 'false').toLowerCase() === 'true';
     const uploadArtifact = core.getBooleanInput('upload-artifact');
     const artifactRetentionDays = parseInt(core.getInput('artifact-retention-days'), 10);
-    const artifactName = core.getInput('artifact-name') || 'testivai-visual-report';
+    artifactName = core.getInput('artifact-name') || artifactName;
     const statusContext = resolveStatusContext(core.getInput('status-context'));
     const upsertMarker = resolveUpsertMarker(statusContext);
 
@@ -69,44 +121,18 @@ async function run(): Promise<void> {
       if (copied > 0) core.info(`Bundled ${copied} pending baseline(s) for approval`);
     }
 
-    // Upload artifact if enabled (recursive so images/ and pending-baselines/ are included)
+    // Upload artifact if enabled (recursive so images/ and pending-baselines/ are included).
+    // A failed upload (an artifact storage quota, a service outage) must not
+    // hide the visual result: the comment and the status still go out, from
+    // results.json, saying the report could not be uploaded, and the step
+    // fails for it after that (below).
     let artifactUrl: string | undefined;
     if (uploadArtifact) {
-      const artifactClient = new artifact.DefaultArtifactClient();
-      // Stamp the run and attempt next to results.json, so a step reading the
-      // report can tell an earlier attempt's (report-artifact.ts).
-      writeRunStamp(reportDir, process.env);
-      const files = collectFilesRecursively(reportDir);
-
-      // On a re-run, replaces the earlier attempts' report of the same name.
-      const uploadResult = await uploadReport({
-        client: artifactClient,
-        name: artifactName,
-        files,
-        rootDir: reportDir,
-        retentionDays: artifactRetentionDays,
-        runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || '1'),
-        log: core,
-      });
-
-      core.info(`Uploaded ${files.length} files as artifact '${artifactName}'`);
-
-      // Build a direct ZIP download link for the artifact
-      const runId = process.env.GITHUB_RUN_ID;
-      const context = github.context;
-      if (runId && uploadResult.id) {
-        // Direct link triggers artifact ZIP download
-        artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts/${uploadResult.id}`;
-        core.info(`Report link: ${artifactUrl}`);
-      } else if (runId) {
-        // Fallback: link to the workflow run page (artifact ID unavailable)
-        artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
-        core.info(`Report link (fallback): ${artifactUrl}`);
-      }
-
-      // Expose artifact ID as an output for downstream steps
-      if (uploadResult.id) {
-        core.setOutput('artifact-id', String(uploadResult.id));
+      try {
+        artifactUrl = await uploadReportArtifact(reportDir, artifactName, artifactRetentionDays);
+      } catch (err) {
+        uploadError = err instanceof Error ? err.message : String(err);
+        core.info(`Could not upload the visual report artifact '${artifactName}' (${uploadError}); posting the results without it.`);
       }
     }
 
@@ -120,8 +146,8 @@ async function run(): Promise<void> {
     // about this run before adding the published report's links.
     const links = { runKey: runKeyFromEnv(process.env) };
     const commentBody = results.snapshots.length === 0
-      ? buildEmptyComment(artifactUrl, upsertMarker, links)
-      : buildComment(results, artifactUrl, upsertMarker, links);
+      ? buildEmptyComment(artifactUrl, upsertMarker, links, uploadError)
+      : buildComment(results, artifactUrl, upsertMarker, links, uploadError);
 
     // The comment on the run's page, for every event (a push has no comment).
     // Written before the comment is posted: a token that cannot comment (a
@@ -233,6 +259,13 @@ async function run(): Promise<void> {
     } else {
       core.setFailed('Unknown error occurred');
     }
+  }
+
+  if (uploadError !== undefined) {
+    core.setFailed(
+      `Could not upload the visual report artifact '${artifactName}', which /testivai approve needs; ` +
+        `re-run the job once the upload can succeed. Error: ${uploadError}`,
+    );
   }
 }
 

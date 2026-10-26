@@ -295,6 +295,37 @@ function renderEnvironmentAndPageHints(snapshot: SnapshotResult): string {
   );
 }
 
+/** The longest upload error the comment quotes. */
+const MAX_UPLOAD_ERROR = 500;
+
+/**
+ * Why the report artifact could not be uploaded, quoted in the comment: one
+ * line, at most MAX_UPLOAD_ERROR characters, in a code span it cannot close
+ * (backticks become quotes), so its markdown and HTML show as text.
+ */
+function quoteUploadError(message: string): string {
+  let text = message.replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim().replace(/`/g, "'");
+  if (!text) text = 'unknown error';
+  if (text.length > MAX_UPLOAD_ERROR) text = `${text.slice(0, MAX_UPLOAD_ERROR - 1)}…`;
+  return `\`${text}\``;
+}
+
+/**
+ * The notice that the report artifact could not be uploaded, so the comment
+ * has no ZIP link. With snapshots to approve, it also says approving needs
+ * that artifact: the approve action takes the captures from it, and finding
+ * none for this run it fails, or (when it looks for the newest run that has
+ * the artifact) takes an earlier run's.
+ */
+function uploadFailedNotice(uploadError: string, approvable: boolean): string {
+  let notice = `> **The visual report could not be uploaded** (${quoteUploadError(uploadError)}), so there is no report to download. The results here come from this run's \`results.json\`.\n`;
+  if (approvable) {
+    notice +=
+      '>\n> `/testivai approve` takes the new baselines from that report artifact, so approving will not work for this run until a re-run uploads it. Until then, an approve can fail or take an earlier run\'s report.\n';
+  }
+  return `${notice}\n`;
+}
+
 /**
  * Build markdown PR comment from results.
  *
@@ -303,12 +334,16 @@ function renderEnvironmentAndPageHints(snapshot: SnapshotResult): string {
  *                     visual report artifact can be downloaded.
  * @param marker       Upsert marker identifying this lane's comment
  *                     (from resolveUpsertMarker).
+ * @param uploadError  Why the report artifact could not be uploaded, when
+ *                     it could not (then there is no artifactUrl): the
+ *                     comment says so instead of linking a ZIP.
  */
 export function buildComment(
   results: ResultsData,
   artifactUrl?: string,
   marker: string = UPSERT_MARKER,
   links: CommentLinks = {},
+  uploadError?: string,
 ): string {
   const { summary, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
@@ -336,6 +371,9 @@ ${summaryLine} — **${summary.total} total**
   } else if (artifactUrl) {
     // Artifact link — gives reviewers direct access to baseline/current/diff images
     comment += `> [Download visual report ZIP](${artifactUrl}) — contains baseline, current, and diff images\n\n`;
+  }
+  if (uploadError !== undefined) {
+    comment += uploadFailedNotice(uploadError, snapshots.some((s) => s.status === 'changed' || s.status === 'new'));
   }
 
   // An environment change shared by two or more snapshots, said once here;
@@ -419,13 +457,16 @@ export function buildEmptyComment(
   artifactUrl?: string,
   marker: string = UPSERT_MARKER,
   links: CommentLinks = {},
+  uploadError?: string,
 ): string {
   const reportUrl = safeReportUrl(links.reportUrl);
   const link = reportUrl
     ? `\n> **[Open the visual report](${reportUrl})**${artifactUrl ? ` · or [download it as a ZIP](${artifactUrl})` : ''}\n`
     : artifactUrl
       ? `\n> [Download visual report ZIP](${artifactUrl})\n`
-      : '';
+      : uploadError !== undefined
+        ? `\n${uploadFailedNotice(uploadError, false).trimEnd()}\n`
+        : '';
 
   return `${marker}${runMarkerLine(links.runKey)}
 
