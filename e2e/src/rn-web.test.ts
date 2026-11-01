@@ -14,10 +14,11 @@
  *      ["class"] it reads style-only, attributed to the button by testID.
  *   3. The title's text: one text change, attributed to the header.
  *   4. A banner inserted at the top: default paths never find the move (the
- *      banner renumbers the :nth-of-type paths, and cards that look alike are
- *      paired with their neighbours, so some regions read a shift by a wrong
- *      distance); with elementIdAttributes ["data-testid"] the moved content
- *      reads as "shift" by the banner's height and the page shift is found.
+ *      banner renumbers the :nth-of-type paths and pairs look-alike cards
+ *      with their neighbours), and no wrong shift is claimed either: every
+ *      claimed move is checked against the pixels. With elementIdAttributes
+ *      ["data-testid"] the moved content reads as "shift" by the banner's
+ *      height and the page shift is found.
  *
  * Needs a Chrome/Chromium (TESTIVAI_CHROME_PATH, or one on PATH). Without one
  * the test is skipped, loudly, except in CI (CI set), where it fails.
@@ -235,15 +236,15 @@ async function main(): Promise<void> {
     const offRegions = (bannerOff.regions ?? []) as Array<{ classification?: string; shift?: { dx: number; dy: number } }>;
     assert.ok(offRegions.length > 0);
     // The banner renumbers every :nth-of-type below it, so the true move is
-    // never found. Worse, sibling cards that look alike get paired with their
-    // neighbours: some regions read as a "shift" by a wrong distance, and a
-    // wrong page shift can be reported. Pinned here as it is today.
-    assert.ok(
-      offRegions.every((r) => r.classification === 'change' || r.shift?.dy !== BANNER_DY),
-      'default paths found the true shift; the anchored paths would no longer be needed',
+    // never found, and look-alike cards are paired with their neighbours.
+    // Those pairs used to read as a "shift" by a wrong distance (-16 px for a
+    // +64 px move) with a wrong page shift; the pixel check now rejects them.
+    assert.deepStrictEqual(
+      offRegions.filter((r) => r.classification === 'shift'),
+      [],
+      'default paths: a shift was claimed (the true move cannot be found, so any shift is a wrong one)',
     );
-    assert.notStrictEqual(bannerOff.pageShift?.dy, BANNER_DY, 'default paths found the true page shift');
-    const wrongShifts = offRegions.filter((r) => r.classification === 'shift').length;
+    assert.strictEqual(bannerOff.pageShift, undefined, 'default paths: a page shift was claimed');
 
     const [bannerOn] = await scenario(browser, base, ANCHORED, ['banner']);
     describe('banner, elementIdAttributes', bannerOn);
@@ -256,8 +257,7 @@ async function main(): Promise<void> {
     }
     assert.strictEqual(bannerOn.pageShift?.dy, BANNER_DY, 'the page shift by the banner height');
     console.log(
-      `[e2e] ✓ react-native-web, banner at the top: default paths never find the ${BANNER_DY}px move ` +
-        `(${wrongShifts} region(s) read a wrong shift, page shift ${JSON.stringify(bannerOff.pageShift?.dy ?? null)}); with elementIdAttributes ` +
+      `[e2e] ✓ react-native-web, banner at the top: default paths read "change" and claim no shift; with elementIdAttributes ` +
         `${shifts.length} of ${onRegions.length} regions shift by ${BANNER_DY}px and the page shift is found.`,
     );
   } finally {
