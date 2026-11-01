@@ -9,6 +9,9 @@ This is a standalone project to copy into your own repository, not a
 workspace package: Expo pins its own React Native toolchain, so it is
 installed on its own (with npm, like `examples/site-check`).
 
+The full guide, with what each change reads as and a limits table:
+[React Native via react-native-web](../../docs/guides/react-native-web.md).
+
 ## Run
 
 ```bash
