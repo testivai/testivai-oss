@@ -256,24 +256,17 @@ async function inContext(
     }
   }
 
-  const switched = target !== current;
-  if (switched) await browser.switchContext(target);
-  let failed = false;
+  const switched = target !== current && current.length > 0;
+  if (target !== current) await browser.switchContext(target);
   try {
     await run(target === 'NATIVE_APP');
   } catch (err) {
-    failed = true;
+    // Back where the test was; the capture error is the one that matters.
+    if (switched) await browser.switchContext(current).catch(() => undefined);
     throw err;
-  } finally {
-    if (switched && current) {
-      try {
-        await browser.switchContext(current);
-      } catch (err) {
-        // A capture error matters more; otherwise the session is left elsewhere: say so.
-        if (!failed) throw err;
-      }
-    }
   }
+  // A failed switch back leaves the session elsewhere: let it surface.
+  if (switched) await browser.switchContext(current);
 }
 
 /** One capture in the session's current context: native mode or a page. */
