@@ -138,7 +138,8 @@ describe('witness(): device emulation after a CDP capture', () => {
     // One session restores touch for the page, reused by the second capture.
     expect(touchSessions(state.calls)).toHaveLength(1);
     const store = new BaselineStore(root);
-    const dsf = (name: string) => (store.readTempMetadata(name)?.environment as { render?: { deviceScaleFactor?: number } }).render?.deviceScaleFactor;
+    const dsf = (name: string) =>
+      (store.readTempMetadata(name)?.environment as { render?: { deviceScaleFactor?: number } } | undefined)?.render?.deviceScaleFactor;
     expect([dsf('first'), dsf('second')]).toEqual([1, 1]);
   });
 });
