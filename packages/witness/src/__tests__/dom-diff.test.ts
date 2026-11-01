@@ -228,3 +228,41 @@ describe('volatile attributes (per-run URL churn)', () => {
     expect(domDiff(a, b, { volatileAttributes: ['SRC'] }).domChanged).toBe(false);
   });
 });
+
+describe('<script> attribute values (they never render)', () => {
+  const page = (script: string) => `<html><head>${script}</head><body><h1>Orders</h1></body></html>`;
+
+  it("a bundle renamed by content hash is not a DOM change (Expo's index-<hash>.js)", () => {
+    const a = page('<script src="/_expo/static/js/web/index-47d040f9ce41f4cf25ecac26e3425a98.js" defer=""></script>');
+    const b = page('<script src="/_expo/static/js/web/index-66295cebe0bf99bbd7a2c9d1060d53d0.js" defer=""></script>');
+    expect(domDiff(a, b).domChanged).toBe(false);
+  });
+
+  it('integrity and nonce values (per build, per request) are not a DOM change', () => {
+    const a = page('<script src="/a.js" integrity="sha384-AAA" nonce="r4nd0m1"></script>');
+    const b = page('<script src="/a.js" integrity="sha384-BBB" nonce="r4nd0m2"></script>');
+    expect(domDiff(a, b).domChanged).toBe(false);
+  });
+
+  it('a script added or removed still is', () => {
+    const a = page('<script src="/a.js"></script>');
+    const b = page('<script src="/a.js"></script><script src="/b.js"></script>');
+    expect(domDiff(a, b).domChanged).toBe(true);
+    expect(domDiff(a, b).summary).toMatchObject({ added: 1 });
+  });
+
+  it('an attribute added to or removed from a script still is (presence counts)', () => {
+    const a = page('<script src="/a.js"></script>');
+    const b = page('<script src="/a.js" defer></script>');
+    expect(domDiff(a, b).domChanged).toBe(true);
+  });
+
+  it('the same values on any other element still count', () => {
+    const a = page('<img src="/hero-1.png">');
+    const b = page('<img src="/hero-2.png">');
+    expect(domDiff(a, b).domChanged).toBe(true);
+    const l1 = page('<link rel="stylesheet" href="/app-1.css">');
+    const l2 = page('<link rel="stylesheet" href="/app-2.css">');
+    expect(domDiff(l1, l2).domChanged).toBe(true);
+  });
+});
