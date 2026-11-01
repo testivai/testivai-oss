@@ -73,6 +73,7 @@ function makeDriver(overrides: Partial<WitnessDriver> & { dom?: string } = {}) {
         parentElement: null,
         getBoundingClientRect: () => rect,
         matches: () => false,
+        getAttribute: (name: string) => (tag === 'h1' && name === 'data-testid' ? 'title' : null),
       });
       const body = makeEl('body');
       const h1 = makeEl('h1');
@@ -387,6 +388,43 @@ describe('element map capture', () => {
     const dir = path.join(process.cwd(), '.testivai', 'temp', 'map-fails');
     expect(fs.existsSync(path.join(dir, 'screenshot.png'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'elements.json'))).toBe(false);
+  });
+});
+
+describe('elementIdAttributes', () => {
+  let projectRoot: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-selenium-ids-'));
+    originalCwd = process.cwd();
+    process.chdir(projectRoot);
+  });
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  const read = (name: string, file: string) =>
+    JSON.parse(fs.readFileSync(path.join(projectRoot, '.testivai', 'temp', name, file), 'utf-8'));
+
+  it('unset: default paths, and metadata.json has no key', async () => {
+    const { driver, executeScript } = makeDriver();
+    await witness(driver, 'plain');
+    const call = executeScript.mock.calls.find(([s]) => (s as string).includes('collectElementMap'));
+    expect((call![0] as string).endsWith(')(document, window, 3000, [])')).toBe(true);
+    expect(read('plain', 'elements.json').map((e: { path: string }) => e.path)).toEqual(['body', 'body > h1']);
+    const metaPath = path.join(projectRoot, '.testivai', 'temp', 'plain', 'metadata.json');
+    if (fs.existsSync(metaPath)) expect('elementIdAttributes' in read('plain', 'metadata.json')).toBe(false);
+  });
+
+  it('set in config.json: anchored paths, recorded in metadata.json', async () => {
+    fs.mkdirSync(path.join(projectRoot, '.testivai'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.testivai', 'config.json'), JSON.stringify({ elementIdAttributes: ['data-testid'] }));
+    const { driver } = makeDriver();
+    await witness(driver, 'anchored');
+    expect(read('anchored', 'elements.json').map((e: { path: string }) => e.path)).toEqual(['body', 'h1[data-testid="title"]']);
+    expect(read('anchored', 'metadata.json').elementIdAttributes).toEqual(['data-testid']);
   });
 });
 

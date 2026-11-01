@@ -16,9 +16,9 @@ export interface PageElementMap {
  * run (so all lanes produce identical maps), plus the viewport it was taken
  * in. WebdriverIO string scripts need an explicit `return`.
  */
-export function elementMapScript(maxElements: number, ignoreSelectors: string[]): string {
+export function elementMapScript(maxElements: number, ignoreSelectors: string[], idAttributes: string[] = []): string {
   return (
-    `return { elements: ${buildElementMapExpression(maxElements, ignoreSelectors)}, ` +
+    `return { elements: ${buildElementMapExpression(maxElements, ignoreSelectors, idAttributes)}, ` +
     'scrollX: window.scrollX || 0, scrollY: window.scrollY || 0, ' +
     'viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, ' +
     'dpr: window.devicePixelRatio || 1 };'

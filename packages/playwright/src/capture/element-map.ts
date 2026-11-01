@@ -8,5 +8,6 @@ export {
   collectElementMap,
   buildElementMapExpression,
   DEFAULT_MAX_ELEMENTS,
+  normalizeElementIdAttributes,
 } from '@testivai/witness';
 export type { CollectedElement } from '@testivai/witness';
