@@ -69,7 +69,7 @@ the context cannot be read, a session started with `app`, `appPackage` or
 
 | Part | Native mode | Why |
 |---|---|---|
-| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture. |
+| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture; in native mode a capture there takes 0.5–1 s. |
 | Screenshot | the whole screen, in physical pixels (1080×2400 on a Pixel 7 profile) | Appium's `takeScreenshot()` |
 | Status bar | masked, from `mobile: viewportRect` at capture time (136 px on that profile) | the clock, battery and signal change between runs |
 | Environment | the device from the capabilities: platform, OS version, model, the Appium driver, screen size, density, pixel ratio | so a device or OS change is listed when pixels differ |
