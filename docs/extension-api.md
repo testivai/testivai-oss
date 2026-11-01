@@ -163,6 +163,7 @@ A capture is **unhealthy** when web fonts were still loading, a `FontFace` error
   "ignoreSelectors": [],      // elements hidden (visibility:hidden) during capture
   "mask": [],                 // areas excluded from the pixel diff; selectors or regions
   "volatileAttributes": [],   // attribute names whose VALUES the DOM diff ignores
+  "elementIdAttributes": ["data-testid"],  // opt-in, unset by default: anchor element paths on these attributes (div[data-testid="board"] > …)
   "diffRegions": { "minSize": 10, "mergeDistance": 12 },  // diff clustering tunables
   "shareUploadCommand": ""    // shell hook for `report --share`; {file} is the share file
 }

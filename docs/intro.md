@@ -57,6 +57,7 @@ Optional tolerance and capture settings (all have safe defaults):
 | `mask` | `[]` | Areas excluded from the pixel diff and hatched in the report — selectors or geometric regions ([details](./comparison.md)) |
 | `diffRegions` | `{minSize: 10, mergeDistance: 12}` | Diff clustering tunables: smallest listed region + merge gap ([details](./comparison.md)) |
 | `shiftTolerance` | unset | Pass diffs where every changed region is a pure element shift of at most N px per axis — content moved, nothing changed (needs element maps on both sides) |
+| `elementIdAttributes` | unset | Opt-in: attribute names such as `["data-testid"]` that anchor element paths, so a region reads `div[data-testid="board"]` instead of a long `div.css-…:nth-of-type(4)` chain, and content inserted above an anchored element reads as a shift instead of a change. Unset, paths are unchanged. Re-approve baselines after turning it on: styles are not compared across paths built with different settings ([details](./how-it-works.md#element-paths)) |
 | `volatileAttributes` | `[]` | Attributes whose *value* is ignored by the DOM diff (presence still counts) |
 | `mcpApprovalPrompt` | `true` | [`@testivai/mcp`](./mcp.md#turning-the-approval-prompt-off): the approve tools ask a person on every call. `false` lets them follow your client's own permission settings |
 | `baselinesDir` | `.testivai/baselines` | Where baselines live; supports a `{platform}` token for per-OS baselines |
