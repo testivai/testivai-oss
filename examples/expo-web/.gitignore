@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.expo/
+test-results/
+playwright-report/
+visual-report/
+# The repository's root .gitignore ignores .testivai/; this project commits
+# its config (and, in your own repo, its baselines). Only captures stay out.
+!.testivai/
+.testivai/temp/

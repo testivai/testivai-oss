@@ -1,0 +1,10 @@
+{
+  "autoOpen": false,
+  "elementIdAttributes": [
+    "data-testid"
+  ],
+  "volatileAttributes": [
+    "class",
+    "src"
+  ]
+}

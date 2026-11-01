@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "testivai-expo-web-example",
+    "slug": "testivai-expo-web-example",
+    "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
+    "web": { "output": "single" }
+  }
+}

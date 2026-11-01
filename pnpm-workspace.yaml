@@ -4,4 +4,6 @@ packages:
   - 'examples/*'
   # A standalone npm project to copy into your own repo, not a workspace package.
   - '!examples/site-check'
+  # Expo pins its own React Native toolchain: installed on its own (its README).
+  - '!examples/expo-web'
   - 'e2e'

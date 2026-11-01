@@ -250,6 +250,92 @@ jobs:
             npx testivai witness http://localhost:3001 --pages "/"
           test -f visual-report/results.json
 
+  # The Expo example (examples/expo-web) is a standalone project, kept out of
+  # the workspace install: Expo pins its own React Native toolchain. It runs
+  # against the packed tarballs of this commit (the published packages may
+  # not have the features it uses yet), on Pixel 7 (Chromium) and iPhone 13
+  # (WebKit): capture, approve, capture again and pass, then a planted
+  # StyleSheet change that must fail the gate as a style-only change on the
+  # button, named by its testID.
+  expo-example:
+    name: Expo example (react-native-web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          # Expo SDK 58 needs Node 22.13 or later.
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install and build the workspace
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Pack witness and the Playwright adapter
+        run: |
+          for pkg in witness playwright; do
+            mkdir -p "$RUNNER_TEMP/tarballs/$pkg"
+            ( cd "packages/$pkg" && pnpm pack --pack-destination "$RUNNER_TEMP/tarballs/$pkg" )
+          done
+
+      - name: Install the example with this commit's packages
+        working-directory: examples/expo-web
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund "$RUNNER_TEMP"/tarballs/*/*.tgz
+          npx playwright install --with-deps chromium webkit
+
+      - name: Baseline, approve, then an unchanged run passes
+        working-directory: examples/expo-web
+        run: |
+          npm run build:web
+          npx playwright test
+          npx testivai approve --all
+          npx playwright test
+          npx testivai report --fail-on-diff
+
+      - name: A StyleSheet change fails the gate, style-only on the button
+        working-directory: examples/expo-web
+        run: |
+          sed -i 's/#1565c0/#c62828/' App.js
+          npm run build:web
+          npx playwright test
+          if npx testivai report --fail-on-diff; then
+            echo "::error::the recoloured button did not fail the gate"
+            exit 1
+          fi
+          node -e '
+            const r = require("./visual-report/results.json");
+            const want = ["orders__pixel-7", "orders__iphone-13"];
+            for (const name of want) {
+              const s = r.snapshots.find((x) => x.name === name);
+              if (!s) throw new Error("no result for " + name);
+              console.log(name, s.status, JSON.stringify(s.dom));
+              if (s.status !== "changed") throw new Error(name + ": not changed");
+              if (!s.dom || s.dom.changed !== false) throw new Error(name + ": the DOM should read unchanged");
+              if (s.dom.styleCheck !== "mismatch") throw new Error(name + ": no style mismatch");
+              if (!s.dom.styleChanges.elements.includes("div[data-testid=\"track-order\"]")) throw new Error(name + ": not attributed to the button");
+            }
+          '
+
+      - name: Upload the visual report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-example-visual-report
+          path: examples/expo-web/visual-report
+          if-no-files-found: ignore
+
   claude-plugin:
     name: Claude Code plugin (testivai-report)
     runs-on: ubuntu-latest
