@@ -13,7 +13,12 @@ import * as path from 'path';
 import type { Page, TestInfo } from '@playwright/test';
 import { BaselineStore, RENDER_PROBE_EXPRESSION } from '@testivai/witness';
 
-interface State { dpr: number; touch: number; coarse?: boolean; calls: string[] }
+/**
+ * What the capture drops, as measured: Chrome 153 drops the pixel ratio,
+ * the touch points and the pointer media; Chrome 156 (CI's) keeps the touch
+ * points and drops the pixel ratio and the pointer media.
+ */
+interface State { dpr: number; touch: number; coarse?: boolean; chrome?: 153 | 156; calls: string[] }
 const mockState: { current: State | null } = { current: null };
 
 jest.mock('../../capture/full-page', () => ({
@@ -23,7 +28,7 @@ jest.mock('../../capture/full-page', () => ({
     if (s.dpr !== 1 || s.touch !== 0) {
       // What Chrome does to the page's emulation.
       s.dpr = 1;
-      s.touch = 0;
+      if ((s.chrome ?? 153) === 153) s.touch = 0;
       s.coarse = false;
     }
     const mockSharp = jest.requireActual('sharp');
@@ -48,10 +53,8 @@ function fakePage(state: State): Page {
       if (key === lastSent) return;
       lastSent = key;
       state.calls.push(`setViewportSize:${key}`);
+      // Device metrics alone bring back the pixel ratio, not the pointer media.
       state.dpr = 2.625;
-      // As in the Chrome on CI: `pointer: coarse` is worked out when the
-      // device metrics are applied, from the touch emulation at that moment.
-      state.coarse = state.touch > 0;
     },
     addStyleTag: async () => ({ evaluate: async () => {} }),
     waitForTimeout: async () => {},
@@ -75,6 +78,7 @@ function fakePage(state: State): Page {
             if (method === 'Emulation.setTouchEmulationEnabled' && params) {
               state.calls.push(`session${id}:touch:${params.enabled}:${params.maxTouchPoints}`);
               state.touch = params.enabled ? params.maxTouchPoints : 0;
+              state.coarse = params.enabled;
             }
             return {};
           },
@@ -120,6 +124,14 @@ describe('witness(): device emulation after a CDP capture', () => {
 
     const env = new BaselineStore(root).readTempMetadata('home')?.environment as { render?: { deviceScaleFactor?: number } };
     expect(env.render?.deviceScaleFactor).toBe(1);
+  });
+
+  it('Chrome 156: the capture keeps the touch points but drops `pointer: coarse`, which is restored too', async () => {
+    const state: State = { dpr: 2.625, touch: 1, coarse: true, chrome: 156, calls: [] };
+    mockState.current = state;
+    await snapshot(fakePage(state), info, 'home');
+    expect(state).toMatchObject({ dpr: 2.625, touch: 1, coarse: true });
+    expect(touchSessions(state.calls)).toHaveLength(1);
   });
 
   it('a desktop profile the capture leaves alone: nothing restored, metadata unchanged', async () => {

@@ -7,8 +7,9 @@ import type { CDPSession, Page } from '@playwright/test';
  * a CDP session of our own. Chrome resizes the page for it and afterwards
  * restores that session's emulation, which is none: the device emulation
  * Playwright set on its own session is gone. Measured on the Pixel 7 profile:
- * devicePixelRatio 2.625 → 1 and touch off (maxTouchPoints 1 → 0,
- * `pointer: coarse` false) for the rest of the test. The image itself is
+ * devicePixelRatio 2.625 → 1 and the touch pointer gone (`pointer: coarse`
+ * and `hover: none` false; maxTouchPoints 1 → 0 on Chrome 153, kept on
+ * Chrome 156) for the rest of the test. The image itself is
  * rendered at a pixel ratio of 1 (412 px wide for a 412 px viewport).
  *
  * witness() reads the emulation before and right after the capture, records
@@ -61,10 +62,15 @@ export async function restoreEmulation(page: Page, before: EmulationState | null
   if (!now) return;
   if (now.dpr === before.dpr && now.maxTouchPoints === before.maxTouchPoints && now.coarsePointer === before.coarsePointer) return;
   try {
-    // Touch first: some Chrome versions work out `pointer: coarse` when the
-    // device metrics are applied, from the touch emulation at that moment
-    // (seen on CI's Chrome: touch back, `pointer: coarse` still false).
-    if (before.maxTouchPoints > 0 && now.maxTouchPoints !== before.maxTouchPoints) {
+    // Touch emulation, whenever the page had touch and its touch points or
+    // pointer media changed. What the capture drops depends on Chrome:
+    // Chrome 153 drops the touch points and `pointer: coarse`; Chrome 156
+    // keeps the touch points and drops `pointer: coarse` and `hover: none`.
+    // Sending it again brings back all three; device metrics alone do not.
+    if (
+      before.maxTouchPoints > 0 &&
+      (now.maxTouchPoints !== before.maxTouchPoints || now.coarsePointer !== before.coarsePointer)
+    ) {
       let session = touchSessions.get(page);
       if (!session) {
         session = await page.context().newCDPSession(page);
@@ -72,7 +78,7 @@ export async function restoreEmulation(page: Page, before: EmulationState | null
       }
       await session.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: before.maxTouchPoints });
     }
-    // Then the device metrics. Playwright does not send a viewport equal to
+    // The device metrics (pixel ratio, mobile). Playwright does not send a viewport equal to
     // the last one it set, so re-applying the same size does nothing: step
     // 1 px away and back.
     const viewport = page.viewportSize();

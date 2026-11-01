@@ -30,7 +30,7 @@ const PAGE = `<!doctype html><meta name="viewport" content="width=device-width">
 <style>body{margin:0} #box{width:200px;height:100px;background:#1565c0} .tall{height:1500px}</style>
 <div id="box"></div><div class="tall"></div>`;
 
-const STATE = `({ dpr: devicePixelRatio, touch: navigator.maxTouchPoints, coarse: matchMedia('(pointer: coarse)').matches, width: innerWidth })`;
+const STATE = `({ dpr: devicePixelRatio, touch: navigator.maxTouchPoints, coarse: matchMedia('(pointer: coarse)').matches, hoverNone: matchMedia('(hover: none)').matches, width: innerWidth })`;
 
 function findChrome(): string | null {
   const fromEnv = process.env.TESTIVAI_CHROME_PATH;
