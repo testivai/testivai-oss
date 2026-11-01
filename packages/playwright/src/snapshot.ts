@@ -20,6 +20,7 @@ import {
 import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
 import { probeCaptureHealth, recordCaptureHealth } from './capture/health';
 import { captureFullPageScreenshot } from './capture/full-page';
+import { readEmulation, restoreEmulation, withCapturedScale } from './capture/emulation';
 
 /**
  * Generates a safe filename from a URL.
@@ -97,6 +98,9 @@ export async function snapshot(
   // recorded as capture provenance, and its user agent names the engine for
   // environmentPolicy "separate" when the project does not.
   const renderProbe: unknown = await page.evaluate(RENDER_PROBE_EXPRESSION).catch(() => null);
+  // The device emulation before the capture, which the CDP capture drops
+  // (capture/emulation.ts); restored once everything is measured.
+  const emulationBefore = await readEmulation(page);
   const localConfig = loadLocalConfig(process.cwd());
   const environmentPolicy = localConfig.environmentPolicy;
   const snapshotName = applyEnvironmentPolicyToName(
@@ -396,6 +400,9 @@ export async function snapshot(
   // fell back leaves the DOM and the declared styles the same, so only this
   // tells an unhealthy capture from render noise. Recorded with the metadata.
   const captureHealth = await probeCaptureHealth(page as unknown as { evaluate(expression: string): Promise<unknown> });
+  // The pixel ratio the image was rendered at (1 after a CDP capture,
+  // whatever the profile says): recorded with the capture's provenance.
+  const emulationAtCapture = await readEmulation(page);
 
   // Restore any elements hidden for ignoreSelectors
   if (ignoreStyleEl) {
@@ -519,7 +526,12 @@ export async function snapshot(
       } catch {
         // a persistent context has no browser(): the probe's user agent is the fallback
       }
-      const environment = playwrightEnvironment({ testInfo: testInfo ?? {}, browserVersion, probe: renderProbe, captureMethod });
+      const environment = playwrightEnvironment({
+        testInfo: testInfo ?? {},
+        browserVersion,
+        probe: withCapturedScale(renderProbe, emulationAtCapture),
+        captureMethod,
+      });
       new BaselineStore(process.cwd()).writeTempMetadata(snapshotName, { name: snapshotName, environment });
     } catch {
       // no environment only means the compare cannot tell drift from noise for this capture
@@ -549,6 +561,10 @@ export async function snapshot(
       // missing elements.json only disables attribution for this capture
     }
   }
+
+  // Last, after everything measured in the page at the capture's scale:
+  // put back the device emulation the CDP capture dropped.
+  await restoreEmulation(page, emulationBefore);
 }
 
 
