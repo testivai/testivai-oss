@@ -90,9 +90,13 @@ function label(script: string): string {
   return script.slice(0, 40);
 }
 
-/** The focused window, as `dumpsys window` names it. */
+/**
+ * The focused window now. `dumpsys window displays`, not the full dump: that
+ * one starts with the window state frozen at the last ANR (a slow boot leaves
+ * the launcher's), so its first mCurrentFocus can be stale.
+ */
 function focusedWindow(): string {
-  const line = adb('shell', 'dumpsys', 'window')
+  const line = adb('shell', 'dumpsys', 'window', 'displays')
     .split('\n')
     .find((l) => l.includes('mCurrentFocus='));
   return (line ?? '').trim();
