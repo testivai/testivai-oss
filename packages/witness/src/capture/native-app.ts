@@ -91,11 +91,14 @@ export function nativeAppDevice(capabilities: unknown): DeviceEnvironment {
   return device;
 }
 
-const segment = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+/** Lowercase, every run of other characters one `_`, none leading or trailing. */
+function segment(s: string): string {
+  let out = s.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  // Runs are collapsed above, so at most one `_` sits at either end.
+  if (out.startsWith('_')) out = out.slice(1);
+  if (out.endsWith('_')) out = out.slice(0, -1);
+  return out;
+}
 
 /**
  * The snapshot key for a device, `<platform>-<device>-<osMajor>`: the model

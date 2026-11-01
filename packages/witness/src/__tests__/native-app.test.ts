@@ -109,6 +109,13 @@ describe('nativeAppVariant', () => {
     expect(nativeAppVariant({ platform: 'android', osVersion: '15', model: 'Pixel 7' })).toBe('android-pixel_7-15');
   });
 
+  it('separators collapse to one underscore and never lead or trail a part, even for long runs', () => {
+    expect(nativeAppVariant({ platform: 'android', model: '__Pixel  7 (5G)__', osVersion: '15' })).toBe('android-pixel_7_5g-15');
+    const started = Date.now();
+    expect(nativeAppVariant({ platform: 'android', model: `${'_'.repeat(100_000)}x${' '.repeat(100_000)}` })).toBe('android-x');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('leaves out what the capabilities do not say', () => {
     expect(nativeAppVariant({ platform: 'android' })).toBe('android');
     expect(nativeAppVariant({ platform: 'ios', osVersion: '18.0' })).toBe('ios-18');
