@@ -17,6 +17,13 @@
  *   5. No environment block is written (a native session has no browser
  *      name).
  *
+ * The screen is checked too, before trusting any of that: Settings must be
+ * the focused window before every capture (a "not responding" dialog left by
+ * a slow boot is dismissed), the first capture must be light and the
+ * dark-mode capture dark (`cmd uimode night` and the pixels). A run
+ * that captured something else fails as a fixture problem, not as a match.
+ * Every step's screenshot is kept in $TESTIVAI_ANDROID_OUT/steps.
+ *
  * It also records what the simulation could not know: how long each rejected
  * page script took, how often WebdriverIO resent it (it retries a command
  * after any error response), how long Appium itself takes to reject one (a
@@ -83,6 +90,28 @@ function label(script: string): string {
   return script.slice(0, 40);
 }
 
+/** The focused window, as `dumpsys window` names it. */
+function focusedWindow(): string {
+  const line = adb('shell', 'dumpsys', 'window')
+    .split('\n')
+    .find((l) => l.includes('mCurrentFocus='));
+  return (line ?? '').trim();
+}
+
+/** Mean luma (0–255) of a capture below the status bar. */
+function meanLuma(png: PNG, top: number): number {
+  let sum = 0;
+  let n = 0;
+  for (let y = top; y < png.height; y += 4) {
+    for (let x = 0; x < png.width; x += 4) {
+      const i = (y * png.width + x) * 4;
+      sum += 0.299 * png.data[i] + 0.587 * png.data[i + 1] + 0.114 * png.data[i + 2];
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
 function expect(condition: boolean, what: string): void {
   if (!condition) failures.push(what);
   console.log(`[android] ${condition ? '✓' : '✗'} ${what}`);
@@ -96,7 +125,10 @@ async function main(): Promise<void> {
   writeConfig({});
   process.chdir(root);
 
-  // Freeze the status bar with demo mode, clock at 12:00.
+  // No new crash or "not responding" dialogs over the app (a slow CI boot
+  // leaves the launcher not responding), then freeze the status bar with
+  // demo mode, clock at 12:00.
+  adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
   adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
   demo('enter');
   demo('clock', '-e', 'hhmm', '1200');
@@ -118,6 +150,11 @@ async function main(): Promise<void> {
       'appium:appPackage': 'com.android.settings',
       'appium:appActivity': '.Settings',
       'appium:noReset': true,
+      // Settings is already running on a booted emulator; without this,
+      // Appium leaves whatever is in front.
+      'appium:forceAppLaunch': true,
+      // `.Settings` is an alias: the activity that opens is the homepage.
+      'appium:appWaitActivity': '*',
       'appium:newCommandTimeout': 300,
     },
   });
@@ -169,19 +206,49 @@ async function main(): Promise<void> {
       },
     };
 
+    // Settings in front, or the run says nothing: dismiss a "not
+    // responding" dialog (its Wait button), else open Settings again.
+    const settingsInFront = async (step: string) => {
+      const actions: string[] = [];
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const focus = focusedWindow();
+        if (focus.includes('com.android.settings/')) return { focus, actions };
+        if (/Not Responding/i.test(focus)) {
+          try {
+            const wait = await session.findElement('-android uiautomator', 'new UiSelector().text("Wait")');
+            await session.elementClick(Object.values(wait as Record<string, string>)[0]);
+            actions.push(`tapped Wait on: ${focus}`);
+          } catch {
+            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+            actions.push(`pressed Back on: ${focus}`);
+          }
+        } else {
+          adb('shell', 'am', 'start', '-W', '-n', 'com.android.settings/.Settings');
+          actions.push(`opened Settings over: ${focus}`);
+        }
+        await sleep(2000);
+      }
+      throw new Error(`fixture: ${step}: Settings is not the focused window (${focusedWindow()}); actions: ${actions.join('; ')}`);
+    };
+
     const store = new BaselineStore(root);
     const tempDir = path.join(root, '.testivai', 'temp', NAME);
+    fs.mkdirSync(path.join(OUT, 'steps'), { recursive: true });
     const capture = async (step: string) => {
       calls.length = 0;
       await sleep(2000);
+      const front = await settingsInFront(step);
       const started = Date.now();
       await witness(browser as unknown as Parameters<typeof witness>[0], NAME);
       const ms = Date.now() - started;
       const files = fs.readdirSync(tempDir).sort();
       const png = PNG.sync.read(fs.readFileSync(path.join(tempDir, 'screenshot.png')));
-      const record = { step, witnessMs: ms, files, screenshot: `${png.width}x${png.height}`, scriptCalls: [...calls] };
+      fs.copyFileSync(path.join(tempDir, 'screenshot.png'), path.join(OUT, 'steps', `${step.split('.')[0]}.png`));
+      const luma = Math.round(meanLuma(png, statusBar));
+      const record = { step, focus: front.focus, actionsBefore: front.actions, luma, witnessMs: ms, files, screenshot: `${png.width}x${png.height}`, scriptCalls: [...calls] };
       steps.push(record);
-      console.log(`[android] ${step}: witness ${ms} ms, files ${files.join(', ')}, ${record.screenshot}`);
+      console.log(`[android] ${step}: witness ${ms} ms, files ${files.join(', ')}, ${record.screenshot}, mean luma ${luma}`);
+      console.log(`[android]     in front: ${front.focus}${front.actions.length ? ` (after: ${front.actions.join('; ')})` : ''}`);
       for (const c of calls) console.log(`[android]     ${c.ok ? 'ok    ' : 'failed'} ${String(c.ms).padStart(5)} ms  ${c.retries} retries  ${c.script}${c.error ? `  (${c.error})` : ''}`);
       return record;
     };
@@ -194,6 +261,7 @@ async function main(): Promise<void> {
 
     // 1. First capture.
     const first = await capture('1. first capture');
+    expect(first.luma >= 160, `fixture: the light Settings screen is light — mean luma ${first.luma}`);
     expect(report().status === 'new', '1. a native screen is captured, status "new"');
     expect(first.files.includes('screenshot.png'), '1. screenshot.png is written');
     expect(first.files.join(',') === 'screenshot.png', `1. only screenshot.png is written (simulation) — got ${first.files.join(', ')}`);
@@ -231,7 +299,9 @@ async function main(): Promise<void> {
     // 4. A visible change: dark mode, with the status-bar mask still on.
     adb('shell', 'cmd', 'uimode', 'night', 'yes');
     await sleep(3000);
-    await capture('4. dark mode');
+    const darkCapture = await capture('4. dark mode');
+    const nightMode = adb('shell', 'cmd', 'uimode', 'night');
+    expect(/yes/i.test(nightMode) && darkCapture.luma <= 90, `fixture: the dark-mode capture is dark — ${nightMode}, mean luma ${darkCapture.luma}`);
     const dark = report();
     expect(dark.status === 'changed', `4. dark mode is a change — ${dark.status}, ${dark.diffPercent.toFixed(2)}%`);
     const gate = spawnSync(process.execPath, [CLI, 'report', '--fail-on-diff'], { cwd: root, encoding: 'utf-8' });
