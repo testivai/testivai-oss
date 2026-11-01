@@ -133,6 +133,7 @@ Captures a viewport screenshot, the DOM and the element map, and writes them as 
 | `options.stabilize` | boolean | Override capture stabilization (animations frozen, caret hidden, fonts awaited). Default: `true` (or the global `stabilize` setting). |
 | `options.native` | boolean | Native app mode (experimental): detected by default in an Appium session on a native Android or iOS screen. `true` forces it, `false` keeps the web path. |
 | `options.maskStatusBar` | boolean | Native mode only: mask the status bar (from `mobile: viewportRect` at capture time). Default: `true`. |
+| `options.context` | string | Capture in another Appium context for this call, then switch back: `'webview'` (the app's web view) or an exact context name. For a hybrid app driven in the native context, the web view is captured as a page, with every layer. |
 
 In an Appium session on a native app screen, `witness()` runs no page script (a native screen has no DOM): it takes the whole screen, masks the status bar, records the device, and keys the snapshot `<name>__<platform>-<device>-<osMajor>`. Pixel diff only. See [Native mobile apps](https://github.com/testivai/testivai-oss/blob/main/docs/guides/native-mobile.md).
 

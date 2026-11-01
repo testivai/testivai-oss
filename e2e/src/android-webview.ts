@@ -18,6 +18,9 @@
  *      shift.
  *   6. Back in the NATIVE_APP context, the same screen is a native capture
  *      (Level 1): pixel-only, keyed by device.
+ *   7. Still in NATIVE_APP, `context: 'webview'` captures the web view as a
+ *      page: it matches the baseline from step 1, and the session is back in
+ *      NATIVE_APP afterwards.
  *
  * Every step's screenshot, summary.json and the report go to
  * $TESTIVAI_WEBVIEW_OUT. Runs after the native check in
@@ -109,16 +112,18 @@ async function main(): Promise<void> {
       capabilities: caps,
       takeScreenshot: () => session.takeScreenshot(),
       getContext: () => session.getContext(),
+      getContexts: () => session.getContexts(),
+      switchContext: (name: string) => session.switchContext(name),
       execute: (script: unknown, ...args: unknown[]) =>
         (session.execute as (s: unknown, ...a: unknown[]) => Promise<unknown>)(script, ...args),
     };
 
     const store = new BaselineStore(root);
     fs.mkdirSync(path.join(OUT, 'steps'), { recursive: true });
-    const capture = async (step: string, name: string) => {
+    const capture = async (step: string, name: string, options: Parameters<typeof witness>[2] = {}) => {
       await sleep(1000);
       const started = Date.now();
-      await witness(browser as unknown as Parameters<typeof witness>[0], name);
+      await witness(browser as unknown as Parameters<typeof witness>[0], name, options);
       const ms = Date.now() - started;
       const written = fs.readdirSync(path.join(root, '.testivai', 'temp'));
       const dir = written.find((d) => d === name || d.startsWith(`${name}__`));
@@ -194,6 +199,16 @@ async function main(): Promise<void> {
     await session.switchContext('NATIVE_APP');
     const native = await capture('6. native context', 'orders');
     expect(native.dir.startsWith('orders__android-') && native.files.join(',') === 'metadata.json,screenshot.png', `6. from NATIVE_APP it is a native capture, pixel-only and keyed by device — ${native.dir}: ${native.files.join(', ')}`);
+    store.clearTemp();
+
+    // 7. The option: from NATIVE_APP, capture the web view as a page.
+    const viaOption = await capture('7. context option', 'orders', { context: 'webview' });
+    const after = await session.getContext();
+    const option = report('orders');
+    summary.contextOption = { contextAfter: after, status: option.status, diffCount: option.diffCount };
+    expect(viaOption.dir === 'orders' && viaOption.files.includes('dom.html') && viaOption.files.includes('elements.json'), `7. context: 'webview' captures the web view as a page — ${viaOption.dir}: ${viaOption.files.join(', ')}`);
+    expect(option.status === 'passed' && option.diffCount === 0, `7. it matches the baseline taken inside the web view — ${option.status}, ${option.diffCount} px`);
+    expect(after === 'NATIVE_APP', `7. the session is back in NATIVE_APP — ${after}`);
 
     fs.cpSync(path.join(root, 'visual-report'), path.join(OUT, 'visual-report'), { recursive: true });
   } finally {
