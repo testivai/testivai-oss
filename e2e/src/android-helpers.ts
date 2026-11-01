@@ -1,0 +1,133 @@
+/**
+ * What the Android emulator checks share (android-native.ts,
+ * android-webview.ts): adb, demo mode, the focused window, keeping the app
+ * under test in front, and a pass/fail list that prints as it goes.
+ */
+
+import { execFileSync } from 'child_process';
+import type { PNG } from 'pngjs';
+
+export function adb(...args: string[]): string {
+  return execFileSync('adb', args, { encoding: 'utf-8' }).trim();
+}
+
+export function demo(command: string, ...extras: string[]): void {
+  adb('shell', 'am', 'broadcast', '-a', 'com.android.systemui.demo', '-e', 'command', command, ...extras);
+}
+
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * No new crash or "not responding" dialogs over the app (a slow CI boot
+ * leaves the launcher not responding), light mode, and the status bar frozen
+ * with demo mode, clock at 12:00.
+ */
+export function prepareDevice(): void {
+  adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
+  adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
+  demo('enter');
+  demo('clock', '-e', 'hhmm', '1200');
+  demo('notifications', '-e', 'visible', 'false');
+  demo('battery', '-e', 'level', '100', '-e', 'plugged', 'false');
+  demo('network', '-e', 'wifi', 'show', '-e', 'level', '4');
+  adb('shell', 'cmd', 'uimode', 'night', 'no');
+}
+
+export function restoreDevice(): void {
+  try {
+    adb('shell', 'cmd', 'uimode', 'night', 'no');
+    demo('exit');
+  } catch {
+    // the emulator is thrown away anyway
+  }
+}
+
+/**
+ * The focused window now. `dumpsys window displays`, not the full dump: that
+ * one starts with the window state frozen at the last ANR (a slow boot leaves
+ * the launcher's), so its first mCurrentFocus can be stale.
+ */
+export function focusedWindow(): string {
+  const line = adb('shell', 'dumpsys', 'window', 'displays')
+    .split('\n')
+    .find((l) => l.includes('mCurrentFocus='));
+  return (line ?? '').trim();
+}
+
+/** The bits of a WebdriverIO session the helpers use. */
+export interface AppiumSession {
+  findElement(using: string, value: string): Promise<unknown>;
+  elementClick(id: string): Promise<unknown>;
+}
+
+/**
+ * The app in front, or the run says nothing: a "not responding" dialog is
+ * dismissed (its Wait button), else the app is opened again (`component`, as
+ * `am start -n` takes it), at most five times. Returns what was done.
+ */
+export async function appInFront(
+  session: AppiumSession,
+  appPackage: string,
+  component: string,
+  step: string,
+): Promise<{ focus: string; actions: string[] }> {
+  const actions: string[] = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const focus = focusedWindow();
+    if (focus.includes(`${appPackage}/`)) return { focus, actions };
+    if (/Not Responding/i.test(focus)) {
+      try {
+        const wait = await session.findElement('-android uiautomator', 'new UiSelector().text("Wait")');
+        await session.elementClick(Object.values(wait as Record<string, string>)[0]);
+        actions.push(`tapped Wait on: ${focus}`);
+      } catch {
+        adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+        actions.push(`pressed Back on: ${focus}`);
+      }
+    } else {
+      adb('shell', 'am', 'start', '-W', '-n', component);
+      actions.push(`opened ${appPackage} over: ${focus}`);
+    }
+    await sleep(2000);
+  }
+  throw new Error(`fixture: ${step}: ${appPackage} is not the focused window (${focusedWindow()}); actions: ${actions.join('; ')}`);
+}
+
+/** Mean luma (0–255) of a capture below a row. */
+export function meanLuma(png: PNG, top: number): number {
+  let sum = 0;
+  let n = 0;
+  for (let y = top; y < png.height; y += 4) {
+    for (let x = 0; x < png.width; x += 4) {
+      const i = (y * png.width + x) * 4;
+      sum += 0.299 * png.data[i] + 0.587 * png.data[i + 1] + 0.114 * png.data[i + 2];
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
+/** Pixels that differ between two same-size captures, above and below a row. */
+export function differingPixels(a: PNG, b: PNG, splitY: number): { above: number; below: number } {
+  const out = { above: 0, below: 0 };
+  if (a.width !== b.width || a.height !== b.height) return { above: -1, below: -1 };
+  for (let i = 0; i < a.data.length; i += 4) {
+    if (a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1] || a.data[i + 2] !== b.data[i + 2]) {
+      if (Math.floor(i / 4 / a.width) < splitY) out.above++;
+      else out.below++;
+    }
+  }
+  return out;
+}
+
+/** Expectations that print as they go and are asserted together at the end. */
+export function checklist(tag: string): { expect(condition: boolean, what: string): void; failures: string[] } {
+  const failures: string[] = [];
+  return {
+    failures,
+    expect(condition: boolean, what: string) {
+      if (!condition) failures.push(what);
+      console.log(`[${tag}] ${condition ? '✓' : '✗'} ${what}`);
+    },
+  };
+}

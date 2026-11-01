@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #f5f5f5; color: #1f1f1f; }
+  header { padding: 16px; background: #ffffff; }
+  header h1 { margin: 0; font-size: 22px; }
+  main { padding: 16px; }
+  .card { background: #ffffff; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0; color: #555555; }
+  .cta { display: block; width: 100%; padding: 12px; border: 0; border-radius: 8px;
+         background: #1565c0; color: #ffffff; font-size: 16px; }
+</style>
+</head>
+<body>
+<header><h1 id="title">Your orders</h1></header>
+<main>
+  <section class="card" data-testid="order-1"><h2>Order 1042</h2><p>Shipped on 28 October</p></section>
+  <section class="card" data-testid="order-2"><h2>Order 1043</h2><p>Out for delivery</p></section>
+  <section class="card" data-testid="order-3"><h2>Order 1044</h2><p>Preparing</p></section>
+  <button class="cta" data-testid="track-order">Track order</button>
+</main>
+</body>
+</html>
