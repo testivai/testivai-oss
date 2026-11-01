@@ -120616,8 +120616,9 @@ function parseOpenTag(raw, volatile = /* @__PURE__ */ new Set()) {
     rest = rest.trimStart();
   }
   const keys = Object.keys(attrs).sort();
+  const allVolatile = tag === "script";
   const attrSig = keys.map((k) => {
-    if (volatile.has(k)) return `${k}=*`;
+    if (allVolatile || volatile.has(k)) return `${k}=*`;
     const v = attrs[k];
     return v.startsWith("blob:") ? `${k}=blob:*` : `${k}=${v}`;
   }).join("\0");
@@ -121260,6 +121261,74 @@ function union(a, b) {
   return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
+// ../packages/witness/src/report/shift-check.ts
+var SHIFT_PIXEL_TOLERANCE = 0.01;
+var MAX_SAMPLES = 4e4;
+var OFFSETS = [
+  [0, 0],
+  [0, -1],
+  [0, 1],
+  [-1, 0],
+  [1, 0],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1]
+];
+function makeShiftCheck(baseline, current, threshold, masks = []) {
+  const deltaThreshold = threshold * threshold * 35215;
+  const cache = /* @__PURE__ */ new Map();
+  const masked = (x, y) => masks.some((m) => x >= m.x && x < m.x + m.width && y >= m.y && y < m.y + m.height);
+  const differs = (bi, ci) => {
+    const b = baseline.data;
+    const c = current.data;
+    const dr = c[ci] - b[bi];
+    const dg = c[ci + 1] - b[bi + 1];
+    const db = c[ci + 2] - b[bi + 2];
+    if (dr === 0 && dg === 0 && db === 0) return false;
+    const y = dr * 0.29889531 + dg * 0.58662247 + db * 0.11448223;
+    const i = dr * 0.59597799 - dg * 0.2741761 - db * 0.32180189;
+    const q = dr * 0.21147017 - dg * 0.52261711 + db * 0.31114694;
+    return y * y * 0.5053 + i * i * 0.299 + q * q * 0.1957 > deltaThreshold;
+  };
+  return (b, c) => {
+    const key = `${b.x},${b.y},${b.width},${b.height}|${c.x},${c.y},${c.width},${c.height}`;
+    const known = cache.get(key);
+    if (known !== void 0) return known;
+    const width = Math.min(b.width, c.width);
+    const height = Math.min(b.height, c.height);
+    const step = Math.max(1, Math.ceil(Math.sqrt(width * height / MAX_SAMPLES)));
+    let comparedAny = false;
+    let confirmed = false;
+    for (const [ox, oy] of OFFSETS) {
+      let compared = 0;
+      let different = 0;
+      for (let y = 0; y < height; y += step) {
+        const by = b.y + y;
+        const cy = c.y + y + oy;
+        if (by < 0 || by >= baseline.height || cy < 0 || cy >= current.height) continue;
+        for (let x = 0; x < width; x += step) {
+          const bx = b.x + x;
+          const cx = c.x + x + ox;
+          if (bx < 0 || bx >= baseline.width || cx < 0 || cx >= current.width) continue;
+          if (masks.length > 0 && (masked(bx, by) || masked(cx, cy))) continue;
+          compared++;
+          if (differs((by * baseline.width + bx) * 4, (cy * current.width + cx) * 4)) different++;
+        }
+      }
+      if (compared === 0) continue;
+      comparedAny = true;
+      if (different / compared <= SHIFT_PIXEL_TOLERANCE) {
+        confirmed = true;
+        break;
+      }
+    }
+    const answer = confirmed || !comparedAny;
+    cache.set(key, answer);
+    return answer;
+  };
+}
+
 // ../packages/witness/src/diff/attribution.ts
 function parseElementMap(raw) {
   if (!Array.isArray(raw)) return [];
@@ -121299,7 +121368,7 @@ function bbox(a, b) {
 }
 var MATCH_COVERAGE = 0.5;
 var MAX_ELEMENTS_PER_REGION = 3;
-function attributeRegions(regions, baselineMap, candidateMap) {
+function attributeRegions(regions, baselineMap, candidateMap, confirmShift) {
   if (baselineMap.length === 0 || candidateMap.length === 0) {
     return regions;
   }
@@ -121317,7 +121386,7 @@ function attributeRegions(regions, baselineMap, candidateMap) {
     if (matches.length === 0) return region;
     const roleOf = (m) => {
       const b = m.baseline;
-      if (b && b.width === m.el.width && b.height === m.el.height && b.styleHash === m.el.styleHash && (b.x !== m.el.x || b.y !== m.el.y)) {
+      if (b && b.width === m.el.width && b.height === m.el.height && b.styleHash === m.el.styleHash && (b.x !== m.el.x || b.y !== m.el.y) && (!confirmShift || confirmShift(b, m.el))) {
         return { role: "shifted", dx: m.el.x - b.x, dy: m.el.y - b.y };
       }
       return { role: "changed", dx: 0, dy: 0 };
@@ -121351,7 +121420,7 @@ function compareStyleHashes(baselineMap, candidateMap) {
   if (comparable === 0) return { status: "unavailable", changed: [] };
   return changed.length > 0 ? { status: "mismatch", changed } : { status: "match", changed: [] };
 }
-function detectPageShift(baselineMap, candidateMap, minElements = 3) {
+function detectPageShift(baselineMap, candidateMap, minElements = 3, confirmShift) {
   if (baselineMap.length === 0 || candidateMap.length === 0) return null;
   const baselineByPath = new Map(baselineMap.map((e) => [e.path, e]));
   const moved = [];
@@ -121362,7 +121431,7 @@ function detectPageShift(baselineMap, candidateMap, minElements = 3) {
     }
     const dx = el.x - b.x;
     const dy = el.y - b.y;
-    if (dx === 0 && dy !== 0) moved.push({ dy, baselineY: b.y });
+    if (dx === 0 && dy !== 0 && (!confirmShift || confirmShift(b, el))) moved.push({ dy, baselineY: b.y });
   }
   if (moved.length < minElements) return null;
   const groups = /* @__PURE__ */ new Map();
@@ -121487,10 +121556,11 @@ function compareAll(options) {
         if (isUnhealthyCapture(result)) domSignal.noiseHint = false;
         result.dom = domSignal;
       }
+      const confirmShift = pixels ? makeShiftCheck(pixels.baseline, pixels.current, threshold, result.masks ?? []) : void 0;
       if (result.regions && result.regions.length > 0) {
-        result.regions = attributeRegions(result.regions, baselineElements, candidateElements);
+        result.regions = attributeRegions(result.regions, baselineElements, candidateElements, confirmShift);
       }
-      const pageShift = detectPageShift(baselineElements, candidateElements);
+      const pageShift = detectPageShift(baselineElements, candidateElements, void 0, confirmShift);
       if (pageShift) {
         result.pageShift = pageShift;
       }
