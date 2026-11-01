@@ -70,6 +70,7 @@
 				"action/src/missing-report.ts",
 				"action/src/__tests__/missing-results.test.ts",
 				"action/src/__tests__/report-after-failure-docs.test.ts",
+				"action/src/__tests__/release-action-workflow.test.ts",
 				"packages/playwright/src/reporter.ts",
 				"packages/playwright/src/__tests__/unit/report-on-failure.spec.ts"
 			],

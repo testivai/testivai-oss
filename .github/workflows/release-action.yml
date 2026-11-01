@@ -12,6 +12,16 @@ name: Release Action (major-tag rolling)
 #
 # Manual override: workflow_dispatch with a tag input lets a maintainer
 # rebuild the major pointer for any existing tag without re-tagging.
+#
+# Credentials: GitHub refuses to move a ref onto a commit whose workflow
+# files (.github/workflows/) changed since the ref's old commit unless the
+# token has the `workflows` permission, which the built-in GITHUB_TOKEN
+# cannot be given. So the push uses the RELEASE_TAG_TOKEN secret when it is
+# set: a fine-grained personal access token for this repository with
+# Contents and Workflows read and write. Without it the built-in token is
+# used, which works only when no workflow file changed since the last
+# release; a refused push then fails saying how to fix it. Setup:
+# action/README.md, "Releases".
 
 on:
   push:
@@ -34,11 +44,13 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      # The push in the last step uses these credentials.
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
+          token: ${{ secrets.RELEASE_TAG_TOKEN || github.token }}
 
       - name: Resolve source tag and target major
         id: resolve
@@ -72,6 +84,8 @@ jobs:
         env:
           SRC_TAG: ${{ steps.resolve.outputs.src_tag }}
           MAJOR_TAG: ${{ steps.resolve.outputs.major_tag }}
+          # Whether the secret is set, never its value.
+          HAS_RELEASE_TAG_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN != '' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -79,6 +93,20 @@ jobs:
           # Resolve the source tag to a SHA, then force-update the major
           # tag to point at that SHA. Annotated tag for nicer `git show`.
           SRC_SHA=$(git rev-list -n 1 "$SRC_TAG")
-          git tag -f -a "$MAJOR_TAG" -m "Rolling major tag → $SRC_TAG ($SRC_SHA)" "$SRC_SHA"
-          git push -f origin "refs/tags/$MAJOR_TAG"
+          MESSAGE="Rolling major tag → $SRC_TAG ($SRC_SHA)"
+          git tag -f -a "$MAJOR_TAG" -m "$MESSAGE" "$SRC_SHA"
+          if ! git push -f origin "refs/tags/$MAJOR_TAG"; then
+            # Most often GitHub's refusal to move a ref across a workflow
+            # file change without the `workflows` permission (see the top).
+            if [ "$HAS_RELEASE_TAG_TOKEN" = "true" ]; then
+              echo "::error::Could not move $MAJOR_TAG to $SRC_TAG. If the error above says 'without \`workflows\` permission', the RELEASE_TAG_TOKEN secret lacks it: give the token Workflows read and write (and Contents read and write) on this repository, then re-run this job."
+            else
+              echo "::error::Could not move $MAJOR_TAG to $SRC_TAG. If the error above says 'without \`workflows\` permission', a workflow file changed since the last release and the built-in token cannot move a tag across that: add a RELEASE_TAG_TOKEN repository secret (a fine-grained personal access token for this repository with Contents and Workflows read and write; see action/README.md, Releases), then re-run this job."
+            fi
+            echo "To move $MAJOR_TAG by hand now, from a clone with push access:"
+            echo "  git fetch origin --tags"
+            echo "  git tag -f -a $MAJOR_TAG -m \"$MESSAGE\" $SRC_SHA"
+            echo "  git push -f origin refs/tags/$MAJOR_TAG"
+            exit 1
+          fi
           echo "Pointed $MAJOR_TAG at $SRC_TAG ($SRC_SHA)"
