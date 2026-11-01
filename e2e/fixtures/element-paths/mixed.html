@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Element paths: a mixed page</title>
+<!--
+  A little of everything the collector handles: classes, same-tag siblings,
+  nesting, elements too small or hidden to be listed, an ignored subtree,
+  Tailwind-style class names, and data-testid values (unique, duplicated,
+  empty) that the default paths must not read.
+-->
+<style>
+  html, body { margin: 0; font: 14px/20px monospace; }
+  .box { width: 200px; height: 30px; margin: 4px; background: #eee; }
+  .w-\[120px\] { width: 120px; }
+  .tiny { width: 2px; height: 2px; }
+  .hidden { visibility: hidden; }
+  .card { display: block; width: 300px; height: 60px; margin: 8px; border: 1px solid #999; }
+</style>
+</head>
+<body>
+  <header class="box" data-testid="top"><nav class="box"><a class="box" href="#">Home</a></nav></header>
+  <main>
+    <section class="card" data-testid="card"><h2 class="box">One</h2><p class="box">Text</p></section>
+    <section class="card" data-testid="card"><h2 class="box">Two</h2><p class="box">Text</p></section>
+    <section class="card" data-testid=""><h2 class="box w-[120px]">Three</h2></section>
+    <div class="tiny" data-testid="tiny"></div>
+    <div class="box hidden" data-testid="hidden"><span class="box" style="visibility: visible; display: block">shown</span></div>
+    <aside class="box ad" data-testid="ad"><div class="box">ad</div></aside>
+    <ul><li class="box">a</li><li class="box">b</li><li class="box" data-testid="last">c</li></ul>
+  </main>
+  <footer class="box" data-test="footer">bottom</footer>
+</body>
+</html>

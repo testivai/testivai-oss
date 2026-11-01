@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Element paths: react-native-web shaped page</title>
+<!--
+  Shaped like react-native-web output (atomic css-* classes, every view a
+  div, data-testid from testID). Opened with ?banner, a "Daily challenge"
+  banner is inserted above everything else, as in the Trifoldie planted
+  change. Every box has a fixed size, so the layout does not depend on fonts.
+-->
+<style>
+  html, body { margin: 0; background: #fff; font: 14px/20px monospace; }
+  .css-g5y9jx { display: flex; flex-direction: column; box-sizing: border-box; }
+  .css-146c3p1 { display: block; height: 20px; color: #222; overflow: hidden; }
+  .r-app { width: 360px; padding: 16px; }
+  .r-banner { height: 60px; background: #ffe08a; margin-bottom: 8px; }
+  .r-header { height: 48px; background: #20304a; margin-bottom: 8px; }
+  .r-header .css-146c3p1 { color: #fff; margin: 14px 12px; width: 120px; }
+  .r-board { flex-direction: row; flex-wrap: wrap; width: 312px; height: 312px; background: #ddd; padding: 6px; margin-bottom: 8px; }
+  .r-tile { width: 88px; height: 88px; margin: 6px; border-radius: 8px; justify-content: center; align-items: center; }
+  .r-tile .css-146c3p1 { width: 20px; text-align: center; }
+  .t0 { background: #e57373; } .t1 { background: #64b5f6; } .t2 { background: #81c784; }
+  .r-score { height: 40px; background: #f5f5f5; justify-content: center; padding: 0 12px; margin-bottom: 8px; }
+  .r-score .css-146c3p1 { width: 60px; }
+  .r-swipe { height: 80px; background: #eceff1; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="css-g5y9jx r-app" id="app">
+    <div class="css-g5y9jx r-header" data-testid="header"><div class="css-146c3p1">Trifoldie</div></div>
+    <div class="css-g5y9jx r-board" data-testid="board">
+      <div class="css-g5y9jx r-tile t0" data-testid="tile-r0-c0"><div class="css-146c3p1">1</div></div>
+      <div class="css-g5y9jx r-tile t1" data-testid="tile-r0-c1"><div class="css-146c3p1">2</div></div>
+      <div class="css-g5y9jx r-tile t2" data-testid="tile-r0-c2"><div class="css-146c3p1">3</div></div>
+      <div class="css-g5y9jx r-tile t1" data-testid="tile-r1-c0"><div class="css-146c3p1">4</div></div>
+      <div class="css-g5y9jx r-tile t2" data-testid="tile-r1-c1"><div class="css-146c3p1">5</div></div>
+      <div class="css-g5y9jx r-tile t0" data-testid="tile-r1-c2"><div class="css-146c3p1">6</div></div>
+      <div class="css-g5y9jx r-tile t2" data-testid="tile-r2-c0"><div class="css-146c3p1">7</div></div>
+      <div class="css-g5y9jx r-tile t0" data-testid="tile-r2-c1"><div class="css-146c3p1">8</div></div>
+      <div class="css-g5y9jx r-tile t1" data-testid="tile-r2-c2"><div class="css-146c3p1">9</div></div>
+    </div>
+    <div class="css-g5y9jx r-score" data-testid="score"><div class="css-146c3p1" data-testid="score-value">120</div></div>
+    <div class="css-g5y9jx r-swipe" data-testid="swipe-area"></div>
+  </div>
+</div>
+<script>
+  if (location.search.indexOf('banner') >= 0) {
+    var banner = document.createElement('div');
+    banner.className = 'css-g5y9jx r-banner';
+    banner.setAttribute('data-testid', 'daily-banner');
+    banner.innerHTML = '<div class="css-146c3p1">Daily challenge</div>';
+    var app = document.getElementById('app');
+    app.insertBefore(banner, app.firstChild);
+  }
+</script>
+</body>
+</html>
