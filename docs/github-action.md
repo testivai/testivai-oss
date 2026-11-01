@@ -167,6 +167,10 @@ Whole `report-dir/` (HTML report, `results.json`, all diff images and DOM captur
 
 ## When a run has no `results.json`
 
+:::note Since v1.6.1
+Earlier versions failed the step with `results.json not found` and posted nothing, leaving the previous run's comment standing.
+:::
+
 A CI step runs only on success by default, so one failing test, even a
 non-visual one, can skip the step that compares the captures (`testivai report`,
 or `merge-captures` then `report` in a sharded run). Run that step and this
