@@ -47,6 +47,7 @@ jobs:
           TESTIVAI_CAPTURE_ONLY: '1'
 
       - name: Visual diff gate
+        if: ${{ !cancelled() }}   # after a failing test too
         run: npx testivai report --fail-on-diff
 
       - name: Upload visual report
@@ -152,7 +153,10 @@ jobs:
       # Capture-only: no comparison and no gate inside the shard.
       - run: npx playwright test --shard=${{ matrix.shard }}/8
 
+      # Upload after a failing test too: the shard's captures and its
+      # manifest are still good, and the merge needs every shard's.
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
           name: captures-${{ matrix.shard }}
           path: .testivai/temp/
@@ -160,6 +164,9 @@ jobs:
 
   visual:
     needs: shard
+    # Run even when a shard failed a test, or one failing test anywhere
+    # skips the comparison and the pull request gets no report.
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4          # baselines come from the repo
       - uses: actions/setup-node@v4
@@ -171,18 +178,24 @@ jobs:
           pattern: captures-*
           path: collected/
 
-      # merge-captures verifies every shard reported before merging, then one
-      # comparison runs over the full union — the gate belongs here.
-      - run: npx testivai merge-captures collected/
-      - run: npx testivai report --fail-on-diff
+      # merge-captures verifies every shard reported, then one comparison
+      # runs over the full union — the gate belongs here. One step, so a
+      # merge that lacks a shard never compares part of the suite.
+      - name: Merge and compare
+        if: ${{ !cancelled() }}
+        run: npx testivai merge-captures collected/ && npx testivai report --fail-on-diff
 
       - uses: testivai/testivai-oss@v1
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-One exit code, one report, one PR comment. Missing-baseline detection is correct
+One exit code, one report, one PR comment, whether the tests passed or not: a
+test that fails in any shard fails that shard's job, and the `visual` job still
+compares every capture taken. When a shard is missing, `merge-captures` fails
+the step before anything is compared, and the action's comment says which
+shards are missing instead of showing a partial result (or an earlier run's). Missing-baseline detection is correct
 **by construction** here, because it only ever runs against the complete set —
 so you keep the gate rather than disabling it with `--allow-missing`.
 
@@ -388,6 +401,7 @@ jobs:
         run: npx playwright test --project=${{ matrix.browser }}
 
       - name: Visual diff gate
+        if: ${{ !cancelled() }}   # after a failing test too
         run: npx testivai report --fail-on-diff --allow-missing
 ```
 
@@ -430,10 +444,12 @@ visual-tests:
   stage: test
   script:
     - npm ci
-    - npx playwright test
+    # Compare after a failing test too, then fail the job for the tests.
+    - npx playwright test || TESTS_FAILED=1
     - npx testivai report --fail-on-diff
+    - test -z "$TESTS_FAILED"
   artifacts:
-    when: on_failure
+    when: always
     paths:
       - visual-report/
 ```
@@ -453,8 +469,10 @@ jobs:
       - run:
           name: Visual diff gate
           command: npx testivai report --fail-on-diff
+          when: always   # after a failing test too
       - store_artifacts:
           path: visual-report
+          when: always
 ```
 
 ### Jenkins
@@ -468,11 +486,14 @@ pipeline {
                 sh 'npm ci'
                 sh 'npx playwright install --with-deps chromium'
                 sh 'npx playwright test'
-                sh 'npx testivai report --fail-on-diff'
             }
         }
     }
     post {
+        // After a failing test too; a changed snapshot fails the build here.
+        always {
+            sh 'npx testivai report --fail-on-diff'
+        }
         failure {
             archiveArtifacts artifacts: 'visual-report/**'
         }

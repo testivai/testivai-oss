@@ -234,6 +234,7 @@ the [CI/CD guide](./ci-cd.md):
           TESTIVAI_CAPTURE_ONLY: '1'
 
       - name: Visual diff gate
+        if: ${{ !cancelled() }}   # after a failing test too
         run: npx testivai report --fail-on-diff
 ```
 

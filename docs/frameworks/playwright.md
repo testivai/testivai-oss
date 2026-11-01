@@ -246,6 +246,7 @@ GitHub Actions example:
   run: npx playwright test
 
 - name: Visual diff gate
+  if: ${{ !cancelled() }}   # after a failing test too
   run: npx testivai report --fail-on-diff
 ```
 

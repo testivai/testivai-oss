@@ -587,10 +587,10 @@ var require_errors = __commonJS({
     };
     var kHTTPParserError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_HTTP_PARSER");
     var HTTPParserError = class extends Error {
-      constructor(message, code, data) {
+      constructor(message, code2, data) {
         super(message);
         this.name = "HTTPParserError";
-        this.code = code ? `HPE_${code}` : void 0;
+        this.code = code2 ? `HPE_${code2}` : void 0;
         this.data = data ? data.toString() : void 0;
       }
       static [Symbol.hasInstance](instance) {
@@ -613,12 +613,12 @@ var require_errors = __commonJS({
     };
     var kRequestRetryError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_REQ_RETRY");
     var RequestRetryError = class extends UndiciError {
-      constructor(message, code, { headers, data }) {
+      constructor(message, code2, { headers, data }) {
         super(message);
         this.name = "RequestRetryError";
         this.message = message || "Request retry error";
         this.code = "UND_ERR_REQ_RETRY";
-        this.statusCode = code;
+        this.statusCode = code2;
         this.data = data;
         this.headers = headers;
       }
@@ -629,12 +629,12 @@ var require_errors = __commonJS({
     };
     var kResponseError = /* @__PURE__ */ Symbol.for("undici.error.UND_ERR_RESPONSE");
     var ResponseError = class extends UndiciError {
-      constructor(message, code, { headers, data }) {
+      constructor(message, code2, { headers, data }) {
         super(message);
         this.name = "ResponseError";
         this.message = message || "Response error";
         this.code = "UND_ERR_RESPONSE";
-        this.statusCode = code;
+        this.statusCode = code2;
         this.data = data;
         this.headers = headers;
       }
@@ -844,8 +844,8 @@ var require_tree = __commonJS({
         if (index === void 0 || index >= key.length) {
           throw new TypeError("Unreachable");
         }
-        const code = this.code = key.charCodeAt(index);
-        if (code > 127) {
+        const code2 = this.code = key.charCodeAt(index);
+        if (code2 > 127) {
           throw new TypeError("key must be ascii string");
         }
         if (key.length !== ++index) {
@@ -866,11 +866,11 @@ var require_tree = __commonJS({
         let index = 0;
         let node = this;
         while (true) {
-          const code = key.charCodeAt(index);
-          if (code > 127) {
+          const code2 = key.charCodeAt(index);
+          if (code2 > 127) {
             throw new TypeError("key must be ascii string");
           }
-          if (node.code === code) {
+          if (node.code === code2) {
             if (length === ++index) {
               node.value = value;
               break;
@@ -880,7 +880,7 @@ var require_tree = __commonJS({
               node.middle = new _TstNode(key, value, index);
               break;
             }
-          } else if (node.code < code) {
+          } else if (node.code < code2) {
             if (node.left !== null) {
               node = node.left;
             } else {
@@ -904,19 +904,19 @@ var require_tree = __commonJS({
         let index = 0;
         let node = this;
         while (node !== null && index < keylength) {
-          let code = key[index];
-          if (code <= 90 && code >= 65) {
-            code |= 32;
+          let code2 = key[index];
+          if (code2 <= 90 && code2 >= 65) {
+            code2 |= 32;
           }
           while (node !== null) {
-            if (code === node.code) {
+            if (code2 === node.code) {
               if (keylength === ++index) {
                 return node;
               }
               node = node.middle;
               break;
             }
-            node = node.code < code ? node.left : node.right;
+            node = node.code < code2 ? node.left : node.right;
           }
         }
         return null;
@@ -1072,14 +1072,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path11 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path16 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path11 && path11[0] !== "/") {
-          path11 = `/${path11}`;
+        if (path16 && path16[0] !== "/") {
+          path16 = `/${path16}`;
         }
-        return new URL(`${origin}${path11}`);
+        return new URL(`${origin}${path16}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1530,39 +1530,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path11, origin }
+          request: { method, path: path16, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path11);
+        debuglog("sending request to %s %s/%s", method, origin, path16);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path11, origin },
+          request: { method, path: path16, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path11,
+          path16,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path11, origin }
+          request: { method, path: path16, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path11);
+        debuglog("trailers received from %s %s/%s", method, origin, path16);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path11, origin },
+          request: { method, path: path16, origin },
           error: error2
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path11,
+          path16,
           error2.message
         );
       });
@@ -1611,9 +1611,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path11, origin }
+            request: { method, path: path16, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path11);
+          debuglog("sending request to %s %s/%s", method, origin, path16);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1623,11 +1623,11 @@ var require_diagnostics = __commonJS({
         websocketDebuglog("connection opened %s%s", address, port ? `:${port}` : "");
       });
       diagnosticsChannel.channel("undici:websocket:close").subscribe((evt) => {
-        const { websocket, code, reason } = evt;
+        const { websocket, code: code2, reason } = evt;
         websocketDebuglog(
           "closed connection to %s - %s %s",
           websocket.url,
-          code,
+          code2,
           reason
         );
       });
@@ -1676,7 +1676,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path11,
+        path: path16,
         method,
         body: body2,
         headers,
@@ -1691,11 +1691,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler2) {
-        if (typeof path11 !== "string") {
+        if (typeof path16 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path11[0] !== "/" && !(path11.startsWith("http://") || path11.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path16[0] !== "/" && !(path16.startsWith("http://") || path16.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path11)) {
+        } else if (invalidPathRegex.test(path16)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1761,7 +1761,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path11, query) : path11;
+        this.path = query ? buildURL(path16, query) : path16;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -3594,8 +3594,8 @@ var require_webidl = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural3 = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural3}: ${context6.types.join(", ")}.`;
+      const plural4 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural4}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -4043,9 +4043,9 @@ var require_util2 = __commonJS({
     }
     function isValidEncodedURL(url2) {
       for (let i = 0; i < url2.length; ++i) {
-        const code = url2.charCodeAt(i);
-        if (code > 126 || // Non-US-ASCII + DEL
-        code < 32) {
+        const code2 = url2.charCodeAt(i);
+        if (code2 > 126 || // Non-US-ASCII + DEL
+        code2 < 32) {
           return false;
         }
       }
@@ -4636,8 +4636,8 @@ var require_util2 = __commonJS({
       }
       const rangeStart = collectASequenceOfCodePoints(
         (char) => {
-          const code = char.charCodeAt(0);
-          return code >= 48 && code <= 57;
+          const code2 = char.charCodeAt(0);
+          return code2 >= 48 && code2 <= 57;
         },
         data,
         position
@@ -4663,8 +4663,8 @@ var require_util2 = __commonJS({
       }
       const rangeEnd = collectASequenceOfCodePoints(
         (char) => {
-          const code = char.charCodeAt(0);
-          return code >= 48 && code <= 57;
+          const code2 = char.charCodeAt(0);
+          return code2 >= 48 && code2 <= 57;
         },
         data,
         position
@@ -4781,8 +4781,8 @@ var require_util2 = __commonJS({
       }
       return values;
     }
-    function getDecodeSplit(name, list) {
-      const value = list.get(name, true);
+    function getDecodeSplit(name, list2) {
+      const value = list2.get(name, true);
       if (value === null) {
         return null;
       }
@@ -6287,7 +6287,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client2, request2) {
-      const { method, path: path11, host, upgrade, blocking, reset } = request2;
+      const { method, path: path16, host, upgrade, blocking, reset } = request2;
       let { body: body2, headers, contentLength: contentLength2 } = request2;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util3.isFormDataLike(body2)) {
@@ -6353,7 +6353,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path11} HTTP/1.1\r
+      let header = `${method} ${path16} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6842,9 +6842,9 @@ var require_client_h2 = __commonJS({
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
-    function onHttp2FrameError(type, code, id) {
+    function onHttp2FrameError(type, code2, id) {
       if (id === 0) {
-        const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
+        const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code2}`);
         this[kSocket][kError] = err;
         this[kClient][kOnError](err);
       }
@@ -6854,8 +6854,8 @@ var require_client_h2 = __commonJS({
       this.destroy(err);
       util3.destroy(this[kSocket], err);
     }
-    function onHTTP2GoAway(code) {
-      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code}`, util3.getSocketInfo(this));
+    function onHTTP2GoAway(code2) {
+      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code2}`, util3.getSocketInfo(this));
       const client2 = this[kClient];
       client2[kSocket] = null;
       client2[kHTTPContext] = null;
@@ -6879,7 +6879,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client2, request2) {
       const session = client2[kHTTP2Session];
-      const { method, path: path11, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
+      const { method, path: path16, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
       let { body: body2 } = request2;
       if (upgrade) {
         util3.errorRequest(client2, request2, new Error("Upgrade not supported for H2"));
@@ -6946,7 +6946,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path11;
+      headers[HTTP2_HEADER_PATH] = path16;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
@@ -7030,8 +7030,8 @@ var require_client_h2 = __commonJS({
       stream4.once("error", function(err) {
         abort(err);
       });
-      stream4.once("frameError", (type, code) => {
-        abort(new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`));
+      stream4.once("frameError", (type, code2) => {
+        abort(new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code2}`));
       });
       return true;
       function writeBodyH2() {
@@ -7299,9 +7299,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util3.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path11 = search ? `${pathname}${search}` : pathname;
+        const path16 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path11;
+        this.opts.path = path16;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -8536,10 +8536,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path11 = "/",
+          path: path16 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path11;
+        opts.path = origin + path16;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -8935,7 +8935,7 @@ var require_retry_handler = __commonJS({
         if (this.handler.onBodySent) return this.handler.onBodySent(chunk);
       }
       static [kRetryHandlerDefaultRetry](err, { state: state3, opts }, cb) {
-        const { statusCode, code, headers } = err;
+        const { statusCode, code: code2, headers } = err;
         const { method, retryOptions } = opts;
         const {
           maxRetries,
@@ -8947,7 +8947,7 @@ var require_retry_handler = __commonJS({
           methods
         } = retryOptions;
         const { counter } = state3;
-        if (code && code !== "UND_ERR_REQ_RETRY" && !errorCodes.includes(code)) {
+        if (code2 && code2 !== "UND_ERR_REQ_RETRY" && !errorCodes.includes(code2)) {
           cb(err);
           return;
         }
@@ -10460,20 +10460,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path11) {
-      if (typeof path11 !== "string") {
-        return path11;
+    function safeUrl(path16) {
+      if (typeof path16 !== "string") {
+        return path16;
       }
-      const pathSegments = path11.split("?");
+      const pathSegments = path16.split("?");
       if (pathSegments.length !== 2) {
-        return path11;
+        return path16;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path11, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path11);
+    function matchKey(mockDispatch2, { path: path16, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path16);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10495,7 +10495,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path11 }) => matchValue(safeUrl(path11), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path16 }) => matchValue(safeUrl(path16), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10533,9 +10533,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path11, method, body: body2, headers, query } = opts;
+      const { path: path16, method, body: body2, headers, query } = opts;
       return {
-        path: path11,
+        path: path16,
         method,
         body: body2,
         headers,
@@ -10960,15 +10960,15 @@ var require_pluralizer = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural3) {
+      constructor(singular, plural4) {
         this.singular = singular;
-        this.plural = plural3;
+        this.plural = plural4;
       }
-      pluralize(count) {
-        const one = count === 1;
+      pluralize(count2) {
+        const one = count2 === 1;
         const keys = one ? singulars : plurals;
         const noun = one ? this.singular : this.plural;
-        return { ...keys, count, noun };
+        return { ...keys, count: count2, noun };
       }
     };
   }
@@ -10998,10 +10998,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path11, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path16, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path11,
+            Path: path16,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -11522,16 +11522,16 @@ var require_dns = __commonJS({
       setRecords(origin, addresses) {
         const timestamp = Date.now();
         const records = { records: { 4: null, 6: null } };
-        for (const record of addresses) {
-          record.timestamp = timestamp;
-          if (typeof record.ttl === "number") {
-            record.ttl = Math.min(record.ttl, this.#maxTTL);
+        for (const record2 of addresses) {
+          record2.timestamp = timestamp;
+          if (typeof record2.ttl === "number") {
+            record2.ttl = Math.min(record2.ttl, this.#maxTTL);
           } else {
-            record.ttl = this.#maxTTL;
+            record2.ttl = this.#maxTTL;
           }
-          const familyRecords = records.records[record.family] ?? { ips: [] };
-          familyRecords.ips.push(record);
-          records.records[record.family] = familyRecords;
+          const familyRecords = records.records[record2.family] ?? { ips: [] };
+          familyRecords.ips.push(record2);
+          records.records[record2.family] = familyRecords;
         }
         this.#records.set(origin.hostname, records);
       }
@@ -11669,8 +11669,8 @@ var require_headers = __commonJS({
     var util3 = require("node:util");
     var kHeadersMap = /* @__PURE__ */ Symbol("headers map");
     var kHeadersSortedMap = /* @__PURE__ */ Symbol("headers map sorted");
-    function isHTTPWhiteSpaceCharCode(code) {
-      return code === 10 || code === 13 || code === 9 || code === 32;
+    function isHTTPWhiteSpaceCharCode(code2) {
+      return code2 === 10 || code2 === 13 || code2 === 9 || code2 === 32;
     }
     function headerValueNormalize(potentialValue) {
       let i = 0;
@@ -11996,9 +11996,9 @@ var require_headers = __commonJS({
       // https://fetch.spec.whatwg.org/#dom-headers-getsetcookie
       getSetCookie() {
         webidl.brandCheck(this, _Headers);
-        const list = this.#headersList.cookies;
-        if (list) {
-          return [...list];
+        const list2 = this.#headersList.cookies;
+        if (list2) {
+          return [...list2];
         }
         return [];
       }
@@ -12038,8 +12038,8 @@ var require_headers = __commonJS({
       static getHeadersList(o) {
         return o.#headersList;
       }
-      static setHeadersList(o, list) {
-        o.#headersList = list;
+      static setHeadersList(o, list2) {
+        o.#headersList = list2;
       }
     };
     var { getHeadersGuard, setHeadersGuard, getHeadersList, setHeadersList } = Headers2;
@@ -13007,13 +13007,13 @@ var require_request2 = __commonJS({
         if (this.signal.aborted) {
           ac.abort(this.signal.reason);
         } else {
-          let list = dependentControllerMap.get(this.signal);
-          if (list === void 0) {
-            list = /* @__PURE__ */ new Set();
-            dependentControllerMap.set(this.signal, list);
+          let list2 = dependentControllerMap.get(this.signal);
+          if (list2 === void 0) {
+            list2 = /* @__PURE__ */ new Set();
+            dependentControllerMap.set(this.signal, list2);
           }
           const acRef = new WeakRef(ac);
-          list.add(acRef);
+          list2.add(acRef);
           util3.addAbortListener(
             ac.signal,
             buildAbort(acRef)
@@ -15827,8 +15827,8 @@ var require_util6 = __commonJS({
     "use strict";
     function isCTLExcludingHtab(value) {
       for (let i = 0; i < value.length; ++i) {
-        const code = value.charCodeAt(i);
-        if (code >= 0 && code <= 8 || code >= 10 && code <= 31 || code === 127) {
+        const code2 = value.charCodeAt(i);
+        if (code2 >= 0 && code2 <= 8 || code2 >= 10 && code2 <= 31 || code2 === 127) {
           return true;
         }
       }
@@ -15836,26 +15836,26 @@ var require_util6 = __commonJS({
     }
     function validateCookieName(name) {
       for (let i = 0; i < name.length; ++i) {
-        const code = name.charCodeAt(i);
-        if (code < 33 || // exclude CTLs (0-31), SP and HT
-        code > 126 || // exclude non-ascii and DEL
-        code === 34 || // "
-        code === 40 || // (
-        code === 41 || // )
-        code === 60 || // <
-        code === 62 || // >
-        code === 64 || // @
-        code === 44 || // ,
-        code === 59 || // ;
-        code === 58 || // :
-        code === 92 || // \
-        code === 47 || // /
-        code === 91 || // [
-        code === 93 || // ]
-        code === 63 || // ?
-        code === 61 || // =
-        code === 123 || // {
-        code === 125) {
+        const code2 = name.charCodeAt(i);
+        if (code2 < 33 || // exclude CTLs (0-31), SP and HT
+        code2 > 126 || // exclude non-ascii and DEL
+        code2 === 34 || // "
+        code2 === 40 || // (
+        code2 === 41 || // )
+        code2 === 60 || // <
+        code2 === 62 || // >
+        code2 === 64 || // @
+        code2 === 44 || // ,
+        code2 === 59 || // ;
+        code2 === 58 || // :
+        code2 === 92 || // \
+        code2 === 47 || // /
+        code2 === 91 || // [
+        code2 === 93 || // ]
+        code2 === 63 || // ?
+        code2 === 61 || // =
+        code2 === 123 || // {
+        code2 === 125) {
           throw new Error("Invalid cookie name");
         }
       }
@@ -15871,23 +15871,23 @@ var require_util6 = __commonJS({
         ++i;
       }
       while (i < len) {
-        const code = value.charCodeAt(i++);
-        if (code < 33 || // exclude CTLs (0-31)
-        code > 126 || // non-ascii and DEL (127)
-        code === 34 || // "
-        code === 44 || // ,
-        code === 59 || // ;
-        code === 92) {
+        const code2 = value.charCodeAt(i++);
+        if (code2 < 33 || // exclude CTLs (0-31)
+        code2 > 126 || // non-ascii and DEL (127)
+        code2 === 34 || // "
+        code2 === 44 || // ,
+        code2 === 59 || // ;
+        code2 === 92) {
           throw new Error("Invalid cookie value");
         }
       }
     }
-    function validateCookiePath(path11) {
-      for (let i = 0; i < path11.length; ++i) {
-        const code = path11.charCodeAt(i);
-        if (code < 32 || // exclude CTLs (0-31)
-        code === 127 || // DEL
-        code === 59) {
+    function validateCookiePath(path16) {
+      for (let i = 0; i < path16.length; ++i) {
+        const code2 = path16.charCodeAt(i);
+        if (code2 < 32 || // exclude CTLs (0-31)
+        code2 === 127 || // DEL
+        code2 === 59) {
           throw new Error("Invalid cookie path");
         }
       }
@@ -16660,37 +16660,37 @@ var require_util7 = __commonJS({
         return false;
       }
       for (let i = 0; i < protocol.length; ++i) {
-        const code = protocol.charCodeAt(i);
-        if (code < 33 || // CTL, contains SP (0x20) and HT (0x09)
-        code > 126 || code === 34 || // "
-        code === 40 || // (
-        code === 41 || // )
-        code === 44 || // ,
-        code === 47 || // /
-        code === 58 || // :
-        code === 59 || // ;
-        code === 60 || // <
-        code === 61 || // =
-        code === 62 || // >
-        code === 63 || // ?
-        code === 64 || // @
-        code === 91 || // [
-        code === 92 || // \
-        code === 93 || // ]
-        code === 123 || // {
-        code === 125) {
+        const code2 = protocol.charCodeAt(i);
+        if (code2 < 33 || // CTL, contains SP (0x20) and HT (0x09)
+        code2 > 126 || code2 === 34 || // "
+        code2 === 40 || // (
+        code2 === 41 || // )
+        code2 === 44 || // ,
+        code2 === 47 || // /
+        code2 === 58 || // :
+        code2 === 59 || // ;
+        code2 === 60 || // <
+        code2 === 61 || // =
+        code2 === 62 || // >
+        code2 === 63 || // ?
+        code2 === 64 || // @
+        code2 === 91 || // [
+        code2 === 92 || // \
+        code2 === 93 || // ]
+        code2 === 123 || // {
+        code2 === 125) {
           return false;
         }
       }
       return true;
     }
-    function isValidStatusCode(code) {
-      if (code >= 1e3 && code < 1015) {
-        return code !== 1004 && // reserved
-        code !== 1005 && // "MUST NOT be set as a status code"
-        code !== 1006;
+    function isValidStatusCode(code2) {
+      if (code2 >= 1e3 && code2 < 1015) {
+        return code2 !== 1004 && // reserved
+        code2 !== 1005 && // "MUST NOT be set as a status code"
+        code2 !== 1006;
       }
-      return code >= 3e3 && code <= 4999;
+      return code2 >= 3e3 && code2 <= 4999;
     }
     function failWebsocketConnection(ws, reason) {
       const { [kController]: controller, [kResponse]: response } = ws;
@@ -16959,7 +16959,7 @@ var require_connection = __commonJS({
       });
       return controller;
     }
-    function closeWebSocketConnection(ws, code, reason, reasonByteLength) {
+    function closeWebSocketConnection(ws, code2, reason, reasonByteLength) {
       if (isClosing(ws) || isClosed(ws)) {
       } else if (!isEstablished(ws)) {
         failWebsocketConnection(ws, "Connection was closed before it was established.");
@@ -16967,12 +16967,12 @@ var require_connection = __commonJS({
       } else if (ws[kSentClose] === sentCloseFrameState.NOT_SENT) {
         ws[kSentClose] = sentCloseFrameState.PROCESSING;
         const frame = new WebsocketFrameSend();
-        if (code !== void 0 && reason === void 0) {
+        if (code2 !== void 0 && reason === void 0) {
           frame.frameData = Buffer.allocUnsafe(2);
-          frame.frameData.writeUInt16BE(code, 0);
-        } else if (code !== void 0 && reason !== void 0) {
+          frame.frameData.writeUInt16BE(code2, 0);
+        } else if (code2 !== void 0 && reason !== void 0) {
           frame.frameData = Buffer.allocUnsafe(2 + reasonByteLength);
-          frame.frameData.writeUInt16BE(code, 0);
+          frame.frameData.writeUInt16BE(code2, 0);
           frame.frameData.write(reason, 2, "utf-8");
         } else {
           frame.frameData = emptyBuffer;
@@ -16997,25 +16997,25 @@ var require_connection = __commonJS({
       response.socket.off("close", onSocketClose);
       response.socket.off("error", onSocketError);
       const wasClean = ws[kSentClose] === sentCloseFrameState.SENT && ws[kReceivedClose];
-      let code = 1005;
+      let code2 = 1005;
       let reason = "";
       const result = ws[kByteParser].closingInfo;
       if (result && !result.error) {
-        code = result.code ?? 1005;
+        code2 = result.code ?? 1005;
         reason = result.reason;
       } else if (!ws[kReceivedClose]) {
-        code = 1006;
+        code2 = 1006;
       }
       ws[kReadyState] = states.CLOSED;
       fireEvent("close", ws, (type, init) => new CloseEvent(type, init), {
         wasClean,
-        code,
+        code: code2,
         reason
       });
       if (channels.close.hasSubscribers) {
         channels.close.publish({
           websocket: ws,
-          code,
+          code: code2,
           reason
         });
       }
@@ -17387,11 +17387,11 @@ var require_receiver = __commonJS({
       }
       parseCloseBody(data) {
         assert(data.length !== 1);
-        let code;
+        let code2;
         if (data.length >= 2) {
-          code = data.readUInt16BE(0);
+          code2 = data.readUInt16BE(0);
         }
-        if (code !== void 0 && !isValidStatusCode(code)) {
+        if (code2 !== void 0 && !isValidStatusCode(code2)) {
           return { code: 1002, reason: "Invalid status code", error: true };
         }
         let reason = data.subarray(2);
@@ -17403,7 +17403,7 @@ var require_receiver = __commonJS({
         } catch {
           return { code: 1007, reason: "Invalid UTF-8", error: true };
         }
-        return { code, reason, error: false };
+        return { code: code2, reason, error: false };
       }
       /**
        * Parses control frames.
@@ -17418,8 +17418,8 @@ var require_receiver = __commonJS({
           }
           this.#info.closeInfo = this.parseCloseBody(body2);
           if (this.#info.closeInfo.error) {
-            const { code, reason } = this.#info.closeInfo;
-            closeWebSocketConnection(this.ws, code, reason, reason.length);
+            const { code: code2, reason } = this.#info.closeInfo;
+            closeWebSocketConnection(this.ws, code2, reason, reason.length);
             failWebsocketConnection(this.ws, reason);
             return false;
           }
@@ -17657,17 +17657,17 @@ var require_websocket = __commonJS({
        * @param {number|undefined} code
        * @param {string|undefined} reason
        */
-      close(code = void 0, reason = void 0) {
+      close(code2 = void 0, reason = void 0) {
         webidl.brandCheck(this, _WebSocket);
         const prefix2 = "WebSocket.close";
-        if (code !== void 0) {
-          code = webidl.converters["unsigned short"](code, prefix2, "code", { clamp: true });
+        if (code2 !== void 0) {
+          code2 = webidl.converters["unsigned short"](code2, prefix2, "code", { clamp: true });
         }
         if (reason !== void 0) {
           reason = webidl.converters.USVString(reason, prefix2, "reason");
         }
-        if (code !== void 0) {
-          if (code !== 1e3 && (code < 3e3 || code > 4999)) {
+        if (code2 !== void 0) {
+          if (code2 !== 1e3 && (code2 < 3e3 || code2 > 4999)) {
             throw new DOMException("invalid code", "InvalidAccessError");
           }
         }
@@ -17681,7 +17681,7 @@ var require_websocket = __commonJS({
             );
           }
         }
-        closeWebSocketConnection(this, code, reason, reasonByteLength);
+        closeWebSocketConnection(this, code2, reason, reasonByteLength);
       }
       /**
        * @see https://websockets.spec.whatwg.org/#dom-websocket-send
@@ -17924,15 +17924,15 @@ var require_websocket = __commonJS({
     }
     function onParserError(err) {
       let message;
-      let code;
+      let code2;
       if (err instanceof CloseEvent) {
         message = err.reason;
-        code = err.code;
+        code2 = err.code;
       } else {
         message = err.message;
       }
       fireEvent("error", this, () => new ErrorEvent("error", { error: err, message }));
-      closeWebSocketConnection(this, code);
+      closeWebSocketConnection(this, code2);
     }
     module2.exports = {
       WebSocket
@@ -18561,11 +18561,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path11 = opts.path;
+          let path16 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path11 = `/${path11}`;
+            path16 = `/${path16}`;
           }
-          url2 = new URL(util3.parseOrigin(url2).origin + path11);
+          url2 = new URL(util3.parseOrigin(url2).origin + path16);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -18655,8 +18655,8 @@ var require_context = __commonJS({
           if ((0, fs_1.existsSync)(process.env.GITHUB_EVENT_PATH)) {
             this.payload = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
           } else {
-            const path11 = process.env.GITHUB_EVENT_PATH;
-            process.stdout.write(`GITHUB_EVENT_PATH ${path11} does not exist${os_1.EOL}`);
+            const path16 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path16} does not exist${os_1.EOL}`);
           }
         }
         this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -19007,11 +19007,11 @@ var require_errors2 = __commonJS({
       }
     };
     var HTTPParserError = class _HTTPParserError extends Error {
-      constructor(message, code, data) {
+      constructor(message, code2, data) {
         super(message);
         Error.captureStackTrace(this, _HTTPParserError);
         this.name = "HTTPParserError";
-        this.code = code ? `HPE_${code}` : void 0;
+        this.code = code2 ? `HPE_${code2}` : void 0;
         this.data = data ? data.toString() : void 0;
       }
     };
@@ -19025,13 +19025,13 @@ var require_errors2 = __commonJS({
       }
     };
     var RequestRetryError = class _RequestRetryError extends UndiciError {
-      constructor(message, code, { headers, data }) {
+      constructor(message, code2, { headers, data }) {
         super(message);
         Error.captureStackTrace(this, _RequestRetryError);
         this.name = "RequestRetryError";
         this.message = message || "Request retry error";
         this.code = "UND_ERR_REQ_RETRY";
-        this.statusCode = code;
+        this.statusCode = code2;
         this.data = data;
         this.headers = headers;
       }
@@ -19241,14 +19241,14 @@ var require_util9 = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol}//${url2.hostname}:${port}`;
-        let path11 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path16 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path11 && !path11.startsWith("/")) {
-          path11 = `/${path11}`;
+        if (path16 && !path16.startsWith("/")) {
+          path16 = `/${path16}`;
         }
-        url2 = new URL(origin + path11);
+        url2 = new URL(origin + path16);
       }
       return url2;
     }
@@ -20250,11 +20250,11 @@ var require_decodeText = __commonJS({
         return typeof data === "string" ? data : data.toString();
       }
     };
-    function decodeText(text, sourceEncoding, destEncoding) {
-      if (text) {
-        return getDecoder(destEncoding)(text, sourceEncoding);
+    function decodeText(text2, sourceEncoding, destEncoding) {
+      if (text2) {
+        return getDecoder(destEncoding)(text2, sourceEncoding);
       }
-      return text;
+      return text2;
     }
     module2.exports = decodeText;
   }
@@ -20862,20 +20862,20 @@ var require_parseParams = __commonJS({
 var require_basename = __commonJS({
   "../node_modules/.pnpm/@fastify+busboy@2.1.1/node_modules/@fastify/busboy/lib/utils/basename.js"(exports2, module2) {
     "use strict";
-    module2.exports = function basename5(path11) {
-      if (typeof path11 !== "string") {
+    module2.exports = function basename5(path16) {
+      if (typeof path16 !== "string") {
         return "";
       }
-      for (var i = path11.length - 1; i >= 0; --i) {
-        switch (path11.charCodeAt(i)) {
+      for (var i = path16.length - 1; i >= 0; --i) {
+        switch (path16.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path11 = path11.slice(i + 1);
-            return path11 === ".." || path11 === "." ? "" : path11;
+            path16 = path16.slice(i + 1);
+            return path16 === ".." || path16 === "." ? "" : path16;
         }
       }
-      return path11 === ".." || path11 === "." ? "" : path11;
+      return path16 === ".." || path16 === "." ? "" : path16;
     };
   }
 });
@@ -22512,8 +22512,8 @@ var require_webidl2 = __commonJS({
       return new TypeError(`${message.header}: ${message.message}`);
     };
     webidl.errors.conversionFailed = function(context6) {
-      const plural3 = context6.types.length === 1 ? "" : " one of";
-      const message = `${context6.argument} could not be converted to${plural3}: ${context6.types.join(", ")}.`;
+      const plural4 = context6.types.length === 1 ? "" : " one of";
+      const message = `${context6.argument} could not be converted to${plural4}: ${context6.types.join(", ")}.`;
       return webidl.errors.exception({
         header: context6.prefix,
         message
@@ -23784,16 +23784,16 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           } else if (/application\/x-www-form-urlencoded/.test(contentType2)) {
             let entries;
             try {
-              let text = "";
+              let text2 = "";
               const streamingDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
               for await (const chunk of consumeBody(this[kState].body)) {
                 if (!isUint8Array(chunk)) {
                   throw new TypeError("Expected Uint8Array chunk");
                 }
-                text += streamingDecoder.decode(chunk, { stream: true });
+                text2 += streamingDecoder.decode(chunk, { stream: true });
               }
-              text += streamingDecoder.decode();
-              entries = new URLSearchParams(text);
+              text2 += streamingDecoder.decode();
+              entries = new URLSearchParams(text2);
             } catch (err) {
               throw Object.assign(new TypeError(), { cause: err });
             }
@@ -23905,7 +23905,7 @@ var require_request3 = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path: path11,
+        path: path16,
         method,
         body: body2,
         headers,
@@ -23919,11 +23919,11 @@ var require_request3 = __commonJS({
         throwOnError,
         expectContinue
       }, handler2) {
-        if (typeof path11 !== "string") {
+        if (typeof path16 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path11[0] !== "/" && !(path11.startsWith("http://") || path11.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path16[0] !== "/" && !(path16.startsWith("http://") || path16.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path11) !== null) {
+        } else if (invalidPathRegex.exec(path16) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -23986,7 +23986,7 @@ var require_request3 = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util3.buildURL(path11, query) : path11;
+        this.path = query ? util3.buildURL(path16, query) : path16;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -24994,9 +24994,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util3.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path11 = search ? `${pathname}${search}` : pathname;
+        const path16 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path11;
+        this.opts.path = path16;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -25454,8 +25454,8 @@ var require_client2 = __commonJS({
       this[kSocket][kError] = err;
       onError(this[kClient], err);
     }
-    function onHttp2FrameError(type, code, id) {
-      const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
+    function onHttp2FrameError(type, code2, id) {
+      const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code2}`);
       if (id === 0) {
         this[kSocket][kError] = err;
         onError(this[kClient], err);
@@ -25465,9 +25465,9 @@ var require_client2 = __commonJS({
       util3.destroy(this, new SocketError("other side closed"));
       util3.destroy(this[kSocket], new SocketError("other side closed"));
     }
-    function onHTTP2GoAway(code) {
+    function onHTTP2GoAway(code2) {
       const client2 = this[kClient];
-      const err = new InformationalError(`HTTP/2: "GOAWAY" frame received with code ${code}`);
+      const err = new InformationalError(`HTTP/2: "GOAWAY" frame received with code ${code2}`);
       client2[kSocket] = null;
       client2[kHTTP2Session] = null;
       if (client2.destroyed) {
@@ -26236,7 +26236,7 @@ var require_client2 = __commonJS({
         writeH2(client2, client2[kHTTP2Session], request2);
         return;
       }
-      const { body: body2, method, path: path11, host, upgrade, headers, blocking, reset } = request2;
+      const { body: body2, method, path: path16, host, upgrade, headers, blocking, reset } = request2;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
         body2.read(0);
@@ -26286,7 +26286,7 @@ var require_client2 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path11} HTTP/1.1\r
+      let header = `${method} ${path16} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -26349,7 +26349,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client2, session, request2) {
-      const { body: body2, method, path: path11, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
+      const { body: body2, method, path: path16, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -26392,7 +26392,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path11;
+      headers[HTTP2_HEADER_PATH] = path16;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
@@ -26456,8 +26456,8 @@ upgrade: ${upgrade}\r
           util3.destroy(stream4, err);
         }
       });
-      stream4.once("frameError", (type, code) => {
-        const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
+      stream4.once("frameError", (type, code2) => {
+        const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code2}`);
         errorRequest2(client2, request2, err);
         if (client2[kHTTP2Session] && !client2[kHTTP2Session].destroyed && !this.closed && !this.destroyed) {
           h2State.streams -= 1;
@@ -28632,20 +28632,20 @@ var require_mock_utils2 = __commonJS({
       }
       return true;
     }
-    function safeUrl(path11) {
-      if (typeof path11 !== "string") {
-        return path11;
+    function safeUrl(path16) {
+      if (typeof path16 !== "string") {
+        return path16;
       }
-      const pathSegments = path11.split("?");
+      const pathSegments = path16.split("?");
       if (pathSegments.length !== 2) {
-        return path11;
+        return path16;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path11, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path11);
+    function matchKey(mockDispatch2, { path: path16, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path16);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -28663,7 +28663,7 @@ var require_mock_utils2 = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path11 }) => matchValue(safeUrl(path11), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path16 }) => matchValue(safeUrl(path16), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -28700,9 +28700,9 @@ var require_mock_utils2 = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path11, method, body: body2, headers, query } = opts;
+      const { path: path16, method, body: body2, headers, query } = opts;
       return {
-        path: path11,
+        path: path16,
         method,
         body: body2,
         headers,
@@ -29115,15 +29115,15 @@ var require_pluralizer2 = __commonJS({
       this: "these"
     };
     module2.exports = class Pluralizer {
-      constructor(singular, plural3) {
+      constructor(singular, plural4) {
         this.singular = singular;
-        this.plural = plural3;
+        this.plural = plural4;
       }
-      pluralize(count) {
-        const one = count === 1;
+      pluralize(count2) {
+        const one = count2 === 1;
         const keys = one ? singulars : plurals;
         const noun = one ? this.singular : this.plural;
-        return { ...keys, count, noun };
+        return { ...keys, count: count2, noun };
       }
     };
   }
@@ -29151,10 +29151,10 @@ var require_pending_interceptors_formatter2 = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path11, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path16, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path11,
+            Path: path16,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -29468,8 +29468,8 @@ var require_RetryHandler = __commonJS({
     var { isDisturbed, parseHeaders, parseRangeHeader } = require_util9();
     function calculateRetryAfterHeader(retryAfter) {
       const current = Date.now();
-      const diff = new Date(retryAfter).getTime() - current;
-      return diff;
+      const diff2 = new Date(retryAfter).getTime() - current;
+      return diff2;
     }
     var RetryHandler = class _RetryHandler {
       constructor(opts, handlers) {
@@ -29552,7 +29552,7 @@ var require_RetryHandler = __commonJS({
         if (this.handler.onBodySent) return this.handler.onBodySent(chunk);
       }
       static [kRetryHandlerDefaultRetry](err, { state: state3, opts }, cb) {
-        const { statusCode, code, headers } = err;
+        const { statusCode, code: code2, headers } = err;
         const { method, retryOptions } = opts;
         const {
           maxRetries,
@@ -29565,7 +29565,7 @@ var require_RetryHandler = __commonJS({
         } = retryOptions;
         let { counter, currentTimeout } = state3;
         currentTimeout = currentTimeout != null && currentTimeout > 0 ? currentTimeout : timeout;
-        if (code && code !== "UND_ERR_REQ_RETRY" && code !== "UND_ERR_SOCKET" && !errorCodes.includes(code)) {
+        if (code2 && code2 !== "UND_ERR_REQ_RETRY" && code2 !== "UND_ERR_SOCKET" && !errorCodes.includes(code2)) {
           cb(err);
           return;
         }
@@ -29807,8 +29807,8 @@ var require_headers2 = __commonJS({
     var assert = require("assert");
     var kHeadersMap = /* @__PURE__ */ Symbol("headers map");
     var kHeadersSortedMap = /* @__PURE__ */ Symbol("headers map sorted");
-    function isHTTPWhiteSpaceCharCode(code) {
-      return code === 10 || code === 13 || code === 9 || code === 32;
+    function isHTTPWhiteSpaceCharCode(code2) {
+      return code2 === 10 || code2 === 13 || code2 === 9 || code2 === 32;
     }
     function headerValueNormalize(potentialValue) {
       let i = 0;
@@ -30041,9 +30041,9 @@ var require_headers2 = __commonJS({
       // https://fetch.spec.whatwg.org/#dom-headers-getsetcookie
       getSetCookie() {
         webidl.brandCheck(this, _Headers);
-        const list = this[kHeadersList].cookies;
-        if (list) {
-          return [...list];
+        const list2 = this[kHeadersList].cookies;
+        if (list2) {
+          return [...list2];
         }
         return [];
       }
@@ -33751,33 +33751,33 @@ var require_util14 = __commonJS({
         return false;
       }
       for (const char of value) {
-        const code = char.charCodeAt(0);
-        if (code >= 0 || code <= 8 || (code >= 10 || code <= 31) || code === 127) {
+        const code2 = char.charCodeAt(0);
+        if (code2 >= 0 || code2 <= 8 || (code2 >= 10 || code2 <= 31) || code2 === 127) {
           return false;
         }
       }
     }
     function validateCookieName(name) {
       for (const char of name) {
-        const code = char.charCodeAt(0);
-        if (code <= 32 || code > 127 || char === "(" || char === ")" || char === ">" || char === "<" || char === "@" || char === "," || char === ";" || char === ":" || char === "\\" || char === '"' || char === "/" || char === "[" || char === "]" || char === "?" || char === "=" || char === "{" || char === "}") {
+        const code2 = char.charCodeAt(0);
+        if (code2 <= 32 || code2 > 127 || char === "(" || char === ")" || char === ">" || char === "<" || char === "@" || char === "," || char === ";" || char === ":" || char === "\\" || char === '"' || char === "/" || char === "[" || char === "]" || char === "?" || char === "=" || char === "{" || char === "}") {
           throw new Error("Invalid cookie name");
         }
       }
     }
     function validateCookieValue(value) {
       for (const char of value) {
-        const code = char.charCodeAt(0);
-        if (code < 33 || // exclude CTLs (0-31)
-        code === 34 || code === 44 || code === 59 || code === 92 || code > 126) {
+        const code2 = char.charCodeAt(0);
+        if (code2 < 33 || // exclude CTLs (0-31)
+        code2 === 34 || code2 === 44 || code2 === 59 || code2 === 92 || code2 > 126) {
           throw new Error("Invalid header value");
         }
       }
     }
-    function validateCookiePath(path11) {
-      for (const char of path11) {
-        const code = char.charCodeAt(0);
-        if (code < 33 || char === ";") {
+    function validateCookiePath(path16) {
+      for (const char of path16) {
+        const code2 = char.charCodeAt(0);
+        if (code2 < 33 || char === ";") {
           throw new Error("Invalid cookie path");
         }
       }
@@ -34508,21 +34508,21 @@ var require_util15 = __commonJS({
         return false;
       }
       for (const char of protocol) {
-        const code = char.charCodeAt(0);
-        if (code < 33 || code > 126 || char === "(" || char === ")" || char === "<" || char === ">" || char === "@" || char === "," || char === ";" || char === ":" || char === "\\" || char === '"' || char === "/" || char === "[" || char === "]" || char === "?" || char === "=" || char === "{" || char === "}" || code === 32 || // SP
-        code === 9) {
+        const code2 = char.charCodeAt(0);
+        if (code2 < 33 || code2 > 126 || char === "(" || char === ")" || char === "<" || char === ">" || char === "@" || char === "," || char === ";" || char === ":" || char === "\\" || char === '"' || char === "/" || char === "[" || char === "]" || char === "?" || char === "=" || char === "{" || char === "}" || code2 === 32 || // SP
+        code2 === 9) {
           return false;
         }
       }
       return true;
     }
-    function isValidStatusCode(code) {
-      if (code >= 1e3 && code < 1015) {
-        return code !== 1004 && // reserved
-        code !== 1005 && // "MUST NOT be set as a status code"
-        code !== 1006;
+    function isValidStatusCode(code2) {
+      if (code2 >= 1e3 && code2 < 1015) {
+        return code2 !== 1004 && // reserved
+        code2 !== 1005 && // "MUST NOT be set as a status code"
+        code2 !== 1006;
       }
-      return code >= 3e3 && code <= 4999;
+      return code2 >= 3e3 && code2 <= 4999;
     }
     function failWebsocketConnection(ws, reason) {
       const { [kController]: controller, [kResponse]: response } = ws;
@@ -34660,25 +34660,25 @@ var require_connection2 = __commonJS({
     function onSocketClose() {
       const { ws } = this;
       const wasClean = ws[kSentClose] && ws[kReceivedClose];
-      let code = 1005;
+      let code2 = 1005;
       let reason = "";
       const result = ws[kByteParser].closingInfo;
       if (result) {
-        code = result.code ?? 1005;
+        code2 = result.code ?? 1005;
         reason = result.reason;
       } else if (!ws[kSentClose]) {
-        code = 1006;
+        code2 = 1006;
       }
       ws[kReadyState] = states.CLOSED;
       fireEvent("close", ws, CloseEvent, {
         wasClean,
-        code,
+        code: code2,
         reason
       });
       if (channels.close.hasSubscribers) {
         channels.close.publish({
           websocket: ws,
-          code,
+          code: code2,
           reason
         });
       }
@@ -34956,21 +34956,21 @@ var require_receiver2 = __commonJS({
         return buffer2;
       }
       parseCloseBody(onlyCode, data) {
-        let code;
+        let code2;
         if (data.length >= 2) {
-          code = data.readUInt16BE(0);
+          code2 = data.readUInt16BE(0);
         }
         if (onlyCode) {
-          if (!isValidStatusCode(code)) {
+          if (!isValidStatusCode(code2)) {
             return null;
           }
-          return { code };
+          return { code: code2 };
         }
         let reason = data.subarray(2);
         if (reason[0] === 239 && reason[1] === 187 && reason[2] === 191) {
           reason = reason.subarray(3);
         }
-        if (code !== void 0 && !isValidStatusCode(code)) {
+        if (code2 !== void 0 && !isValidStatusCode(code2)) {
           return null;
         }
         try {
@@ -34978,7 +34978,7 @@ var require_receiver2 = __commonJS({
         } catch {
           return null;
         }
-        return { code, reason };
+        return { code: code2, reason };
       }
       get closingInfo() {
         return this.#info.closeInfo;
@@ -35088,16 +35088,16 @@ var require_websocket2 = __commonJS({
        * @param {number|undefined} code
        * @param {string|undefined} reason
        */
-      close(code = void 0, reason = void 0) {
+      close(code2 = void 0, reason = void 0) {
         webidl.brandCheck(this, _WebSocket);
-        if (code !== void 0) {
-          code = webidl.converters["unsigned short"](code, { clamp: true });
+        if (code2 !== void 0) {
+          code2 = webidl.converters["unsigned short"](code2, { clamp: true });
         }
         if (reason !== void 0) {
           reason = webidl.converters.USVString(reason);
         }
-        if (code !== void 0) {
-          if (code !== 1e3 && (code < 3e3 || code > 4999)) {
+        if (code2 !== void 0) {
+          if (code2 !== 1e3 && (code2 < 3e3 || code2 > 4999)) {
             throw new DOMException2("invalid code", "InvalidAccessError");
           }
         }
@@ -35117,12 +35117,12 @@ var require_websocket2 = __commonJS({
           this[kReadyState] = _WebSocket.CLOSING;
         } else if (!isClosing(this)) {
           const frame = new WebsocketFrameSend();
-          if (code !== void 0 && reason === void 0) {
+          if (code2 !== void 0 && reason === void 0) {
             frame.frameData = Buffer.allocUnsafe(2);
-            frame.frameData.writeUInt16BE(code, 0);
-          } else if (code !== void 0 && reason !== void 0) {
+            frame.frameData.writeUInt16BE(code2, 0);
+          } else if (code2 !== void 0 && reason !== void 0) {
             frame.frameData = Buffer.allocUnsafe(2 + reasonByteLength);
-            frame.frameData.writeUInt16BE(code, 0);
+            frame.frameData.writeUInt16BE(code2, 0);
             frame.frameData.write(reason, 2, "utf-8");
           } else {
             frame.frameData = emptyBuffer;
@@ -35455,11 +35455,11 @@ var require_undici2 = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path11 = opts.path;
+          let path16 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path11 = `/${path11}`;
+            path16 = `/${path16}`;
           }
-          url2 = new URL(util3.parseOrigin(url2).origin + path11);
+          url2 = new URL(util3.parseOrigin(url2).origin + path16);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -43312,11 +43312,11 @@ var require_rpc_error = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.RpcError = void 0;
     var RpcError = class extends Error {
-      constructor(message, code = "UNKNOWN", meta) {
+      constructor(message, code2 = "UNKNOWN", meta) {
         super(message);
         this.name = "RpcError";
         Object.setPrototypeOf(this, new.target.prototype);
-        this.code = code;
+        this.code = code2;
         this.meta = meta !== null && meta !== void 0 ? meta : {};
       }
       toString() {
@@ -43511,12 +43511,12 @@ var require_rpc_output_stream = __commonJS({
       onComplete(callback) {
         return this.addLis(callback, this._lis.cmp);
       }
-      addLis(callback, list) {
-        list.push(callback);
+      addLis(callback, list2) {
+        list2.push(callback);
         return () => {
-          let i = list.indexOf(callback);
+          let i = list2.indexOf(callback);
           if (i >= 0)
-            list.splice(i, 1);
+            list2.splice(i, 1);
         };
       }
       // remove all listeners
@@ -44575,20 +44575,20 @@ var require_ms = __commonJS({
     function fmtLong(ms) {
       var msAbs = Math.abs(ms);
       if (msAbs >= d) {
-        return plural3(ms, msAbs, d, "day");
+        return plural4(ms, msAbs, d, "day");
       }
       if (msAbs >= h) {
-        return plural3(ms, msAbs, h, "hour");
+        return plural4(ms, msAbs, h, "hour");
       }
       if (msAbs >= m) {
-        return plural3(ms, msAbs, m, "minute");
+        return plural4(ms, msAbs, m, "minute");
       }
       if (msAbs >= s) {
-        return plural3(ms, msAbs, s, "second");
+        return plural4(ms, msAbs, s, "second");
       }
       return ms + " ms";
     }
-    function plural3(ms, msAbs, n, name) {
+    function plural4(ms, msAbs, n, name) {
       var isPlural = msAbs >= n * 1.5;
       return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
     }
@@ -46097,8 +46097,8 @@ var require_minimatch = __commonJS({
       return new Minimatch(pattern, options).match(p);
     };
     module2.exports = minimatch;
-    var path11 = require_path();
-    minimatch.sep = path11.sep;
+    var path16 = require_path();
+    minimatch.sep = path16.sep;
     var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
     minimatch.GLOBSTAR = GLOBSTAR;
     var expand2 = require_brace_expansion();
@@ -46120,7 +46120,7 @@ var require_minimatch = __commonJS({
     var reSpecials = charSet("().*{}+?[]^$\\!");
     var addPatternStartSet = charSet("[.(");
     var slashSplit = /\/+/;
-    minimatch.filter = (pattern, options = {}) => (p, i, list) => minimatch(p, pattern, options);
+    minimatch.filter = (pattern, options = {}) => (p, i, list2) => minimatch(p, pattern, options);
     var ext = (a, b = {}) => {
       const t = {};
       Object.keys(a).forEach((k) => t[k] = a[k]);
@@ -46143,7 +46143,7 @@ var require_minimatch = __commonJS({
       m.defaults = (options) => orig.defaults(ext(def, options));
       m.makeRe = (pattern, options) => orig.makeRe(pattern, ext(def, options));
       m.braceExpand = (pattern, options) => orig.braceExpand(pattern, ext(def, options));
-      m.match = (list, pattern, options) => orig.match(list, pattern, ext(def, options));
+      m.match = (list2, pattern, options) => orig.match(list2, pattern, ext(def, options));
       return m;
     };
     minimatch.braceExpand = (pattern, options) => braceExpand(pattern, options);
@@ -46165,13 +46165,13 @@ var require_minimatch = __commonJS({
     };
     var SUBPARSE = /* @__PURE__ */ Symbol("subparse");
     minimatch.makeRe = (pattern, options) => new Minimatch(pattern, options || {}).makeRe();
-    minimatch.match = (list, pattern, options = {}) => {
+    minimatch.match = (list2, pattern, options = {}) => {
       const mm = new Minimatch(pattern, options);
-      list = list.filter((f) => mm.match(f));
-      if (mm.options.nonull && !list.length) {
-        list.push(pattern);
+      list2 = list2.filter((f) => mm.match(f));
+      if (mm.options.nonull && !list2.length) {
+        list2.push(pattern);
       }
-      return list;
+      return list2;
     };
     var globUnescape = (s) => s.replace(/\\(.)/g, "$1");
     var charUnescape = (s) => s.replace(/\\([^-\]])/g, "$1");
@@ -46704,8 +46704,8 @@ var require_minimatch = __commonJS({
         if (this.empty) return f === "";
         if (f === "/" && partial) return true;
         const options = this.options;
-        if (path11.sep !== "/") {
-          f = f.split(path11.sep).join("/");
+        if (path16.sep !== "/") {
+          f = f.split(path16.sep).join("/");
         }
         f = f.split(slashSplit);
         this.debug(this.pattern, "split", f);
@@ -46743,13 +46743,13 @@ var require_minimatch = __commonJS({
 var require_readdir_glob = __commonJS({
   "../node_modules/.pnpm/readdir-glob@1.1.3/node_modules/readdir-glob/index.js"(exports2, module2) {
     module2.exports = readdirGlob;
-    var fs10 = require("fs");
+    var fs15 = require("fs");
     var { EventEmitter: EventEmitter4 } = require("events");
     var { Minimatch } = require_minimatch();
     var { resolve: resolve3 } = require("path");
     function readdir2(dir, strict) {
       return new Promise((resolve4, reject) => {
-        fs10.readdir(dir, { withFileTypes: true }, (err, files) => {
+        fs15.readdir(dir, { withFileTypes: true }, (err, files) => {
           if (err) {
             switch (err.code) {
               case "ENOTDIR":
@@ -46782,7 +46782,7 @@ var require_readdir_glob = __commonJS({
     }
     function stat2(file, followSymlinks) {
       return new Promise((resolve4, reject) => {
-        const statFunc = followSymlinks ? fs10.stat : fs10.lstat;
+        const statFunc = followSymlinks ? fs15.stat : fs15.lstat;
         statFunc(file, (err, stats) => {
           if (err) {
             switch (err.code) {
@@ -46803,8 +46803,8 @@ var require_readdir_glob = __commonJS({
         });
       });
     }
-    async function* exploreWalkAsync(dir, path11, followSymlinks, useStat, shouldSkip, strict) {
-      let files = await readdir2(path11 + dir, strict);
+    async function* exploreWalkAsync(dir, path16, followSymlinks, useStat, shouldSkip, strict) {
+      let files = await readdir2(path16 + dir, strict);
       for (const file of files) {
         let name = file.name;
         if (name === void 0) {
@@ -46813,7 +46813,7 @@ var require_readdir_glob = __commonJS({
         }
         const filename = dir + "/" + name;
         const relative2 = filename.slice(1);
-        const absolute = path11 + "/" + relative2;
+        const absolute = path16 + "/" + relative2;
         let stats = null;
         if (useStat || followSymlinks) {
           stats = await stat2(absolute, followSymlinks);
@@ -46827,15 +46827,15 @@ var require_readdir_glob = __commonJS({
         if (stats.isDirectory()) {
           if (!shouldSkip(relative2)) {
             yield { relative: relative2, absolute, stats };
-            yield* exploreWalkAsync(filename, path11, followSymlinks, useStat, shouldSkip, false);
+            yield* exploreWalkAsync(filename, path16, followSymlinks, useStat, shouldSkip, false);
           }
         } else {
           yield { relative: relative2, absolute, stats };
         }
       }
     }
-    async function* explore(path11, followSymlinks, useStat, shouldSkip) {
-      yield* exploreWalkAsync("", path11, followSymlinks, useStat, shouldSkip, true);
+    async function* explore(path16, followSymlinks, useStat, shouldSkip) {
+      yield* exploreWalkAsync("", path16, followSymlinks, useStat, shouldSkip, true);
     }
     function readOptions(options) {
       return {
@@ -48518,9 +48518,9 @@ var require_async = __commonJS({
         }
         return result;
       }
-      function timesLimit(count, limit, iteratee, callback) {
+      function timesLimit(count2, limit, iteratee, callback) {
         var _iteratee = wrapAsync(iteratee);
-        return mapLimit$1(range2(count), limit, _iteratee, callback);
+        return mapLimit$1(range2(count2), limit, _iteratee, callback);
       }
       function times(n, iteratee, callback) {
         return timesLimit(n, Infinity, iteratee, callback);
@@ -48847,54 +48847,54 @@ var require_polyfills = __commonJS({
     }
     var chdir;
     module2.exports = patch;
-    function patch(fs10) {
+    function patch(fs15) {
       if (constants3.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-        patchLchmod(fs10);
+        patchLchmod(fs15);
       }
-      if (!fs10.lutimes) {
-        patchLutimes(fs10);
+      if (!fs15.lutimes) {
+        patchLutimes(fs15);
       }
-      fs10.chown = chownFix(fs10.chown);
-      fs10.fchown = chownFix(fs10.fchown);
-      fs10.lchown = chownFix(fs10.lchown);
-      fs10.chmod = chmodFix(fs10.chmod);
-      fs10.fchmod = chmodFix(fs10.fchmod);
-      fs10.lchmod = chmodFix(fs10.lchmod);
-      fs10.chownSync = chownFixSync(fs10.chownSync);
-      fs10.fchownSync = chownFixSync(fs10.fchownSync);
-      fs10.lchownSync = chownFixSync(fs10.lchownSync);
-      fs10.chmodSync = chmodFixSync(fs10.chmodSync);
-      fs10.fchmodSync = chmodFixSync(fs10.fchmodSync);
-      fs10.lchmodSync = chmodFixSync(fs10.lchmodSync);
-      fs10.stat = statFix(fs10.stat);
-      fs10.fstat = statFix(fs10.fstat);
-      fs10.lstat = statFix(fs10.lstat);
-      fs10.statSync = statFixSync(fs10.statSync);
-      fs10.fstatSync = statFixSync(fs10.fstatSync);
-      fs10.lstatSync = statFixSync(fs10.lstatSync);
-      if (fs10.chmod && !fs10.lchmod) {
-        fs10.lchmod = function(path11, mode, cb) {
+      fs15.chown = chownFix(fs15.chown);
+      fs15.fchown = chownFix(fs15.fchown);
+      fs15.lchown = chownFix(fs15.lchown);
+      fs15.chmod = chmodFix(fs15.chmod);
+      fs15.fchmod = chmodFix(fs15.fchmod);
+      fs15.lchmod = chmodFix(fs15.lchmod);
+      fs15.chownSync = chownFixSync(fs15.chownSync);
+      fs15.fchownSync = chownFixSync(fs15.fchownSync);
+      fs15.lchownSync = chownFixSync(fs15.lchownSync);
+      fs15.chmodSync = chmodFixSync(fs15.chmodSync);
+      fs15.fchmodSync = chmodFixSync(fs15.fchmodSync);
+      fs15.lchmodSync = chmodFixSync(fs15.lchmodSync);
+      fs15.stat = statFix(fs15.stat);
+      fs15.fstat = statFix(fs15.fstat);
+      fs15.lstat = statFix(fs15.lstat);
+      fs15.statSync = statFixSync(fs15.statSync);
+      fs15.fstatSync = statFixSync(fs15.fstatSync);
+      fs15.lstatSync = statFixSync(fs15.lstatSync);
+      if (fs15.chmod && !fs15.lchmod) {
+        fs15.lchmod = function(path16, mode, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs10.lchmodSync = function() {
+        fs15.lchmodSync = function() {
         };
       }
-      if (fs10.chown && !fs10.lchown) {
-        fs10.lchown = function(path11, uid, gid, cb) {
+      if (fs15.chown && !fs15.lchown) {
+        fs15.lchown = function(path16, uid, gid, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs10.lchownSync = function() {
+        fs15.lchownSync = function() {
         };
       }
       if (platform2 === "win32") {
-        fs10.rename = typeof fs10.rename !== "function" ? fs10.rename : (function(fs$rename) {
+        fs15.rename = typeof fs15.rename !== "function" ? fs15.rename : (function(fs$rename) {
           function rename2(from, to, cb) {
             var start = Date.now();
             var backoff = 0;
             fs$rename(from, to, function CB(er) {
               if (er && (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") && Date.now() - start < 6e4) {
                 setTimeout(function() {
-                  fs10.stat(to, function(stater, st) {
+                  fs15.stat(to, function(stater, st) {
                     if (stater && stater.code === "ENOENT")
                       fs$rename(from, to, CB);
                     else
@@ -48910,9 +48910,9 @@ var require_polyfills = __commonJS({
           }
           if (Object.setPrototypeOf) Object.setPrototypeOf(rename2, fs$rename);
           return rename2;
-        })(fs10.rename);
+        })(fs15.rename);
       }
-      fs10.read = typeof fs10.read !== "function" ? fs10.read : (function(fs$read) {
+      fs15.read = typeof fs15.read !== "function" ? fs15.read : (function(fs$read) {
         function read(fd, buffer2, offset, length, position, callback_) {
           var callback;
           if (callback_ && typeof callback_ === "function") {
@@ -48920,22 +48920,22 @@ var require_polyfills = __commonJS({
             callback = function(er, _2, __) {
               if (er && er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
-                return fs$read.call(fs10, fd, buffer2, offset, length, position, callback);
+                return fs$read.call(fs15, fd, buffer2, offset, length, position, callback);
               }
               callback_.apply(this, arguments);
             };
           }
-          return fs$read.call(fs10, fd, buffer2, offset, length, position, callback);
+          return fs$read.call(fs15, fd, buffer2, offset, length, position, callback);
         }
         if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
         return read;
-      })(fs10.read);
-      fs10.readSync = typeof fs10.readSync !== "function" ? fs10.readSync : /* @__PURE__ */ (function(fs$readSync) {
+      })(fs15.read);
+      fs15.readSync = typeof fs15.readSync !== "function" ? fs15.readSync : /* @__PURE__ */ (function(fs$readSync) {
         return function(fd, buffer2, offset, length, position) {
           var eagCounter = 0;
           while (true) {
             try {
-              return fs$readSync.call(fs10, fd, buffer2, offset, length, position);
+              return fs$readSync.call(fs15, fd, buffer2, offset, length, position);
             } catch (er) {
               if (er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
@@ -48945,11 +48945,11 @@ var require_polyfills = __commonJS({
             }
           }
         };
-      })(fs10.readSync);
-      function patchLchmod(fs11) {
-        fs11.lchmod = function(path11, mode, callback) {
-          fs11.open(
-            path11,
+      })(fs15.readSync);
+      function patchLchmod(fs16) {
+        fs16.lchmod = function(path16, mode, callback) {
+          fs16.open(
+            path16,
             constants3.O_WRONLY | constants3.O_SYMLINK,
             mode,
             function(err, fd) {
@@ -48957,80 +48957,80 @@ var require_polyfills = __commonJS({
                 if (callback) callback(err);
                 return;
               }
-              fs11.fchmod(fd, mode, function(err2) {
-                fs11.close(fd, function(err22) {
+              fs16.fchmod(fd, mode, function(err2) {
+                fs16.close(fd, function(err22) {
                   if (callback) callback(err2 || err22);
                 });
               });
             }
           );
         };
-        fs11.lchmodSync = function(path11, mode) {
-          var fd = fs11.openSync(path11, constants3.O_WRONLY | constants3.O_SYMLINK, mode);
+        fs16.lchmodSync = function(path16, mode) {
+          var fd = fs16.openSync(path16, constants3.O_WRONLY | constants3.O_SYMLINK, mode);
           var threw = true;
           var ret;
           try {
-            ret = fs11.fchmodSync(fd, mode);
+            ret = fs16.fchmodSync(fd, mode);
             threw = false;
           } finally {
             if (threw) {
               try {
-                fs11.closeSync(fd);
+                fs16.closeSync(fd);
               } catch (er) {
               }
             } else {
-              fs11.closeSync(fd);
+              fs16.closeSync(fd);
             }
           }
           return ret;
         };
       }
-      function patchLutimes(fs11) {
-        if (constants3.hasOwnProperty("O_SYMLINK") && fs11.futimes) {
-          fs11.lutimes = function(path11, at, mt, cb) {
-            fs11.open(path11, constants3.O_SYMLINK, function(er, fd) {
+      function patchLutimes(fs16) {
+        if (constants3.hasOwnProperty("O_SYMLINK") && fs16.futimes) {
+          fs16.lutimes = function(path16, at, mt, cb) {
+            fs16.open(path16, constants3.O_SYMLINK, function(er, fd) {
               if (er) {
                 if (cb) cb(er);
                 return;
               }
-              fs11.futimes(fd, at, mt, function(er2) {
-                fs11.close(fd, function(er22) {
+              fs16.futimes(fd, at, mt, function(er2) {
+                fs16.close(fd, function(er22) {
                   if (cb) cb(er2 || er22);
                 });
               });
             });
           };
-          fs11.lutimesSync = function(path11, at, mt) {
-            var fd = fs11.openSync(path11, constants3.O_SYMLINK);
+          fs16.lutimesSync = function(path16, at, mt) {
+            var fd = fs16.openSync(path16, constants3.O_SYMLINK);
             var ret;
             var threw = true;
             try {
-              ret = fs11.futimesSync(fd, at, mt);
+              ret = fs16.futimesSync(fd, at, mt);
               threw = false;
             } finally {
               if (threw) {
                 try {
-                  fs11.closeSync(fd);
+                  fs16.closeSync(fd);
                 } catch (er) {
                 }
               } else {
-                fs11.closeSync(fd);
+                fs16.closeSync(fd);
               }
             }
             return ret;
           };
-        } else if (fs11.futimes) {
-          fs11.lutimes = function(_a, _b, _c, cb) {
+        } else if (fs16.futimes) {
+          fs16.lutimes = function(_a, _b, _c, cb) {
             if (cb) process.nextTick(cb);
           };
-          fs11.lutimesSync = function() {
+          fs16.lutimesSync = function() {
           };
         }
       }
       function chmodFix(orig) {
         if (!orig) return orig;
         return function(target, mode, cb) {
-          return orig.call(fs10, target, mode, function(er) {
+          return orig.call(fs15, target, mode, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -49040,7 +49040,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, mode) {
           try {
-            return orig.call(fs10, target, mode);
+            return orig.call(fs15, target, mode);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -49049,7 +49049,7 @@ var require_polyfills = __commonJS({
       function chownFix(orig) {
         if (!orig) return orig;
         return function(target, uid, gid, cb) {
-          return orig.call(fs10, target, uid, gid, function(er) {
+          return orig.call(fs15, target, uid, gid, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -49059,7 +49059,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, uid, gid) {
           try {
-            return orig.call(fs10, target, uid, gid);
+            return orig.call(fs15, target, uid, gid);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -49079,13 +49079,13 @@ var require_polyfills = __commonJS({
             }
             if (cb) cb.apply(this, arguments);
           }
-          return options ? orig.call(fs10, target, options, callback) : orig.call(fs10, target, callback);
+          return options ? orig.call(fs15, target, options, callback) : orig.call(fs15, target, callback);
         };
       }
       function statFixSync(orig) {
         if (!orig) return orig;
         return function(target, options) {
-          var stats = options ? orig.call(fs10, target, options) : orig.call(fs10, target);
+          var stats = options ? orig.call(fs15, target, options) : orig.call(fs15, target);
           if (stats) {
             if (stats.uid < 0) stats.uid += 4294967296;
             if (stats.gid < 0) stats.gid += 4294967296;
@@ -49114,16 +49114,16 @@ var require_legacy_streams = __commonJS({
   "../node_modules/.pnpm/graceful-fs@4.2.11/node_modules/graceful-fs/legacy-streams.js"(exports2, module2) {
     var Stream = require("stream").Stream;
     module2.exports = legacy;
-    function legacy(fs10) {
+    function legacy(fs15) {
       return {
         ReadStream,
         WriteStream
       };
-      function ReadStream(path11, options) {
-        if (!(this instanceof ReadStream)) return new ReadStream(path11, options);
+      function ReadStream(path16, options) {
+        if (!(this instanceof ReadStream)) return new ReadStream(path16, options);
         Stream.call(this);
         var self2 = this;
-        this.path = path11;
+        this.path = path16;
         this.fd = null;
         this.readable = true;
         this.paused = false;
@@ -49157,7 +49157,7 @@ var require_legacy_streams = __commonJS({
           });
           return;
         }
-        fs10.open(this.path, this.flags, this.mode, function(err, fd) {
+        fs15.open(this.path, this.flags, this.mode, function(err, fd) {
           if (err) {
             self2.emit("error", err);
             self2.readable = false;
@@ -49168,10 +49168,10 @@ var require_legacy_streams = __commonJS({
           self2._read();
         });
       }
-      function WriteStream(path11, options) {
-        if (!(this instanceof WriteStream)) return new WriteStream(path11, options);
+      function WriteStream(path16, options) {
+        if (!(this instanceof WriteStream)) return new WriteStream(path16, options);
         Stream.call(this);
-        this.path = path11;
+        this.path = path16;
         this.fd = null;
         this.writable = true;
         this.flags = "w";
@@ -49196,7 +49196,7 @@ var require_legacy_streams = __commonJS({
         this.busy = false;
         this._queue = [];
         if (this.fd === null) {
-          this._open = fs10.open;
+          this._open = fs15.open;
           this._queue.push([this._open, this.path, this.flags, this.mode, void 0]);
           this.flush();
         }
@@ -49231,7 +49231,7 @@ var require_clone = __commonJS({
 // ../node_modules/.pnpm/graceful-fs@4.2.11/node_modules/graceful-fs/graceful-fs.js
 var require_graceful_fs = __commonJS({
   "../node_modules/.pnpm/graceful-fs@4.2.11/node_modules/graceful-fs/graceful-fs.js"(exports2, module2) {
-    var fs10 = require("fs");
+    var fs15 = require("fs");
     var polyfills = require_polyfills();
     var legacy = require_legacy_streams();
     var clone = require_clone();
@@ -49263,12 +49263,12 @@ var require_graceful_fs = __commonJS({
         m = "GFS4: " + m.split(/\n/).join("\nGFS4: ");
         console.error(m);
       };
-    if (!fs10[gracefulQueue]) {
+    if (!fs15[gracefulQueue]) {
       queue = global[gracefulQueue] || [];
-      publishQueue(fs10, queue);
-      fs10.close = (function(fs$close) {
+      publishQueue(fs15, queue);
+      fs15.close = (function(fs$close) {
         function close(fd, cb) {
-          return fs$close.call(fs10, fd, function(err) {
+          return fs$close.call(fs15, fd, function(err) {
             if (!err) {
               resetQueue();
             }
@@ -49280,48 +49280,48 @@ var require_graceful_fs = __commonJS({
           value: fs$close
         });
         return close;
-      })(fs10.close);
-      fs10.closeSync = (function(fs$closeSync) {
+      })(fs15.close);
+      fs15.closeSync = (function(fs$closeSync) {
         function closeSync(fd) {
-          fs$closeSync.apply(fs10, arguments);
+          fs$closeSync.apply(fs15, arguments);
           resetQueue();
         }
         Object.defineProperty(closeSync, previousSymbol, {
           value: fs$closeSync
         });
         return closeSync;
-      })(fs10.closeSync);
+      })(fs15.closeSync);
       if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) {
         process.on("exit", function() {
-          debug2(fs10[gracefulQueue]);
-          require("assert").equal(fs10[gracefulQueue].length, 0);
+          debug2(fs15[gracefulQueue]);
+          require("assert").equal(fs15[gracefulQueue].length, 0);
         });
       }
     }
     var queue;
     if (!global[gracefulQueue]) {
-      publishQueue(global, fs10[gracefulQueue]);
+      publishQueue(global, fs15[gracefulQueue]);
     }
-    module2.exports = patch(clone(fs10));
-    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs10.__patched) {
-      module2.exports = patch(fs10);
-      fs10.__patched = true;
+    module2.exports = patch(clone(fs15));
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs15.__patched) {
+      module2.exports = patch(fs15);
+      fs15.__patched = true;
     }
-    function patch(fs11) {
-      polyfills(fs11);
-      fs11.gracefulify = patch;
-      fs11.createReadStream = createReadStream2;
-      fs11.createWriteStream = createWriteStream2;
-      var fs$readFile = fs11.readFile;
-      fs11.readFile = readFile;
-      function readFile(path11, options, cb) {
+    function patch(fs16) {
+      polyfills(fs16);
+      fs16.gracefulify = patch;
+      fs16.createReadStream = createReadStream2;
+      fs16.createWriteStream = createWriteStream2;
+      var fs$readFile = fs16.readFile;
+      fs16.readFile = readFile;
+      function readFile(path16, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$readFile(path11, options, cb);
-        function go$readFile(path12, options2, cb2, startTime) {
-          return fs$readFile(path12, options2, function(err) {
+        return go$readFile(path16, options, cb);
+        function go$readFile(path17, options2, cb2, startTime) {
+          return fs$readFile(path17, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$readFile, [path12, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$readFile, [path17, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -49329,16 +49329,16 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$writeFile = fs11.writeFile;
-      fs11.writeFile = writeFile2;
-      function writeFile2(path11, data, options, cb) {
+      var fs$writeFile = fs16.writeFile;
+      fs16.writeFile = writeFile2;
+      function writeFile2(path16, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$writeFile(path11, data, options, cb);
-        function go$writeFile(path12, data2, options2, cb2, startTime) {
-          return fs$writeFile(path12, data2, options2, function(err) {
+        return go$writeFile(path16, data, options, cb);
+        function go$writeFile(path17, data2, options2, cb2, startTime) {
+          return fs$writeFile(path17, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$writeFile, [path12, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$writeFile, [path17, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -49346,17 +49346,17 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$appendFile = fs11.appendFile;
+      var fs$appendFile = fs16.appendFile;
       if (fs$appendFile)
-        fs11.appendFile = appendFile2;
-      function appendFile2(path11, data, options, cb) {
+        fs16.appendFile = appendFile2;
+      function appendFile2(path16, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$appendFile(path11, data, options, cb);
-        function go$appendFile(path12, data2, options2, cb2, startTime) {
-          return fs$appendFile(path12, data2, options2, function(err) {
+        return go$appendFile(path16, data, options, cb);
+        function go$appendFile(path17, data2, options2, cb2, startTime) {
+          return fs$appendFile(path17, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$appendFile, [path12, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$appendFile, [path17, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -49364,9 +49364,9 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$copyFile = fs11.copyFile;
+      var fs$copyFile = fs16.copyFile;
       if (fs$copyFile)
-        fs11.copyFile = copyFile2;
+        fs16.copyFile = copyFile2;
       function copyFile2(src, dest, flags, cb) {
         if (typeof flags === "function") {
           cb = flags;
@@ -49384,34 +49384,34 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$readdir = fs11.readdir;
-      fs11.readdir = readdir2;
+      var fs$readdir = fs16.readdir;
+      fs16.readdir = readdir2;
       var noReaddirOptionVersions = /^v[0-5]\./;
-      function readdir2(path11, options, cb) {
+      function readdir2(path16, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path12, options2, cb2, startTime) {
-          return fs$readdir(path12, fs$readdirCallback(
-            path12,
+        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path17, options2, cb2, startTime) {
+          return fs$readdir(path17, fs$readdirCallback(
+            path17,
             options2,
             cb2,
             startTime
           ));
-        } : function go$readdir2(path12, options2, cb2, startTime) {
-          return fs$readdir(path12, options2, fs$readdirCallback(
-            path12,
+        } : function go$readdir2(path17, options2, cb2, startTime) {
+          return fs$readdir(path17, options2, fs$readdirCallback(
+            path17,
             options2,
             cb2,
             startTime
           ));
         };
-        return go$readdir(path11, options, cb);
-        function fs$readdirCallback(path12, options2, cb2, startTime) {
+        return go$readdir(path16, options, cb);
+        function fs$readdirCallback(path17, options2, cb2, startTime) {
           return function(err, files) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
               enqueue([
                 go$readdir,
-                [path12, options2, cb2],
+                [path17, options2, cb2],
                 err,
                 startTime || Date.now(),
                 Date.now()
@@ -49426,21 +49426,21 @@ var require_graceful_fs = __commonJS({
         }
       }
       if (process.version.substr(0, 4) === "v0.8") {
-        var legStreams = legacy(fs11);
+        var legStreams = legacy(fs16);
         ReadStream = legStreams.ReadStream;
         WriteStream = legStreams.WriteStream;
       }
-      var fs$ReadStream = fs11.ReadStream;
+      var fs$ReadStream = fs16.ReadStream;
       if (fs$ReadStream) {
         ReadStream.prototype = Object.create(fs$ReadStream.prototype);
         ReadStream.prototype.open = ReadStream$open;
       }
-      var fs$WriteStream = fs11.WriteStream;
+      var fs$WriteStream = fs16.WriteStream;
       if (fs$WriteStream) {
         WriteStream.prototype = Object.create(fs$WriteStream.prototype);
         WriteStream.prototype.open = WriteStream$open;
       }
-      Object.defineProperty(fs11, "ReadStream", {
+      Object.defineProperty(fs16, "ReadStream", {
         get: function() {
           return ReadStream;
         },
@@ -49450,7 +49450,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      Object.defineProperty(fs11, "WriteStream", {
+      Object.defineProperty(fs16, "WriteStream", {
         get: function() {
           return WriteStream;
         },
@@ -49461,7 +49461,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileReadStream = ReadStream;
-      Object.defineProperty(fs11, "FileReadStream", {
+      Object.defineProperty(fs16, "FileReadStream", {
         get: function() {
           return FileReadStream;
         },
@@ -49472,7 +49472,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileWriteStream = WriteStream;
-      Object.defineProperty(fs11, "FileWriteStream", {
+      Object.defineProperty(fs16, "FileWriteStream", {
         get: function() {
           return FileWriteStream;
         },
@@ -49482,7 +49482,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      function ReadStream(path11, options) {
+      function ReadStream(path16, options) {
         if (this instanceof ReadStream)
           return fs$ReadStream.apply(this, arguments), this;
         else
@@ -49502,7 +49502,7 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function WriteStream(path11, options) {
+      function WriteStream(path16, options) {
         if (this instanceof WriteStream)
           return fs$WriteStream.apply(this, arguments), this;
         else
@@ -49520,22 +49520,22 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function createReadStream2(path11, options) {
-        return new fs11.ReadStream(path11, options);
+      function createReadStream2(path16, options) {
+        return new fs16.ReadStream(path16, options);
       }
-      function createWriteStream2(path11, options) {
-        return new fs11.WriteStream(path11, options);
+      function createWriteStream2(path16, options) {
+        return new fs16.WriteStream(path16, options);
       }
-      var fs$open = fs11.open;
-      fs11.open = open2;
-      function open2(path11, flags, mode, cb) {
+      var fs$open = fs16.open;
+      fs16.open = open2;
+      function open2(path16, flags, mode, cb) {
         if (typeof mode === "function")
           cb = mode, mode = null;
-        return go$open(path11, flags, mode, cb);
-        function go$open(path12, flags2, mode2, cb2, startTime) {
-          return fs$open(path12, flags2, mode2, function(err, fd) {
+        return go$open(path16, flags, mode, cb);
+        function go$open(path17, flags2, mode2, cb2, startTime) {
+          return fs$open(path17, flags2, mode2, function(err, fd) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$open, [path12, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$open, [path17, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -49543,20 +49543,20 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      return fs11;
+      return fs16;
     }
     function enqueue(elem) {
       debug2("ENQUEUE", elem[0].name, elem[1]);
-      fs10[gracefulQueue].push(elem);
+      fs15[gracefulQueue].push(elem);
       retry2();
     }
     var retryTimer;
     function resetQueue() {
       var now = Date.now();
-      for (var i = 0; i < fs10[gracefulQueue].length; ++i) {
-        if (fs10[gracefulQueue][i].length > 2) {
-          fs10[gracefulQueue][i][3] = now;
-          fs10[gracefulQueue][i][4] = now;
+      for (var i = 0; i < fs15[gracefulQueue].length; ++i) {
+        if (fs15[gracefulQueue][i].length > 2) {
+          fs15[gracefulQueue][i][3] = now;
+          fs15[gracefulQueue][i][4] = now;
         }
       }
       retry2();
@@ -49564,9 +49564,9 @@ var require_graceful_fs = __commonJS({
     function retry2() {
       clearTimeout(retryTimer);
       retryTimer = void 0;
-      if (fs10[gracefulQueue].length === 0)
+      if (fs15[gracefulQueue].length === 0)
         return;
-      var elem = fs10[gracefulQueue].shift();
+      var elem = fs15[gracefulQueue].shift();
       var fn = elem[0];
       var args = elem[1];
       var err = elem[2];
@@ -49588,7 +49588,7 @@ var require_graceful_fs = __commonJS({
           debug2("RETRY", fn.name, args);
           fn.apply(null, args.concat([startTime]));
         } else {
-          fs10[gracefulQueue].push(elem);
+          fs15[gracefulQueue].push(elem);
         }
       }
       if (retryTimer === void 0) {
@@ -49892,7 +49892,7 @@ var require_BufferList = __commonJS({
         this.head = this.tail = null;
         this.length = 0;
       };
-      BufferList.prototype.join = function join6(s) {
+      BufferList.prototype.join = function join11(s) {
         if (this.length === 0) return "";
         var p = this.head;
         var ret = "" + p.data;
@@ -50301,13 +50301,13 @@ var require_stream_writable = __commonJS({
         var buffer2 = new Array(l);
         var holder = state3.corkedRequestsFree;
         holder.entry = entry;
-        var count = 0;
+        var count2 = 0;
         var allBuffers = true;
         while (entry) {
-          buffer2[count] = entry;
+          buffer2[count2] = entry;
           if (!entry.isBuf) allBuffers = false;
           entry = entry.next;
-          count += 1;
+          count2 += 1;
         }
         buffer2.allBuffers = allBuffers;
         doWrite(stream4, state3, true, state3.length, buffer2, "", holder.finish);
@@ -51351,20 +51351,20 @@ var require_stream_readable = __commonJS({
       }
       return ret;
     }
-    function fromListPartial(n, list, hasStrings) {
+    function fromListPartial(n, list2, hasStrings) {
       var ret;
-      if (n < list.head.data.length) {
-        ret = list.head.data.slice(0, n);
-        list.head.data = list.head.data.slice(n);
-      } else if (n === list.head.data.length) {
-        ret = list.shift();
+      if (n < list2.head.data.length) {
+        ret = list2.head.data.slice(0, n);
+        list2.head.data = list2.head.data.slice(n);
+      } else if (n === list2.head.data.length) {
+        ret = list2.shift();
       } else {
-        ret = hasStrings ? copyFromBufferString(n, list) : copyFromBuffer(n, list);
+        ret = hasStrings ? copyFromBufferString(n, list2) : copyFromBuffer(n, list2);
       }
       return ret;
     }
-    function copyFromBufferString(n, list) {
-      var p = list.head;
+    function copyFromBufferString(n, list2) {
+      var p = list2.head;
       var c = 1;
       var ret = p.data;
       n -= ret.length;
@@ -51377,22 +51377,22 @@ var require_stream_readable = __commonJS({
         if (n === 0) {
           if (nb === str.length) {
             ++c;
-            if (p.next) list.head = p.next;
-            else list.head = list.tail = null;
+            if (p.next) list2.head = p.next;
+            else list2.head = list2.tail = null;
           } else {
-            list.head = p;
+            list2.head = p;
             p.data = str.slice(nb);
           }
           break;
         }
         ++c;
       }
-      list.length -= c;
+      list2.length -= c;
       return ret;
     }
-    function copyFromBuffer(n, list) {
+    function copyFromBuffer(n, list2) {
       var ret = Buffer3.allocUnsafe(n);
-      var p = list.head;
+      var p = list2.head;
       var c = 1;
       p.data.copy(ret);
       n -= p.data.length;
@@ -51404,17 +51404,17 @@ var require_stream_readable = __commonJS({
         if (n === 0) {
           if (nb === buf.length) {
             ++c;
-            if (p.next) list.head = p.next;
-            else list.head = list.tail = null;
+            if (p.next) list2.head = p.next;
+            else list2.head = list2.tail = null;
           } else {
-            list.head = p;
+            list2.head = p;
             p.data = buf.slice(nb);
           }
           break;
         }
         ++c;
       }
-      list.length -= c;
+      list2.length -= c;
       return ret;
     }
     function endReadable(stream4) {
@@ -51640,22 +51640,22 @@ var require_lazystream = __commonJS({
 // ../node_modules/.pnpm/normalize-path@3.0.0/node_modules/normalize-path/index.js
 var require_normalize_path = __commonJS({
   "../node_modules/.pnpm/normalize-path@3.0.0/node_modules/normalize-path/index.js"(exports2, module2) {
-    module2.exports = function(path11, stripTrailing) {
-      if (typeof path11 !== "string") {
+    module2.exports = function(path16, stripTrailing) {
+      if (typeof path16 !== "string") {
         throw new TypeError("expected path to be a string");
       }
-      if (path11 === "\\" || path11 === "/") return "/";
-      var len = path11.length;
-      if (len <= 1) return path11;
+      if (path16 === "\\" || path16 === "/") return "/";
+      var len = path16.length;
+      if (len <= 1) return path16;
       var prefix2 = "";
-      if (len > 4 && path11[3] === "\\") {
-        var ch = path11[2];
-        if ((ch === "?" || ch === ".") && path11.slice(0, 2) === "\\\\") {
-          path11 = path11.slice(2);
+      if (len > 4 && path16[3] === "\\") {
+        var ch = path16[2];
+        if ((ch === "?" || ch === ".") && path16.slice(0, 2) === "\\\\") {
+          path16 = path16.slice(2);
           prefix2 = "//";
         }
       }
-      var segs = path11.split(/[/\\]+/);
+      var segs = path16.split(/[/\\]+/);
       if (stripTrailing !== false && segs[segs.length - 1] === "") {
         segs.pop();
       }
@@ -51986,16 +51986,16 @@ var require_shortOut = __commonJS({
     var HOT_SPAN = 16;
     var nativeNow = Date.now;
     function shortOut(func) {
-      var count = 0, lastCalled = 0;
+      var count2 = 0, lastCalled = 0;
       return function() {
         var stamp = nativeNow(), remaining = HOT_SPAN - (stamp - lastCalled);
         lastCalled = stamp;
         if (remaining > 0) {
-          if (++count >= HOT_COUNT) {
+          if (++count2 >= HOT_COUNT) {
             return arguments[0];
           }
         } else {
-          count = 0;
+          count2 = 0;
         }
         return func.apply(void 0, arguments);
       };
@@ -52625,16 +52625,16 @@ var require_errors3 = __commonJS({
       }
       return format(msg, ...args);
     }
-    function E(code, message, Base) {
+    function E(code2, message, Base) {
       if (!Base) {
         Base = Error;
       }
       class NodeError extends Base {
         constructor(...args) {
-          super(getMessage(code, message, args));
+          super(getMessage(code2, message, args));
         }
         toString() {
-          return `${this.name} [${code}]: ${this.message}`;
+          return `${this.name} [${code2}]: ${this.message}`;
         }
       }
       Object.defineProperties(NodeError.prototype, {
@@ -52646,16 +52646,16 @@ var require_errors3 = __commonJS({
         },
         toString: {
           value() {
-            return `${this.name} [${code}]: ${this.message}`;
+            return `${this.name} [${code2}]: ${this.message}`;
           },
           writable: true,
           enumerable: false,
           configurable: true
         }
       });
-      NodeError.prototype.code = code;
+      NodeError.prototype.code = code2;
       NodeError.prototype[kIsNodeError] = true;
-      codes[code] = NodeError;
+      codes[code2] = NodeError;
     }
     function hideStackFrames(fn) {
       const hidden = nodeInternalPrefix + fn.name;
@@ -53784,10 +53784,10 @@ var require_validators = __commonJS({
         );
       }
     }
-    var validateOneOf = hideStackFrames((value, name, oneOf) => {
-      if (!ArrayPrototypeIncludes(oneOf, value)) {
+    var validateOneOf = hideStackFrames((value, name, oneOf2) => {
+      if (!ArrayPrototypeIncludes(oneOf2, value)) {
         const allowed = ArrayPrototypeJoin(
-          ArrayPrototypeMap(oneOf, (v) => typeof v === "string" ? `'${v}'` : String2(v)),
+          ArrayPrototypeMap(oneOf2, (v) => typeof v === "string" ? `'${v}'` : String2(v)),
           ", "
         );
         const reason = "must be one of: " + allowed;
@@ -53886,9 +53886,9 @@ var require_validators = __commonJS({
     var validateUndefined = hideStackFrames((value, name) => {
       if (value !== void 0) throw new ERR_INVALID_ARG_TYPE(name, "undefined", value);
     });
-    function validateUnion(value, name, union) {
-      if (!ArrayPrototypeIncludes(union, value)) {
-        throw new ERR_INVALID_ARG_TYPE(name, `('${ArrayPrototypeJoin(union, "|")}')`, value);
+    function validateUnion(value, name, union2) {
+      if (!ArrayPrototypeIncludes(union2, value)) {
+        throw new ERR_INVALID_ARG_TYPE(name, `('${ArrayPrototypeJoin(union2, "|")}')`, value);
       }
     }
     var linkValueRegExp = /^(?:<[^>]*>)(?:\s*;\s*[^;"\s]+(?:=(")?[^;"\s]*\1)?)*$/;
@@ -56646,17 +56646,17 @@ var require_writable = __commonJS({
         }
       }
     }
-    function afterWriteTick({ stream: stream4, state: state3, count, cb }) {
+    function afterWriteTick({ stream: stream4, state: state3, count: count2, cb }) {
       state3.afterWriteTickInfo = null;
-      return afterWrite(stream4, state3, count, cb);
+      return afterWrite(stream4, state3, count2, cb);
     }
-    function afterWrite(stream4, state3, count, cb) {
+    function afterWrite(stream4, state3, count2, cb) {
       const needDrain = !state3.ending && !stream4.destroyed && state3.length === 0 && state3.needDrain;
       if (needDrain) {
         state3.needDrain = false;
         stream4.emit("drain");
       }
-      while (count-- > 0) {
+      while (count2-- > 0) {
         state3.pendingcb--;
         cb();
       }
@@ -59577,10 +59577,10 @@ var require_union = __commonJS({
     var baseRest = require_baseRest();
     var baseUniq = require_baseUniq();
     var isArrayLikeObject = require_isArrayLikeObject();
-    var union = baseRest(function(arrays) {
+    var union2 = baseRest(function(arrays) {
       return baseUniq(baseFlatten(arrays, 1, isArrayLikeObject, true));
     });
-    module2.exports = union;
+    module2.exports = union2;
   }
 });
 
@@ -60711,11 +60711,11 @@ var require_commonjs3 = __commonJS({
       return (f) => f.length === len && f !== "." && f !== "..";
     };
     var defaultPlatform = typeof process === "object" && process ? typeof process.env === "object" && process.env && process.env.__MINIMATCH_TESTING_PLATFORM__ || process.platform : "posix";
-    var path11 = {
+    var path16 = {
       win32: { sep: "\\" },
       posix: { sep: "/" }
     };
-    exports2.sep = defaultPlatform === "win32" ? path11.win32.sep : path11.posix.sep;
+    exports2.sep = defaultPlatform === "win32" ? path16.win32.sep : path16.posix.sep;
     exports2.minimatch.sep = exports2.sep;
     exports2.GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
     exports2.minimatch.GLOBSTAR = exports2.GLOBSTAR;
@@ -60758,7 +60758,7 @@ var require_commonjs3 = __commonJS({
         defaults: (options) => orig.defaults(ext(def, options)),
         makeRe: (pattern, options = {}) => orig.makeRe(pattern, ext(def, options)),
         braceExpand: (pattern, options = {}) => orig.braceExpand(pattern, ext(def, options)),
-        match: (list, pattern, options = {}) => orig.match(list, pattern, ext(def, options)),
+        match: (list2, pattern, options = {}) => orig.match(list2, pattern, ext(def, options)),
         sep: orig.sep,
         GLOBSTAR: exports2.GLOBSTAR
       });
@@ -60777,13 +60777,13 @@ var require_commonjs3 = __commonJS({
     var makeRe = (pattern, options = {}) => new Minimatch(pattern, options).makeRe();
     exports2.makeRe = makeRe;
     exports2.minimatch.makeRe = exports2.makeRe;
-    var match = (list, pattern, options = {}) => {
+    var match = (list2, pattern, options = {}) => {
       const mm = new Minimatch(pattern, options);
-      list = list.filter((f) => mm.match(f));
-      if (mm.options.nonull && !list.length) {
-        list.push(pattern);
+      list2 = list2.filter((f) => mm.match(f));
+      if (mm.options.nonull && !list2.length) {
+        list2.push(pattern);
       }
-      return list;
+      return list2;
     };
     exports2.match = match;
     exports2.minimatch.match = exports2.match;
@@ -61469,8 +61469,8 @@ var require_commonjs4 = __commonJS({
     var perf = typeof performance === "object" && performance && typeof performance.now === "function" ? performance : Date;
     var warned = /* @__PURE__ */ new Set();
     var PROCESS = typeof process === "object" && !!process ? process : {};
-    var emitWarning = (msg, type, code, fn) => {
-      typeof PROCESS.emitWarning === "function" ? PROCESS.emitWarning(msg, type, code, fn) : console.error(`[${code}] ${type}: ${msg}`);
+    var emitWarning = (msg, type, code2, fn) => {
+      typeof PROCESS.emitWarning === "function" ? PROCESS.emitWarning(msg, type, code2, fn) : console.error(`[${code2}] ${type}: ${msg}`);
     };
     var AC = globalThis.AbortController;
     var AS = globalThis.AbortSignal;
@@ -61508,7 +61508,7 @@ var require_commonjs4 = __commonJS({
         emitWarning("AbortController is not defined. If using lru-cache in node 14, load an AbortController polyfill from the `node-abort-controller` package. A minimal polyfill is provided for use by LRUCache.fetch(), but it should not be relied upon in other contexts (eg, passing it to other APIs that use AbortController/AbortSignal might have undesirable effects). You may disable this with LRU_CACHE_IGNORE_AC_WARNING=1 in the env.", "NO_ABORT_CONTROLLER", "ENOTSUP", warnACPolyfill);
       };
     }
-    var shouldWarn = (code) => !warned.has(code);
+    var shouldWarn = (code2) => !warned.has(code2);
     var isPosInt = (n) => n && n === Math.floor(n) && n > 0 && isFinite(n);
     var getUintArray = (max) => !isPosInt(max) ? null : max <= Math.pow(2, 8) ? Uint8Array : max <= Math.pow(2, 16) ? Uint16Array : max <= Math.pow(2, 32) ? Uint32Array : max <= Number.MAX_SAFE_INTEGER ? ZeroArray : null;
     var ZeroArray = class extends Array {
@@ -61799,11 +61799,11 @@ var require_commonjs4 = __commonJS({
           throw new TypeError("At least one of max, maxSize, or ttl is required");
         }
         if (!this.ttlAutopurge && !this.#max && !this.#maxSize) {
-          const code = "LRU_CACHE_UNBOUNDED";
-          if (shouldWarn(code)) {
-            warned.add(code);
+          const code2 = "LRU_CACHE_UNBOUNDED";
+          if (shouldWarn(code2)) {
+            warned.add(code2);
             const msg = "TTL caching without ttlAutopurge, max, or maxSize can result in unbounded memory consumption.";
-            emitWarning(msg, "UnboundedCacheWarning", code, _LRUCache);
+            emitWarning(msg, "UnboundedCacheWarning", code2, _LRUCache);
           }
         }
       }
@@ -64036,12 +64036,12 @@ var require_commonjs6 = __commonJS({
       /**
        * Get the Path object referenced by the string path, resolved from this Path
        */
-      resolve(path11) {
-        if (!path11) {
+      resolve(path16) {
+        if (!path16) {
           return this;
         }
-        const rootPath = this.getRootString(path11);
-        const dir = path11.substring(rootPath.length);
+        const rootPath = this.getRootString(path16);
+        const dir = path16.substring(rootPath.length);
         const dirParts = dir.split(this.splitSep);
         const result = rootPath ? this.getRoot(rootPath).#resolveParts(dirParts) : this.#resolveParts(dirParts);
         return result;
@@ -64429,33 +64429,33 @@ var require_commonjs6 = __commonJS({
         this.#type = t | ENOTDIR;
         this.#markChildrenENOENT();
       }
-      #readdirFail(code = "") {
-        if (code === "ENOTDIR" || code === "EPERM") {
+      #readdirFail(code2 = "") {
+        if (code2 === "ENOTDIR" || code2 === "EPERM") {
           this.#markENOTDIR();
-        } else if (code === "ENOENT") {
+        } else if (code2 === "ENOENT") {
           this.#markENOENT();
         } else {
           this.children().provisional = 0;
         }
       }
-      #lstatFail(code = "") {
-        if (code === "ENOTDIR") {
+      #lstatFail(code2 = "") {
+        if (code2 === "ENOTDIR") {
           const p = this.parent;
           p.#markENOTDIR();
-        } else if (code === "ENOENT") {
+        } else if (code2 === "ENOENT") {
           this.#markENOENT();
         }
       }
-      #readlinkFail(code = "") {
+      #readlinkFail(code2 = "") {
         let ter = this.#type;
         ter |= ENOREADLINK;
-        if (code === "ENOENT")
+        if (code2 === "ENOENT")
           ter |= ENOENT;
-        if (code === "EINVAL" || code === "UNKNOWN") {
+        if (code2 === "EINVAL" || code2 === "UNKNOWN") {
           ter &= IFMT_UNKNOWN;
         }
         this.#type = ter;
-        if (code === "ENOTDIR" && this.parent) {
+        if (code2 === "ENOTDIR" && this.parent) {
           this.parent.#markENOTDIR();
         }
       }
@@ -64794,8 +64794,8 @@ var require_commonjs6 = __commonJS({
       /**
        * @internal
        */
-      getRootString(path11) {
-        return node_path_1.win32.parse(path11).root;
+      getRootString(path16) {
+        return node_path_1.win32.parse(path16).root;
       }
       /**
        * @internal
@@ -64842,8 +64842,8 @@ var require_commonjs6 = __commonJS({
       /**
        * @internal
        */
-      getRootString(path11) {
-        return path11.startsWith("/") ? "/" : "";
+      getRootString(path16) {
+        return path16.startsWith("/") ? "/" : "";
       }
       /**
        * @internal
@@ -64893,8 +64893,8 @@ var require_commonjs6 = __commonJS({
        *
        * @internal
        */
-      constructor(cwd = process.cwd(), pathImpl, sep4, { nocase, childrenCacheSize = 16 * 1024, fs: fs10 = defaultFS } = {}) {
-        this.#fs = fsFromOption(fs10);
+      constructor(cwd = process.cwd(), pathImpl, sep4, { nocase, childrenCacheSize = 16 * 1024, fs: fs15 = defaultFS } = {}) {
+        this.#fs = fsFromOption(fs15);
         if (cwd instanceof URL || cwd.startsWith("file://")) {
           cwd = (0, node_url_1.fileURLToPath)(cwd);
         }
@@ -64933,11 +64933,11 @@ var require_commonjs6 = __commonJS({
       /**
        * Get the depth of a provided path, string, or the cwd
        */
-      depth(path11 = this.cwd) {
-        if (typeof path11 === "string") {
-          path11 = this.cwd.resolve(path11);
+      depth(path16 = this.cwd) {
+        if (typeof path16 === "string") {
+          path16 = this.cwd.resolve(path16);
         }
-        return path11.depth();
+        return path16.depth();
       }
       /**
        * Return the cache of child entries.  Exposed so subclasses can create
@@ -65424,9 +65424,9 @@ var require_commonjs6 = __commonJS({
         process4();
         return results;
       }
-      chdir(path11 = this.cwd) {
+      chdir(path16 = this.cwd) {
         const oldCwd = this.cwd;
-        this.cwd = typeof path11 === "string" ? this.cwd.resolve(path11) : path11;
+        this.cwd = typeof path16 === "string" ? this.cwd.resolve(path16) : path16;
         this.cwd[setAsCwd](oldCwd);
       }
     };
@@ -65453,8 +65453,8 @@ var require_commonjs6 = __commonJS({
       /**
        * @internal
        */
-      newRoot(fs10) {
-        return new PathWin32(this.rootPath, IFDIR, void 0, this.roots, this.nocase, this.childrenCache(), { fs: fs10 });
+      newRoot(fs15) {
+        return new PathWin32(this.rootPath, IFDIR, void 0, this.roots, this.nocase, this.childrenCache(), { fs: fs15 });
       }
       /**
        * Return true if the provided path string is an absolute path
@@ -65483,8 +65483,8 @@ var require_commonjs6 = __commonJS({
       /**
        * @internal
        */
-      newRoot(fs10) {
-        return new PathPosix(this.rootPath, IFDIR, void 0, this.roots, this.nocase, this.childrenCache(), { fs: fs10 });
+      newRoot(fs15) {
+        return new PathPosix(this.rootPath, IFDIR, void 0, this.roots, this.nocase, this.childrenCache(), { fs: fs15 });
       }
       /**
        * Return true if the provided path string is an absolute path
@@ -65814,8 +65814,8 @@ var require_processor = __commonJS({
       }
       // match, absolute, ifdir
       entries() {
-        return [...this.store.entries()].map(([path11, n]) => [
-          path11,
+        return [...this.store.entries()].map(([path16, n]) => [
+          path16,
           !!(n & 2),
           !!(n & 1)
         ]);
@@ -66033,9 +66033,9 @@ var require_walker = __commonJS({
       signal;
       maxDepth;
       includeChildMatches;
-      constructor(patterns, path11, opts) {
+      constructor(patterns, path16, opts) {
         this.patterns = patterns;
-        this.path = path11;
+        this.path = path16;
         this.opts = opts;
         this.#sep = !opts.posix && opts.platform === "win32" ? "\\" : "/";
         this.includeChildMatches = opts.includeChildMatches !== false;
@@ -66054,11 +66054,11 @@ var require_walker = __commonJS({
           });
         }
       }
-      #ignored(path11) {
-        return this.seen.has(path11) || !!this.#ignore?.ignored?.(path11);
+      #ignored(path16) {
+        return this.seen.has(path16) || !!this.#ignore?.ignored?.(path16);
       }
-      #childrenIgnored(path11) {
-        return !!this.#ignore?.childrenIgnored?.(path11);
+      #childrenIgnored(path16) {
+        return !!this.#ignore?.childrenIgnored?.(path16);
       }
       // backpressure mechanism
       pause() {
@@ -66274,8 +66274,8 @@ var require_walker = __commonJS({
     exports2.GlobUtil = GlobUtil;
     var GlobWalker = class extends GlobUtil {
       matches = /* @__PURE__ */ new Set();
-      constructor(patterns, path11, opts) {
-        super(patterns, path11, opts);
+      constructor(patterns, path16, opts) {
+        super(patterns, path16, opts);
       }
       matchEmit(e) {
         this.matches.add(e);
@@ -66313,8 +66313,8 @@ var require_walker = __commonJS({
     exports2.GlobWalker = GlobWalker;
     var GlobStream = class extends GlobUtil {
       results;
-      constructor(patterns, path11, opts) {
-        super(patterns, path11, opts);
+      constructor(patterns, path16, opts) {
+        super(patterns, path16, opts);
         this.results = new minipass_1.Minipass({
           signal: this.signal,
           objectMode: true
@@ -66669,11 +66669,11 @@ var require_commonjs7 = __commonJS({
 // ../node_modules/.pnpm/archiver-utils@5.0.2/node_modules/archiver-utils/file.js
 var require_file3 = __commonJS({
   "../node_modules/.pnpm/archiver-utils@5.0.2/node_modules/archiver-utils/file.js"(exports2, module2) {
-    var fs10 = require_graceful_fs();
-    var path11 = require("path");
+    var fs15 = require_graceful_fs();
+    var path16 = require("path");
     var flatten2 = require_flatten();
     var difference = require_difference();
-    var union = require_union();
+    var union2 = require_union();
     var isPlainObject3 = require_isPlainObject();
     var glob = require_commonjs7();
     var file = module2.exports = {};
@@ -66689,14 +66689,14 @@ var require_file3 = __commonJS({
         if (exclusion) {
           result = difference(result, matches);
         } else {
-          result = union(result, matches);
+          result = union2(result, matches);
         }
       });
       return result;
     };
     file.exists = function() {
-      var filepath = path11.join.apply(path11, arguments);
-      return fs10.existsSync(filepath);
+      var filepath = path16.join.apply(path16, arguments);
+      return fs15.existsSync(filepath);
     };
     file.expand = function(...args) {
       var options = isPlainObject3(args[0]) ? args.shift() : {};
@@ -66709,12 +66709,12 @@ var require_file3 = __commonJS({
       });
       if (options.filter) {
         matches = matches.filter(function(filepath) {
-          filepath = path11.join(options.cwd || "", filepath);
+          filepath = path16.join(options.cwd || "", filepath);
           try {
             if (typeof options.filter === "function") {
               return options.filter(filepath);
             } else {
-              return fs10.statSync(filepath)[options.filter]();
+              return fs15.statSync(filepath)[options.filter]();
             }
           } catch (e) {
             return false;
@@ -66726,7 +66726,7 @@ var require_file3 = __commonJS({
     file.expandMapping = function(patterns, destBase, options) {
       options = Object.assign({
         rename: function(destBase2, destPath) {
-          return path11.join(destBase2 || "", destPath);
+          return path16.join(destBase2 || "", destPath);
         }
       }, options);
       var files = [];
@@ -66734,14 +66734,14 @@ var require_file3 = __commonJS({
       file.expand(options, patterns).forEach(function(src) {
         var destPath = src;
         if (options.flatten) {
-          destPath = path11.basename(destPath);
+          destPath = path16.basename(destPath);
         }
         if (options.ext) {
           destPath = destPath.replace(/(\.[^\/]*)?$/, options.ext);
         }
         var dest = options.rename(destBase, destPath, options);
         if (options.cwd) {
-          src = path11.join(options.cwd, src);
+          src = path16.join(options.cwd, src);
         }
         dest = dest.replace(pathSeparatorRe, "/");
         src = src.replace(pathSeparatorRe, "/");
@@ -66822,8 +66822,8 @@ var require_file3 = __commonJS({
 // ../node_modules/.pnpm/archiver-utils@5.0.2/node_modules/archiver-utils/index.js
 var require_archiver_utils = __commonJS({
   "../node_modules/.pnpm/archiver-utils@5.0.2/node_modules/archiver-utils/index.js"(exports2, module2) {
-    var fs10 = require_graceful_fs();
-    var path11 = require("path");
+    var fs15 = require_graceful_fs();
+    var path16 = require("path");
     var isStream = require_is_stream();
     var lazystream = require_lazystream();
     var normalizePath = require_normalize_path();
@@ -66871,7 +66871,7 @@ var require_archiver_utils = __commonJS({
     };
     utils.lazyReadStream = function(filepath) {
       return new lazystream.Readable(function() {
-        return fs10.createReadStream(filepath);
+        return fs15.createReadStream(filepath);
       });
     };
     utils.normalizeInputSource = function(source) {
@@ -66899,7 +66899,7 @@ var require_archiver_utils = __commonJS({
         callback = base;
         base = dirpath;
       }
-      fs10.readdir(dirpath, function(err, list) {
+      fs15.readdir(dirpath, function(err, list2) {
         var i = 0;
         var file;
         var filepath;
@@ -66907,15 +66907,15 @@ var require_archiver_utils = __commonJS({
           return callback(err);
         }
         (function next() {
-          file = list[i++];
+          file = list2[i++];
           if (!file) {
             return callback(null, results);
           }
-          filepath = path11.join(dirpath, file);
-          fs10.stat(filepath, function(err2, stats) {
+          filepath = path16.join(dirpath, file);
+          fs15.stat(filepath, function(err2, stats) {
             results.push({
               path: filepath,
-              relative: path11.relative(base, filepath).replace(/\\/g, "/"),
+              relative: path16.relative(base, filepath).replace(/\\/g, "/"),
               stats
             });
             if (stats && stats.isDirectory()) {
@@ -66960,10 +66960,10 @@ var require_error = __commonJS({
       "SYMLINKTARGETREQUIRED": "symlink target argument must be a non-empty string value",
       "ENTRYNOTSUPPORTED": "entry not supported"
     };
-    function ArchiverError(code, data) {
+    function ArchiverError(code2, data) {
       Error.captureStackTrace(this, this.constructor);
-      this.message = ERROR_CODES[code] || code;
-      this.code = code;
+      this.message = ERROR_CODES[code2] || code2;
+      this.code = code2;
       this.data = data;
     }
     util3.inherits(ArchiverError, Error);
@@ -66974,10 +66974,10 @@ var require_error = __commonJS({
 // ../node_modules/.pnpm/archiver@7.0.1/node_modules/archiver/lib/core.js
 var require_core = __commonJS({
   "../node_modules/.pnpm/archiver@7.0.1/node_modules/archiver/lib/core.js"(exports2, module2) {
-    var fs10 = require("fs");
+    var fs15 = require("fs");
     var glob = require_readdir_glob();
     var async = require_async();
-    var path11 = require("path");
+    var path16 = require("path");
     var util3 = require_archiver_utils();
     var inherits = require("util").inherits;
     var ArchiverError = require_error();
@@ -67038,7 +67038,7 @@ var require_core = __commonJS({
       data.sourcePath = filepath;
       task.data = data;
       this._entriesCount++;
-      if (data.stats && data.stats instanceof fs10.Stats) {
+      if (data.stats && data.stats instanceof fs15.Stats) {
         task = this._updateQueueTaskWithStats(task, data.stats);
         if (task) {
           if (data.stats.size) {
@@ -67209,7 +67209,7 @@ var require_core = __commonJS({
         callback();
         return;
       }
-      fs10.lstat(task.filepath, function(err, stats) {
+      fs15.lstat(task.filepath, function(err, stats) {
         if (this._state.aborted) {
           setImmediate(callback);
           return;
@@ -67252,10 +67252,10 @@ var require_core = __commonJS({
         task.data.sourceType = "buffer";
         task.source = Buffer.concat([]);
       } else if (stats.isSymbolicLink() && this._moduleSupports("symlink")) {
-        var linkPath = fs10.readlinkSync(task.filepath);
-        var dirName = path11.dirname(task.filepath);
+        var linkPath = fs15.readlinkSync(task.filepath);
+        var dirName = path16.dirname(task.filepath);
         task.data.type = "symlink";
-        task.data.linkname = path11.relative(dirName, path11.resolve(dirName, linkPath));
+        task.data.linkname = path16.relative(dirName, path16.resolve(dirName, linkPath));
         task.data.sourceType = "buffer";
         task.source = Buffer.concat([]);
       } else {
@@ -72326,10 +72326,10 @@ var require_dist5 = __commonJS({
         index = skipOWS(header, index + 1, len);
         const keyStart = index;
         while (index < len) {
-          const code = header.charCodeAt(index);
-          if (code === SEMI)
+          const code2 = header.charCodeAt(index);
+          if (code2 === SEMI)
             continue parameter;
-          if (code === EQ) {
+          if (code2 === EQ) {
             const keyEnd = trailingOWS(header, keyStart, index);
             const key = header.slice(keyStart, keyEnd).toLowerCase();
             index = skipOWS(header, index + 1, len);
@@ -72337,18 +72337,18 @@ var require_dist5 = __commonJS({
               index++;
               let value = "";
               while (index < len) {
-                const code2 = header.charCodeAt(index++);
-                if (code2 === DQUOTE) {
+                const code3 = header.charCodeAt(index++);
+                if (code3 === DQUOTE) {
                   index = skipValue(header, index, len);
                   if (parameters[key] === void 0)
                     parameters[key] = value;
                   break;
                 }
-                if (code2 === BSLASH && index < len) {
+                if (code3 === BSLASH && index < len) {
                   value += header[index++];
                   continue;
                 }
-                value += String.fromCharCode(code2);
+                value += String.fromCharCode(code3);
               }
               continue parameter;
             }
@@ -72548,7 +72548,7 @@ var require_traverse = __commonJS({
       })(this.value);
     };
     function walk(root, cb, immutable) {
-      var path11 = [];
+      var path16 = [];
       var parents = [];
       var alive = true;
       return (function walker(node_) {
@@ -72557,11 +72557,11 @@ var require_traverse = __commonJS({
         var state3 = {
           node,
           node_,
-          path: [].concat(path11),
+          path: [].concat(path16),
           parent: parents.slice(-1)[0],
-          key: path11.slice(-1)[0],
-          isRoot: path11.length === 0,
-          level: path11.length,
+          key: path16.slice(-1)[0],
+          isRoot: path16.length === 0,
+          level: path16.length,
           circular: null,
           update: function(x) {
             if (!state3.isRoot) {
@@ -72616,7 +72616,7 @@ var require_traverse = __commonJS({
           parents.push(state3);
           var keys = Object.keys(state3.node);
           keys.forEach(function(key, i2) {
-            path11.push(key);
+            path16.push(key);
             if (modifiers.pre) modifiers.pre.call(state3, state3.node[key], key);
             var child2 = walker(state3.node[key]);
             if (immutable && Object.hasOwnProperty.call(state3.node, key)) {
@@ -72625,7 +72625,7 @@ var require_traverse = __commonJS({
             child2.isLast = i2 == keys.length - 1;
             child2.isFirst = i2 == 0;
             if (modifiers.post) modifiers.post.call(state3, child2);
-            path11.pop();
+            path16.pop();
           });
           parents.pop();
         }
@@ -73646,11 +73646,11 @@ var require_unzip_stream = __commonJS({
           return requiredLength;
         case states.CENTRAL_DIRECTORY_FILE_HEADER_SUFFIX:
           var isUtf8 = (this.parsedEntity.flags & 2048) !== 0;
-          var path11 = this._decodeString(chunk.slice(0, this.parsedEntity.fileNameLength), isUtf8);
+          var path16 = this._decodeString(chunk.slice(0, this.parsedEntity.fileNameLength), isUtf8);
           var extraDataBuffer = chunk.slice(this.parsedEntity.fileNameLength, this.parsedEntity.fileNameLength + this.parsedEntity.extraFieldLength);
           var extra = this._readExtraFields(extraDataBuffer);
           if (extra && extra.parsed && extra.parsed.path && !isUtf8) {
-            path11 = extra.parsed.path;
+            path16 = extra.parsed.path;
           }
           this.parsedEntity.extra = extra.parsed;
           var isUnix = (this.parsedEntity.versionMadeBy & 65280) >> 8 === 3;
@@ -73662,7 +73662,7 @@ var require_unzip_stream = __commonJS({
           }
           if (this.options.debug) {
             const debugObj2 = Object.assign({}, this.parsedEntity, {
-              path: path11,
+              path: path16,
               flags: "0x" + this.parsedEntity.flags.toString(16),
               unixAttrs: unixAttrs && "0" + unixAttrs.toString(8),
               isSymlink,
@@ -74099,8 +74099,8 @@ var require_parser_stream = __commonJS({
 // ../node_modules/.pnpm/mkdirp@0.5.6/node_modules/mkdirp/index.js
 var require_mkdirp = __commonJS({
   "../node_modules/.pnpm/mkdirp@0.5.6/node_modules/mkdirp/index.js"(exports2, module2) {
-    var path11 = require("path");
-    var fs10 = require("fs");
+    var path16 = require("path");
+    var fs15 = require("fs");
     var _0777 = parseInt("0777", 8);
     module2.exports = mkdirP.mkdirp = mkdirP.mkdirP = mkdirP;
     function mkdirP(p, opts, f, made) {
@@ -74111,7 +74111,7 @@ var require_mkdirp = __commonJS({
         opts = { mode: opts };
       }
       var mode = opts.mode;
-      var xfs = opts.fs || fs10;
+      var xfs = opts.fs || fs15;
       if (mode === void 0) {
         mode = _0777;
       }
@@ -74119,7 +74119,7 @@ var require_mkdirp = __commonJS({
       var cb = f || /* istanbul ignore next */
       function() {
       };
-      p = path11.resolve(p);
+      p = path16.resolve(p);
       xfs.mkdir(p, mode, function(er) {
         if (!er) {
           made = made || p;
@@ -74127,8 +74127,8 @@ var require_mkdirp = __commonJS({
         }
         switch (er.code) {
           case "ENOENT":
-            if (path11.dirname(p) === p) return cb(er);
-            mkdirP(path11.dirname(p), opts, function(er2, made2) {
+            if (path16.dirname(p) === p) return cb(er);
+            mkdirP(path16.dirname(p), opts, function(er2, made2) {
               if (er2) cb(er2, made2);
               else mkdirP(p, opts, cb, made2);
             });
@@ -74150,19 +74150,19 @@ var require_mkdirp = __commonJS({
         opts = { mode: opts };
       }
       var mode = opts.mode;
-      var xfs = opts.fs || fs10;
+      var xfs = opts.fs || fs15;
       if (mode === void 0) {
         mode = _0777;
       }
       if (!made) made = null;
-      p = path11.resolve(p);
+      p = path16.resolve(p);
       try {
         xfs.mkdirSync(p, mode);
         made = made || p;
       } catch (err0) {
         switch (err0.code) {
           case "ENOENT":
-            made = sync(path11.dirname(p), opts, made);
+            made = sync(path16.dirname(p), opts, made);
             sync(p, opts, made);
             break;
           // In the case of any other error, just see if there's a dir
@@ -74187,8 +74187,8 @@ var require_mkdirp = __commonJS({
 // ../node_modules/.pnpm/unzip-stream@0.3.4/node_modules/unzip-stream/lib/extract.js
 var require_extract2 = __commonJS({
   "../node_modules/.pnpm/unzip-stream@0.3.4/node_modules/unzip-stream/lib/extract.js"(exports2, module2) {
-    var fs10 = require("fs");
-    var path11 = require("path");
+    var fs15 = require("fs");
+    var path16 = require("path");
     var util3 = require("util");
     var mkdirp = require_mkdirp();
     var Transform3 = require("stream").Transform;
@@ -74230,11 +74230,11 @@ var require_extract2 = __commonJS({
     };
     Extract.prototype._processEntry = function(entry) {
       var self2 = this;
-      var destPath = path11.join(this.opts.path, entry.path);
-      var directory = entry.isDirectory ? destPath : path11.dirname(destPath);
+      var destPath = path16.join(this.opts.path, entry.path);
+      var directory = entry.isDirectory ? destPath : path16.dirname(destPath);
       this.unfinishedEntries++;
       var writeFileFn = function() {
-        var pipedStream = fs10.createWriteStream(destPath);
+        var pipedStream = fs15.createWriteStream(destPath);
         pipedStream.on("close", function() {
           self2.unfinishedEntries--;
           self2._notifyAwaiter();
@@ -74520,16 +74520,16 @@ var require_light = __commonJS({
           }
         }
         shiftAll(fn) {
-          return this._lists.forEach(function(list) {
-            return list.forEachShift(fn);
+          return this._lists.forEach(function(list2) {
+            return list2.forEachShift(fn);
           });
         }
         getFirst(arr = this._lists) {
-          var j, len, list;
+          var j, len, list2;
           for (j = 0, len = arr.length; j < len; j++) {
-            list = arr[j];
-            if (list.length > 0) {
-              return list;
+            list2 = arr[j];
+            if (list2.length > 0) {
+              return list2;
             }
           }
           return [];
@@ -75593,6 +75593,2094 @@ var require_light = __commonJS({
       var lib = Bottleneck_1;
       return lib;
     }));
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/chunkstream.js
+var require_chunkstream = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/chunkstream.js"(exports2, module2) {
+    "use strict";
+    var util3 = require("util");
+    var Stream = require("stream");
+    var ChunkStream = module2.exports = function() {
+      Stream.call(this);
+      this._buffers = [];
+      this._buffered = 0;
+      this._reads = [];
+      this._paused = false;
+      this._encoding = "utf8";
+      this.writable = true;
+    };
+    util3.inherits(ChunkStream, Stream);
+    ChunkStream.prototype.read = function(length, callback) {
+      this._reads.push({
+        length: Math.abs(length),
+        // if length < 0 then at most this length
+        allowLess: length < 0,
+        func: callback
+      });
+      process.nextTick(
+        function() {
+          this._process();
+          if (this._paused && this._reads && this._reads.length > 0) {
+            this._paused = false;
+            this.emit("drain");
+          }
+        }.bind(this)
+      );
+    };
+    ChunkStream.prototype.write = function(data, encoding) {
+      if (!this.writable) {
+        this.emit("error", new Error("Stream not writable"));
+        return false;
+      }
+      let dataBuffer;
+      if (Buffer.isBuffer(data)) {
+        dataBuffer = data;
+      } else {
+        dataBuffer = Buffer.from(data, encoding || this._encoding);
+      }
+      this._buffers.push(dataBuffer);
+      this._buffered += dataBuffer.length;
+      this._process();
+      if (this._reads && this._reads.length === 0) {
+        this._paused = true;
+      }
+      return this.writable && !this._paused;
+    };
+    ChunkStream.prototype.end = function(data, encoding) {
+      if (data) {
+        this.write(data, encoding);
+      }
+      this.writable = false;
+      if (!this._buffers) {
+        return;
+      }
+      if (this._buffers.length === 0) {
+        this._end();
+      } else {
+        this._buffers.push(null);
+        this._process();
+      }
+    };
+    ChunkStream.prototype.destroySoon = ChunkStream.prototype.end;
+    ChunkStream.prototype._end = function() {
+      if (this._reads.length > 0) {
+        this.emit("error", new Error("Unexpected end of input"));
+      }
+      this.destroy();
+    };
+    ChunkStream.prototype.destroy = function() {
+      if (!this._buffers) {
+        return;
+      }
+      this.writable = false;
+      this._reads = null;
+      this._buffers = null;
+      this.emit("close");
+    };
+    ChunkStream.prototype._processReadAllowingLess = function(read) {
+      this._reads.shift();
+      let smallerBuf = this._buffers[0];
+      if (smallerBuf.length > read.length) {
+        this._buffered -= read.length;
+        this._buffers[0] = smallerBuf.slice(read.length);
+        read.func.call(this, smallerBuf.slice(0, read.length));
+      } else {
+        this._buffered -= smallerBuf.length;
+        this._buffers.shift();
+        read.func.call(this, smallerBuf);
+      }
+    };
+    ChunkStream.prototype._processRead = function(read) {
+      this._reads.shift();
+      let pos = 0;
+      let count2 = 0;
+      let data = Buffer.alloc(read.length);
+      while (pos < read.length) {
+        let buf = this._buffers[count2++];
+        let len = Math.min(buf.length, read.length - pos);
+        buf.copy(data, pos, 0, len);
+        pos += len;
+        if (len !== buf.length) {
+          this._buffers[--count2] = buf.slice(len);
+        }
+      }
+      if (count2 > 0) {
+        this._buffers.splice(0, count2);
+      }
+      this._buffered -= read.length;
+      read.func.call(this, data);
+    };
+    ChunkStream.prototype._process = function() {
+      try {
+        while (this._buffered > 0 && this._reads && this._reads.length > 0) {
+          let read = this._reads[0];
+          if (read.allowLess) {
+            this._processReadAllowingLess(read);
+          } else if (this._buffered >= read.length) {
+            this._processRead(read);
+          } else {
+            break;
+          }
+        }
+        if (this._buffers && !this.writable) {
+          this._end();
+        }
+      } catch (ex) {
+        this.emit("error", ex);
+      }
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/interlace.js
+var require_interlace = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/interlace.js"(exports2) {
+    "use strict";
+    var imagePasses = [
+      {
+        // pass 1 - 1px
+        x: [0],
+        y: [0]
+      },
+      {
+        // pass 2 - 1px
+        x: [4],
+        y: [0]
+      },
+      {
+        // pass 3 - 2px
+        x: [0, 4],
+        y: [4]
+      },
+      {
+        // pass 4 - 4px
+        x: [2, 6],
+        y: [0, 4]
+      },
+      {
+        // pass 5 - 8px
+        x: [0, 2, 4, 6],
+        y: [2, 6]
+      },
+      {
+        // pass 6 - 16px
+        x: [1, 3, 5, 7],
+        y: [0, 2, 4, 6]
+      },
+      {
+        // pass 7 - 32px
+        x: [0, 1, 2, 3, 4, 5, 6, 7],
+        y: [1, 3, 5, 7]
+      }
+    ];
+    exports2.getImagePasses = function(width, height) {
+      let images = [];
+      let xLeftOver = width % 8;
+      let yLeftOver = height % 8;
+      let xRepeats = (width - xLeftOver) / 8;
+      let yRepeats = (height - yLeftOver) / 8;
+      for (let i = 0; i < imagePasses.length; i++) {
+        let pass = imagePasses[i];
+        let passWidth = xRepeats * pass.x.length;
+        let passHeight = yRepeats * pass.y.length;
+        for (let j = 0; j < pass.x.length; j++) {
+          if (pass.x[j] < xLeftOver) {
+            passWidth++;
+          } else {
+            break;
+          }
+        }
+        for (let j = 0; j < pass.y.length; j++) {
+          if (pass.y[j] < yLeftOver) {
+            passHeight++;
+          } else {
+            break;
+          }
+        }
+        if (passWidth > 0 && passHeight > 0) {
+          images.push({ width: passWidth, height: passHeight, index: i });
+        }
+      }
+      return images;
+    };
+    exports2.getInterlaceIterator = function(width) {
+      return function(x, y, pass) {
+        let outerXLeftOver = x % imagePasses[pass].x.length;
+        let outerX = (x - outerXLeftOver) / imagePasses[pass].x.length * 8 + imagePasses[pass].x[outerXLeftOver];
+        let outerYLeftOver = y % imagePasses[pass].y.length;
+        let outerY = (y - outerYLeftOver) / imagePasses[pass].y.length * 8 + imagePasses[pass].y[outerYLeftOver];
+        return outerX * 4 + outerY * width * 4;
+      };
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/paeth-predictor.js
+var require_paeth_predictor = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/paeth-predictor.js"(exports2, module2) {
+    "use strict";
+    module2.exports = function paethPredictor(left, above, upLeft) {
+      let paeth = left + above - upLeft;
+      let pLeft = Math.abs(paeth - left);
+      let pAbove = Math.abs(paeth - above);
+      let pUpLeft = Math.abs(paeth - upLeft);
+      if (pLeft <= pAbove && pLeft <= pUpLeft) {
+        return left;
+      }
+      if (pAbove <= pUpLeft) {
+        return above;
+      }
+      return upLeft;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse.js
+var require_filter_parse = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse.js"(exports2, module2) {
+    "use strict";
+    var interlaceUtils = require_interlace();
+    var paethPredictor = require_paeth_predictor();
+    function getByteWidth(width, bpp, depth) {
+      let byteWidth = width * bpp;
+      if (depth !== 8) {
+        byteWidth = Math.ceil(byteWidth / (8 / depth));
+      }
+      return byteWidth;
+    }
+    var Filter = module2.exports = function(bitmapInfo, dependencies) {
+      let width = bitmapInfo.width;
+      let height = bitmapInfo.height;
+      let interlace = bitmapInfo.interlace;
+      let bpp = bitmapInfo.bpp;
+      let depth = bitmapInfo.depth;
+      this.read = dependencies.read;
+      this.write = dependencies.write;
+      this.complete = dependencies.complete;
+      this._imageIndex = 0;
+      this._images = [];
+      if (interlace) {
+        let passes = interlaceUtils.getImagePasses(width, height);
+        for (let i = 0; i < passes.length; i++) {
+          this._images.push({
+            byteWidth: getByteWidth(passes[i].width, bpp, depth),
+            height: passes[i].height,
+            lineIndex: 0
+          });
+        }
+      } else {
+        this._images.push({
+          byteWidth: getByteWidth(width, bpp, depth),
+          height,
+          lineIndex: 0
+        });
+      }
+      if (depth === 8) {
+        this._xComparison = bpp;
+      } else if (depth === 16) {
+        this._xComparison = bpp * 2;
+      } else {
+        this._xComparison = 1;
+      }
+    };
+    Filter.prototype.start = function() {
+      this.read(
+        this._images[this._imageIndex].byteWidth + 1,
+        this._reverseFilterLine.bind(this)
+      );
+    };
+    Filter.prototype._unFilterType1 = function(rawData, unfilteredLine, byteWidth) {
+      let xComparison = this._xComparison;
+      let xBiggerThan = xComparison - 1;
+      for (let x = 0; x < byteWidth; x++) {
+        let rawByte = rawData[1 + x];
+        let f1Left = x > xBiggerThan ? unfilteredLine[x - xComparison] : 0;
+        unfilteredLine[x] = rawByte + f1Left;
+      }
+    };
+    Filter.prototype._unFilterType2 = function(rawData, unfilteredLine, byteWidth) {
+      let lastLine = this._lastLine;
+      for (let x = 0; x < byteWidth; x++) {
+        let rawByte = rawData[1 + x];
+        let f2Up = lastLine ? lastLine[x] : 0;
+        unfilteredLine[x] = rawByte + f2Up;
+      }
+    };
+    Filter.prototype._unFilterType3 = function(rawData, unfilteredLine, byteWidth) {
+      let xComparison = this._xComparison;
+      let xBiggerThan = xComparison - 1;
+      let lastLine = this._lastLine;
+      for (let x = 0; x < byteWidth; x++) {
+        let rawByte = rawData[1 + x];
+        let f3Up = lastLine ? lastLine[x] : 0;
+        let f3Left = x > xBiggerThan ? unfilteredLine[x - xComparison] : 0;
+        let f3Add = Math.floor((f3Left + f3Up) / 2);
+        unfilteredLine[x] = rawByte + f3Add;
+      }
+    };
+    Filter.prototype._unFilterType4 = function(rawData, unfilteredLine, byteWidth) {
+      let xComparison = this._xComparison;
+      let xBiggerThan = xComparison - 1;
+      let lastLine = this._lastLine;
+      for (let x = 0; x < byteWidth; x++) {
+        let rawByte = rawData[1 + x];
+        let f4Up = lastLine ? lastLine[x] : 0;
+        let f4Left = x > xBiggerThan ? unfilteredLine[x - xComparison] : 0;
+        let f4UpLeft = x > xBiggerThan && lastLine ? lastLine[x - xComparison] : 0;
+        let f4Add = paethPredictor(f4Left, f4Up, f4UpLeft);
+        unfilteredLine[x] = rawByte + f4Add;
+      }
+    };
+    Filter.prototype._reverseFilterLine = function(rawData) {
+      let filter = rawData[0];
+      let unfilteredLine;
+      let currentImage = this._images[this._imageIndex];
+      let byteWidth = currentImage.byteWidth;
+      if (filter === 0) {
+        unfilteredLine = rawData.slice(1, byteWidth + 1);
+      } else {
+        unfilteredLine = Buffer.alloc(byteWidth);
+        switch (filter) {
+          case 1:
+            this._unFilterType1(rawData, unfilteredLine, byteWidth);
+            break;
+          case 2:
+            this._unFilterType2(rawData, unfilteredLine, byteWidth);
+            break;
+          case 3:
+            this._unFilterType3(rawData, unfilteredLine, byteWidth);
+            break;
+          case 4:
+            this._unFilterType4(rawData, unfilteredLine, byteWidth);
+            break;
+          default:
+            throw new Error("Unrecognised filter type - " + filter);
+        }
+      }
+      this.write(unfilteredLine);
+      currentImage.lineIndex++;
+      if (currentImage.lineIndex >= currentImage.height) {
+        this._lastLine = null;
+        this._imageIndex++;
+        currentImage = this._images[this._imageIndex];
+      } else {
+        this._lastLine = unfilteredLine;
+      }
+      if (currentImage) {
+        this.read(currentImage.byteWidth + 1, this._reverseFilterLine.bind(this));
+      } else {
+        this._lastLine = null;
+        this.complete();
+      }
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse-async.js
+var require_filter_parse_async = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse-async.js"(exports2, module2) {
+    "use strict";
+    var util3 = require("util");
+    var ChunkStream = require_chunkstream();
+    var Filter = require_filter_parse();
+    var FilterAsync = module2.exports = function(bitmapInfo) {
+      ChunkStream.call(this);
+      let buffers = [];
+      let that = this;
+      this._filter = new Filter(bitmapInfo, {
+        read: this.read.bind(this),
+        write: function(buffer2) {
+          buffers.push(buffer2);
+        },
+        complete: function() {
+          that.emit("complete", Buffer.concat(buffers));
+        }
+      });
+      this._filter.start();
+    };
+    util3.inherits(FilterAsync, ChunkStream);
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/constants.js
+var require_constants13 = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/constants.js"(exports2, module2) {
+    "use strict";
+    module2.exports = {
+      PNG_SIGNATURE: [137, 80, 78, 71, 13, 10, 26, 10],
+      TYPE_IHDR: 1229472850,
+      TYPE_IEND: 1229278788,
+      TYPE_IDAT: 1229209940,
+      TYPE_PLTE: 1347179589,
+      TYPE_tRNS: 1951551059,
+      // eslint-disable-line camelcase
+      TYPE_gAMA: 1732332865,
+      // eslint-disable-line camelcase
+      // color-type bits
+      COLORTYPE_GRAYSCALE: 0,
+      COLORTYPE_PALETTE: 1,
+      COLORTYPE_COLOR: 2,
+      COLORTYPE_ALPHA: 4,
+      // e.g. grayscale and alpha
+      // color-type combinations
+      COLORTYPE_PALETTE_COLOR: 3,
+      COLORTYPE_COLOR_ALPHA: 6,
+      COLORTYPE_TO_BPP_MAP: {
+        0: 1,
+        2: 3,
+        3: 1,
+        4: 2,
+        6: 4
+      },
+      GAMMA_DIVISION: 1e5
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/crc.js
+var require_crc = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/crc.js"(exports2, module2) {
+    "use strict";
+    var crcTable = [];
+    (function() {
+      for (let i = 0; i < 256; i++) {
+        let currentCrc = i;
+        for (let j = 0; j < 8; j++) {
+          if (currentCrc & 1) {
+            currentCrc = 3988292384 ^ currentCrc >>> 1;
+          } else {
+            currentCrc = currentCrc >>> 1;
+          }
+        }
+        crcTable[i] = currentCrc;
+      }
+    })();
+    var CrcCalculator = module2.exports = function() {
+      this._crc = -1;
+    };
+    CrcCalculator.prototype.write = function(data) {
+      for (let i = 0; i < data.length; i++) {
+        this._crc = crcTable[(this._crc ^ data[i]) & 255] ^ this._crc >>> 8;
+      }
+      return true;
+    };
+    CrcCalculator.prototype.crc32 = function() {
+      return this._crc ^ -1;
+    };
+    CrcCalculator.crc32 = function(buf) {
+      let crc = -1;
+      for (let i = 0; i < buf.length; i++) {
+        crc = crcTable[(crc ^ buf[i]) & 255] ^ crc >>> 8;
+      }
+      return crc ^ -1;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser.js
+var require_parser = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser.js"(exports2, module2) {
+    "use strict";
+    var constants3 = require_constants13();
+    var CrcCalculator = require_crc();
+    var Parser = module2.exports = function(options, dependencies) {
+      this._options = options;
+      options.checkCRC = options.checkCRC !== false;
+      this._hasIHDR = false;
+      this._hasIEND = false;
+      this._emittedHeadersFinished = false;
+      this._palette = [];
+      this._colorType = 0;
+      this._chunks = {};
+      this._chunks[constants3.TYPE_IHDR] = this._handleIHDR.bind(this);
+      this._chunks[constants3.TYPE_IEND] = this._handleIEND.bind(this);
+      this._chunks[constants3.TYPE_IDAT] = this._handleIDAT.bind(this);
+      this._chunks[constants3.TYPE_PLTE] = this._handlePLTE.bind(this);
+      this._chunks[constants3.TYPE_tRNS] = this._handleTRNS.bind(this);
+      this._chunks[constants3.TYPE_gAMA] = this._handleGAMA.bind(this);
+      this.read = dependencies.read;
+      this.error = dependencies.error;
+      this.metadata = dependencies.metadata;
+      this.gamma = dependencies.gamma;
+      this.transColor = dependencies.transColor;
+      this.palette = dependencies.palette;
+      this.parsed = dependencies.parsed;
+      this.inflateData = dependencies.inflateData;
+      this.finished = dependencies.finished;
+      this.simpleTransparency = dependencies.simpleTransparency;
+      this.headersFinished = dependencies.headersFinished || function() {
+      };
+    };
+    Parser.prototype.start = function() {
+      this.read(constants3.PNG_SIGNATURE.length, this._parseSignature.bind(this));
+    };
+    Parser.prototype._parseSignature = function(data) {
+      let signature = constants3.PNG_SIGNATURE;
+      for (let i = 0; i < signature.length; i++) {
+        if (data[i] !== signature[i]) {
+          this.error(new Error("Invalid file signature"));
+          return;
+        }
+      }
+      this.read(8, this._parseChunkBegin.bind(this));
+    };
+    Parser.prototype._parseChunkBegin = function(data) {
+      let length = data.readUInt32BE(0);
+      let type = data.readUInt32BE(4);
+      let name = "";
+      for (let i = 4; i < 8; i++) {
+        name += String.fromCharCode(data[i]);
+      }
+      let ancillary = Boolean(data[4] & 32);
+      if (!this._hasIHDR && type !== constants3.TYPE_IHDR) {
+        this.error(new Error("Expected IHDR on beggining"));
+        return;
+      }
+      this._crc = new CrcCalculator();
+      this._crc.write(Buffer.from(name));
+      if (this._chunks[type]) {
+        return this._chunks[type](length);
+      }
+      if (!ancillary) {
+        this.error(new Error("Unsupported critical chunk type " + name));
+        return;
+      }
+      this.read(length + 4, this._skipChunk.bind(this));
+    };
+    Parser.prototype._skipChunk = function() {
+      this.read(8, this._parseChunkBegin.bind(this));
+    };
+    Parser.prototype._handleChunkEnd = function() {
+      this.read(4, this._parseChunkEnd.bind(this));
+    };
+    Parser.prototype._parseChunkEnd = function(data) {
+      let fileCrc = data.readInt32BE(0);
+      let calcCrc = this._crc.crc32();
+      if (this._options.checkCRC && calcCrc !== fileCrc) {
+        this.error(new Error("Crc error - " + fileCrc + " - " + calcCrc));
+        return;
+      }
+      if (!this._hasIEND) {
+        this.read(8, this._parseChunkBegin.bind(this));
+      }
+    };
+    Parser.prototype._handleIHDR = function(length) {
+      this.read(length, this._parseIHDR.bind(this));
+    };
+    Parser.prototype._parseIHDR = function(data) {
+      this._crc.write(data);
+      let width = data.readUInt32BE(0);
+      let height = data.readUInt32BE(4);
+      let depth = data[8];
+      let colorType = data[9];
+      let compr = data[10];
+      let filter = data[11];
+      let interlace = data[12];
+      if (depth !== 8 && depth !== 4 && depth !== 2 && depth !== 1 && depth !== 16) {
+        this.error(new Error("Unsupported bit depth " + depth));
+        return;
+      }
+      if (!(colorType in constants3.COLORTYPE_TO_BPP_MAP)) {
+        this.error(new Error("Unsupported color type"));
+        return;
+      }
+      if (compr !== 0) {
+        this.error(new Error("Unsupported compression method"));
+        return;
+      }
+      if (filter !== 0) {
+        this.error(new Error("Unsupported filter method"));
+        return;
+      }
+      if (interlace !== 0 && interlace !== 1) {
+        this.error(new Error("Unsupported interlace method"));
+        return;
+      }
+      this._colorType = colorType;
+      let bpp = constants3.COLORTYPE_TO_BPP_MAP[this._colorType];
+      this._hasIHDR = true;
+      this.metadata({
+        width,
+        height,
+        depth,
+        interlace: Boolean(interlace),
+        palette: Boolean(colorType & constants3.COLORTYPE_PALETTE),
+        color: Boolean(colorType & constants3.COLORTYPE_COLOR),
+        alpha: Boolean(colorType & constants3.COLORTYPE_ALPHA),
+        bpp,
+        colorType
+      });
+      this._handleChunkEnd();
+    };
+    Parser.prototype._handlePLTE = function(length) {
+      this.read(length, this._parsePLTE.bind(this));
+    };
+    Parser.prototype._parsePLTE = function(data) {
+      this._crc.write(data);
+      let entries = Math.floor(data.length / 3);
+      for (let i = 0; i < entries; i++) {
+        this._palette.push([data[i * 3], data[i * 3 + 1], data[i * 3 + 2], 255]);
+      }
+      this.palette(this._palette);
+      this._handleChunkEnd();
+    };
+    Parser.prototype._handleTRNS = function(length) {
+      this.simpleTransparency();
+      this.read(length, this._parseTRNS.bind(this));
+    };
+    Parser.prototype._parseTRNS = function(data) {
+      this._crc.write(data);
+      if (this._colorType === constants3.COLORTYPE_PALETTE_COLOR) {
+        if (this._palette.length === 0) {
+          this.error(new Error("Transparency chunk must be after palette"));
+          return;
+        }
+        if (data.length > this._palette.length) {
+          this.error(new Error("More transparent colors than palette size"));
+          return;
+        }
+        for (let i = 0; i < data.length; i++) {
+          this._palette[i][3] = data[i];
+        }
+        this.palette(this._palette);
+      }
+      if (this._colorType === constants3.COLORTYPE_GRAYSCALE) {
+        this.transColor([data.readUInt16BE(0)]);
+      }
+      if (this._colorType === constants3.COLORTYPE_COLOR) {
+        this.transColor([
+          data.readUInt16BE(0),
+          data.readUInt16BE(2),
+          data.readUInt16BE(4)
+        ]);
+      }
+      this._handleChunkEnd();
+    };
+    Parser.prototype._handleGAMA = function(length) {
+      this.read(length, this._parseGAMA.bind(this));
+    };
+    Parser.prototype._parseGAMA = function(data) {
+      this._crc.write(data);
+      this.gamma(data.readUInt32BE(0) / constants3.GAMMA_DIVISION);
+      this._handleChunkEnd();
+    };
+    Parser.prototype._handleIDAT = function(length) {
+      if (!this._emittedHeadersFinished) {
+        this._emittedHeadersFinished = true;
+        this.headersFinished();
+      }
+      this.read(-length, this._parseIDAT.bind(this, length));
+    };
+    Parser.prototype._parseIDAT = function(length, data) {
+      this._crc.write(data);
+      if (this._colorType === constants3.COLORTYPE_PALETTE_COLOR && this._palette.length === 0) {
+        throw new Error("Expected palette not found");
+      }
+      this.inflateData(data);
+      let leftOverLength = length - data.length;
+      if (leftOverLength > 0) {
+        this._handleIDAT(leftOverLength);
+      } else {
+        this._handleChunkEnd();
+      }
+    };
+    Parser.prototype._handleIEND = function(length) {
+      this.read(length, this._parseIEND.bind(this));
+    };
+    Parser.prototype._parseIEND = function(data) {
+      this._crc.write(data);
+      this._hasIEND = true;
+      this._handleChunkEnd();
+      if (this.finished) {
+        this.finished();
+      }
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/bitmapper.js
+var require_bitmapper = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/bitmapper.js"(exports2) {
+    "use strict";
+    var interlaceUtils = require_interlace();
+    var pixelBppMapper = [
+      // 0 - dummy entry
+      function() {
+      },
+      // 1 - L
+      // 0: 0, 1: 0, 2: 0, 3: 0xff
+      function(pxData, data, pxPos, rawPos) {
+        if (rawPos === data.length) {
+          throw new Error("Ran out of data");
+        }
+        let pixel = data[rawPos];
+        pxData[pxPos] = pixel;
+        pxData[pxPos + 1] = pixel;
+        pxData[pxPos + 2] = pixel;
+        pxData[pxPos + 3] = 255;
+      },
+      // 2 - LA
+      // 0: 0, 1: 0, 2: 0, 3: 1
+      function(pxData, data, pxPos, rawPos) {
+        if (rawPos + 1 >= data.length) {
+          throw new Error("Ran out of data");
+        }
+        let pixel = data[rawPos];
+        pxData[pxPos] = pixel;
+        pxData[pxPos + 1] = pixel;
+        pxData[pxPos + 2] = pixel;
+        pxData[pxPos + 3] = data[rawPos + 1];
+      },
+      // 3 - RGB
+      // 0: 0, 1: 1, 2: 2, 3: 0xff
+      function(pxData, data, pxPos, rawPos) {
+        if (rawPos + 2 >= data.length) {
+          throw new Error("Ran out of data");
+        }
+        pxData[pxPos] = data[rawPos];
+        pxData[pxPos + 1] = data[rawPos + 1];
+        pxData[pxPos + 2] = data[rawPos + 2];
+        pxData[pxPos + 3] = 255;
+      },
+      // 4 - RGBA
+      // 0: 0, 1: 1, 2: 2, 3: 3
+      function(pxData, data, pxPos, rawPos) {
+        if (rawPos + 3 >= data.length) {
+          throw new Error("Ran out of data");
+        }
+        pxData[pxPos] = data[rawPos];
+        pxData[pxPos + 1] = data[rawPos + 1];
+        pxData[pxPos + 2] = data[rawPos + 2];
+        pxData[pxPos + 3] = data[rawPos + 3];
+      }
+    ];
+    var pixelBppCustomMapper = [
+      // 0 - dummy entry
+      function() {
+      },
+      // 1 - L
+      // 0: 0, 1: 0, 2: 0, 3: 0xff
+      function(pxData, pixelData, pxPos, maxBit) {
+        let pixel = pixelData[0];
+        pxData[pxPos] = pixel;
+        pxData[pxPos + 1] = pixel;
+        pxData[pxPos + 2] = pixel;
+        pxData[pxPos + 3] = maxBit;
+      },
+      // 2 - LA
+      // 0: 0, 1: 0, 2: 0, 3: 1
+      function(pxData, pixelData, pxPos) {
+        let pixel = pixelData[0];
+        pxData[pxPos] = pixel;
+        pxData[pxPos + 1] = pixel;
+        pxData[pxPos + 2] = pixel;
+        pxData[pxPos + 3] = pixelData[1];
+      },
+      // 3 - RGB
+      // 0: 0, 1: 1, 2: 2, 3: 0xff
+      function(pxData, pixelData, pxPos, maxBit) {
+        pxData[pxPos] = pixelData[0];
+        pxData[pxPos + 1] = pixelData[1];
+        pxData[pxPos + 2] = pixelData[2];
+        pxData[pxPos + 3] = maxBit;
+      },
+      // 4 - RGBA
+      // 0: 0, 1: 1, 2: 2, 3: 3
+      function(pxData, pixelData, pxPos) {
+        pxData[pxPos] = pixelData[0];
+        pxData[pxPos + 1] = pixelData[1];
+        pxData[pxPos + 2] = pixelData[2];
+        pxData[pxPos + 3] = pixelData[3];
+      }
+    ];
+    function bitRetriever(data, depth) {
+      let leftOver = [];
+      let i = 0;
+      function split() {
+        if (i === data.length) {
+          throw new Error("Ran out of data");
+        }
+        let byte = data[i];
+        i++;
+        let byte8, byte7, byte6, byte5, byte4, byte3, byte2, byte1;
+        switch (depth) {
+          default:
+            throw new Error("unrecognised depth");
+          case 16:
+            byte2 = data[i];
+            i++;
+            leftOver.push((byte << 8) + byte2);
+            break;
+          case 4:
+            byte2 = byte & 15;
+            byte1 = byte >> 4;
+            leftOver.push(byte1, byte2);
+            break;
+          case 2:
+            byte4 = byte & 3;
+            byte3 = byte >> 2 & 3;
+            byte2 = byte >> 4 & 3;
+            byte1 = byte >> 6 & 3;
+            leftOver.push(byte1, byte2, byte3, byte4);
+            break;
+          case 1:
+            byte8 = byte & 1;
+            byte7 = byte >> 1 & 1;
+            byte6 = byte >> 2 & 1;
+            byte5 = byte >> 3 & 1;
+            byte4 = byte >> 4 & 1;
+            byte3 = byte >> 5 & 1;
+            byte2 = byte >> 6 & 1;
+            byte1 = byte >> 7 & 1;
+            leftOver.push(byte1, byte2, byte3, byte4, byte5, byte6, byte7, byte8);
+            break;
+        }
+      }
+      return {
+        get: function(count2) {
+          while (leftOver.length < count2) {
+            split();
+          }
+          let returner = leftOver.slice(0, count2);
+          leftOver = leftOver.slice(count2);
+          return returner;
+        },
+        resetAfterLine: function() {
+          leftOver.length = 0;
+        },
+        end: function() {
+          if (i !== data.length) {
+            throw new Error("extra data found");
+          }
+        }
+      };
+    }
+    function mapImage8Bit(image, pxData, getPxPos, bpp, data, rawPos) {
+      let imageWidth = image.width;
+      let imageHeight = image.height;
+      let imagePass = image.index;
+      for (let y = 0; y < imageHeight; y++) {
+        for (let x = 0; x < imageWidth; x++) {
+          let pxPos = getPxPos(x, y, imagePass);
+          pixelBppMapper[bpp](pxData, data, pxPos, rawPos);
+          rawPos += bpp;
+        }
+      }
+      return rawPos;
+    }
+    function mapImageCustomBit(image, pxData, getPxPos, bpp, bits, maxBit) {
+      let imageWidth = image.width;
+      let imageHeight = image.height;
+      let imagePass = image.index;
+      for (let y = 0; y < imageHeight; y++) {
+        for (let x = 0; x < imageWidth; x++) {
+          let pixelData = bits.get(bpp);
+          let pxPos = getPxPos(x, y, imagePass);
+          pixelBppCustomMapper[bpp](pxData, pixelData, pxPos, maxBit);
+        }
+        bits.resetAfterLine();
+      }
+    }
+    exports2.dataToBitMap = function(data, bitmapInfo) {
+      let width = bitmapInfo.width;
+      let height = bitmapInfo.height;
+      let depth = bitmapInfo.depth;
+      let bpp = bitmapInfo.bpp;
+      let interlace = bitmapInfo.interlace;
+      let bits;
+      if (depth !== 8) {
+        bits = bitRetriever(data, depth);
+      }
+      let pxData;
+      if (depth <= 8) {
+        pxData = Buffer.alloc(width * height * 4);
+      } else {
+        pxData = new Uint16Array(width * height * 4);
+      }
+      let maxBit = Math.pow(2, depth) - 1;
+      let rawPos = 0;
+      let images;
+      let getPxPos;
+      if (interlace) {
+        images = interlaceUtils.getImagePasses(width, height);
+        getPxPos = interlaceUtils.getInterlaceIterator(width, height);
+      } else {
+        let nonInterlacedPxPos = 0;
+        getPxPos = function() {
+          let returner = nonInterlacedPxPos;
+          nonInterlacedPxPos += 4;
+          return returner;
+        };
+        images = [{ width, height }];
+      }
+      for (let imageIndex = 0; imageIndex < images.length; imageIndex++) {
+        if (depth === 8) {
+          rawPos = mapImage8Bit(
+            images[imageIndex],
+            pxData,
+            getPxPos,
+            bpp,
+            data,
+            rawPos
+          );
+        } else {
+          mapImageCustomBit(
+            images[imageIndex],
+            pxData,
+            getPxPos,
+            bpp,
+            bits,
+            maxBit
+          );
+        }
+      }
+      if (depth === 8) {
+        if (rawPos !== data.length) {
+          throw new Error("extra data found");
+        }
+      } else {
+        bits.end();
+      }
+      return pxData;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/format-normaliser.js
+var require_format_normaliser = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/format-normaliser.js"(exports2, module2) {
+    "use strict";
+    function dePalette(indata, outdata, width, height, palette) {
+      let pxPos = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let color = palette[indata[pxPos]];
+          if (!color) {
+            throw new Error("index " + indata[pxPos] + " not in palette");
+          }
+          for (let i = 0; i < 4; i++) {
+            outdata[pxPos + i] = color[i];
+          }
+          pxPos += 4;
+        }
+      }
+    }
+    function replaceTransparentColor(indata, outdata, width, height, transColor) {
+      let pxPos = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let makeTrans = false;
+          if (transColor.length === 1) {
+            if (transColor[0] === indata[pxPos]) {
+              makeTrans = true;
+            }
+          } else if (transColor[0] === indata[pxPos] && transColor[1] === indata[pxPos + 1] && transColor[2] === indata[pxPos + 2]) {
+            makeTrans = true;
+          }
+          if (makeTrans) {
+            for (let i = 0; i < 4; i++) {
+              outdata[pxPos + i] = 0;
+            }
+          }
+          pxPos += 4;
+        }
+      }
+    }
+    function scaleDepth(indata, outdata, width, height, depth) {
+      let maxOutSample = 255;
+      let maxInSample = Math.pow(2, depth) - 1;
+      let pxPos = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          for (let i = 0; i < 4; i++) {
+            outdata[pxPos + i] = Math.floor(
+              indata[pxPos + i] * maxOutSample / maxInSample + 0.5
+            );
+          }
+          pxPos += 4;
+        }
+      }
+    }
+    module2.exports = function(indata, imageData, skipRescale = false) {
+      let depth = imageData.depth;
+      let width = imageData.width;
+      let height = imageData.height;
+      let colorType = imageData.colorType;
+      let transColor = imageData.transColor;
+      let palette = imageData.palette;
+      let outdata = indata;
+      if (colorType === 3) {
+        dePalette(indata, outdata, width, height, palette);
+      } else {
+        if (transColor) {
+          replaceTransparentColor(indata, outdata, width, height, transColor);
+        }
+        if (depth !== 8 && !skipRescale) {
+          if (depth === 16) {
+            outdata = Buffer.alloc(width * height * 4);
+          }
+          scaleDepth(indata, outdata, width, height, depth);
+        }
+      }
+      return outdata;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser-async.js
+var require_parser_async = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser-async.js"(exports2, module2) {
+    "use strict";
+    var util3 = require("util");
+    var zlib2 = require("zlib");
+    var ChunkStream = require_chunkstream();
+    var FilterAsync = require_filter_parse_async();
+    var Parser = require_parser();
+    var bitmapper = require_bitmapper();
+    var formatNormaliser = require_format_normaliser();
+    var ParserAsync = module2.exports = function(options) {
+      ChunkStream.call(this);
+      this._parser = new Parser(options, {
+        read: this.read.bind(this),
+        error: this._handleError.bind(this),
+        metadata: this._handleMetaData.bind(this),
+        gamma: this.emit.bind(this, "gamma"),
+        palette: this._handlePalette.bind(this),
+        transColor: this._handleTransColor.bind(this),
+        finished: this._finished.bind(this),
+        inflateData: this._inflateData.bind(this),
+        simpleTransparency: this._simpleTransparency.bind(this),
+        headersFinished: this._headersFinished.bind(this)
+      });
+      this._options = options;
+      this.writable = true;
+      this._parser.start();
+    };
+    util3.inherits(ParserAsync, ChunkStream);
+    ParserAsync.prototype._handleError = function(err) {
+      this.emit("error", err);
+      this.writable = false;
+      this.destroy();
+      if (this._inflate && this._inflate.destroy) {
+        this._inflate.destroy();
+      }
+      if (this._filter) {
+        this._filter.destroy();
+        this._filter.on("error", function() {
+        });
+      }
+      this.errord = true;
+    };
+    ParserAsync.prototype._inflateData = function(data) {
+      if (!this._inflate) {
+        if (this._bitmapInfo.interlace) {
+          this._inflate = zlib2.createInflate();
+          this._inflate.on("error", this.emit.bind(this, "error"));
+          this._filter.on("complete", this._complete.bind(this));
+          this._inflate.pipe(this._filter);
+        } else {
+          let rowSize = (this._bitmapInfo.width * this._bitmapInfo.bpp * this._bitmapInfo.depth + 7 >> 3) + 1;
+          let imageSize = rowSize * this._bitmapInfo.height;
+          let chunkSize = Math.max(imageSize, zlib2.Z_MIN_CHUNK);
+          this._inflate = zlib2.createInflate({ chunkSize });
+          let leftToInflate = imageSize;
+          let emitError = this.emit.bind(this, "error");
+          this._inflate.on("error", function(err) {
+            if (!leftToInflate) {
+              return;
+            }
+            emitError(err);
+          });
+          this._filter.on("complete", this._complete.bind(this));
+          let filterWrite = this._filter.write.bind(this._filter);
+          this._inflate.on("data", function(chunk) {
+            if (!leftToInflate) {
+              return;
+            }
+            if (chunk.length > leftToInflate) {
+              chunk = chunk.slice(0, leftToInflate);
+            }
+            leftToInflate -= chunk.length;
+            filterWrite(chunk);
+          });
+          this._inflate.on("end", this._filter.end.bind(this._filter));
+        }
+      }
+      this._inflate.write(data);
+    };
+    ParserAsync.prototype._handleMetaData = function(metaData) {
+      this._metaData = metaData;
+      this._bitmapInfo = Object.create(metaData);
+      this._filter = new FilterAsync(this._bitmapInfo);
+    };
+    ParserAsync.prototype._handleTransColor = function(transColor) {
+      this._bitmapInfo.transColor = transColor;
+    };
+    ParserAsync.prototype._handlePalette = function(palette) {
+      this._bitmapInfo.palette = palette;
+    };
+    ParserAsync.prototype._simpleTransparency = function() {
+      this._metaData.alpha = true;
+    };
+    ParserAsync.prototype._headersFinished = function() {
+      this.emit("metadata", this._metaData);
+    };
+    ParserAsync.prototype._finished = function() {
+      if (this.errord) {
+        return;
+      }
+      if (!this._inflate) {
+        this.emit("error", "No Inflate block");
+      } else {
+        this._inflate.end();
+      }
+    };
+    ParserAsync.prototype._complete = function(filteredData) {
+      if (this.errord) {
+        return;
+      }
+      let normalisedBitmapData;
+      try {
+        let bitmapData = bitmapper.dataToBitMap(filteredData, this._bitmapInfo);
+        normalisedBitmapData = formatNormaliser(
+          bitmapData,
+          this._bitmapInfo,
+          this._options.skipRescale
+        );
+        bitmapData = null;
+      } catch (ex) {
+        this._handleError(ex);
+        return;
+      }
+      this.emit("parsed", normalisedBitmapData);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/bitpacker.js
+var require_bitpacker = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/bitpacker.js"(exports2, module2) {
+    "use strict";
+    var constants3 = require_constants13();
+    module2.exports = function(dataIn, width, height, options) {
+      let outHasAlpha = [constants3.COLORTYPE_COLOR_ALPHA, constants3.COLORTYPE_ALPHA].indexOf(
+        options.colorType
+      ) !== -1;
+      if (options.colorType === options.inputColorType) {
+        let bigEndian = (function() {
+          let buffer2 = new ArrayBuffer(2);
+          new DataView(buffer2).setInt16(
+            0,
+            256,
+            true
+            /* littleEndian */
+          );
+          return new Int16Array(buffer2)[0] !== 256;
+        })();
+        if (options.bitDepth === 8 || options.bitDepth === 16 && bigEndian) {
+          return dataIn;
+        }
+      }
+      let data = options.bitDepth !== 16 ? dataIn : new Uint16Array(dataIn.buffer);
+      let maxValue = 255;
+      let inBpp = constants3.COLORTYPE_TO_BPP_MAP[options.inputColorType];
+      if (inBpp === 4 && !options.inputHasAlpha) {
+        inBpp = 3;
+      }
+      let outBpp = constants3.COLORTYPE_TO_BPP_MAP[options.colorType];
+      if (options.bitDepth === 16) {
+        maxValue = 65535;
+        outBpp *= 2;
+      }
+      let outData = Buffer.alloc(width * height * outBpp);
+      let inIndex = 0;
+      let outIndex = 0;
+      let bgColor = options.bgColor || {};
+      if (bgColor.red === void 0) {
+        bgColor.red = maxValue;
+      }
+      if (bgColor.green === void 0) {
+        bgColor.green = maxValue;
+      }
+      if (bgColor.blue === void 0) {
+        bgColor.blue = maxValue;
+      }
+      function getRGBA() {
+        let red;
+        let green;
+        let blue;
+        let alpha = maxValue;
+        switch (options.inputColorType) {
+          case constants3.COLORTYPE_COLOR_ALPHA:
+            alpha = data[inIndex + 3];
+            red = data[inIndex];
+            green = data[inIndex + 1];
+            blue = data[inIndex + 2];
+            break;
+          case constants3.COLORTYPE_COLOR:
+            red = data[inIndex];
+            green = data[inIndex + 1];
+            blue = data[inIndex + 2];
+            break;
+          case constants3.COLORTYPE_ALPHA:
+            alpha = data[inIndex + 1];
+            red = data[inIndex];
+            green = red;
+            blue = red;
+            break;
+          case constants3.COLORTYPE_GRAYSCALE:
+            red = data[inIndex];
+            green = red;
+            blue = red;
+            break;
+          default:
+            throw new Error(
+              "input color type:" + options.inputColorType + " is not supported at present"
+            );
+        }
+        if (options.inputHasAlpha) {
+          if (!outHasAlpha) {
+            alpha /= maxValue;
+            red = Math.min(
+              Math.max(Math.round((1 - alpha) * bgColor.red + alpha * red), 0),
+              maxValue
+            );
+            green = Math.min(
+              Math.max(Math.round((1 - alpha) * bgColor.green + alpha * green), 0),
+              maxValue
+            );
+            blue = Math.min(
+              Math.max(Math.round((1 - alpha) * bgColor.blue + alpha * blue), 0),
+              maxValue
+            );
+          }
+        }
+        return { red, green, blue, alpha };
+      }
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let rgba = getRGBA(data, inIndex);
+          switch (options.colorType) {
+            case constants3.COLORTYPE_COLOR_ALPHA:
+            case constants3.COLORTYPE_COLOR:
+              if (options.bitDepth === 8) {
+                outData[outIndex] = rgba.red;
+                outData[outIndex + 1] = rgba.green;
+                outData[outIndex + 2] = rgba.blue;
+                if (outHasAlpha) {
+                  outData[outIndex + 3] = rgba.alpha;
+                }
+              } else {
+                outData.writeUInt16BE(rgba.red, outIndex);
+                outData.writeUInt16BE(rgba.green, outIndex + 2);
+                outData.writeUInt16BE(rgba.blue, outIndex + 4);
+                if (outHasAlpha) {
+                  outData.writeUInt16BE(rgba.alpha, outIndex + 6);
+                }
+              }
+              break;
+            case constants3.COLORTYPE_ALPHA:
+            case constants3.COLORTYPE_GRAYSCALE: {
+              let grayscale = (rgba.red + rgba.green + rgba.blue) / 3;
+              if (options.bitDepth === 8) {
+                outData[outIndex] = grayscale;
+                if (outHasAlpha) {
+                  outData[outIndex + 1] = rgba.alpha;
+                }
+              } else {
+                outData.writeUInt16BE(grayscale, outIndex);
+                if (outHasAlpha) {
+                  outData.writeUInt16BE(rgba.alpha, outIndex + 2);
+                }
+              }
+              break;
+            }
+            default:
+              throw new Error("unrecognised color Type " + options.colorType);
+          }
+          inIndex += inBpp;
+          outIndex += outBpp;
+        }
+      }
+      return outData;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-pack.js
+var require_filter_pack = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-pack.js"(exports2, module2) {
+    "use strict";
+    var paethPredictor = require_paeth_predictor();
+    function filterNone(pxData, pxPos, byteWidth, rawData, rawPos) {
+      for (let x = 0; x < byteWidth; x++) {
+        rawData[rawPos + x] = pxData[pxPos + x];
+      }
+    }
+    function filterSumNone(pxData, pxPos, byteWidth) {
+      let sum = 0;
+      let length = pxPos + byteWidth;
+      for (let i = pxPos; i < length; i++) {
+        sum += Math.abs(pxData[i]);
+      }
+      return sum;
+    }
+    function filterSub(pxData, pxPos, byteWidth, rawData, rawPos, bpp) {
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let val = pxData[pxPos + x] - left;
+        rawData[rawPos + x] = val;
+      }
+    }
+    function filterSumSub(pxData, pxPos, byteWidth, bpp) {
+      let sum = 0;
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let val = pxData[pxPos + x] - left;
+        sum += Math.abs(val);
+      }
+      return sum;
+    }
+    function filterUp(pxData, pxPos, byteWidth, rawData, rawPos) {
+      for (let x = 0; x < byteWidth; x++) {
+        let up = pxPos > 0 ? pxData[pxPos + x - byteWidth] : 0;
+        let val = pxData[pxPos + x] - up;
+        rawData[rawPos + x] = val;
+      }
+    }
+    function filterSumUp(pxData, pxPos, byteWidth) {
+      let sum = 0;
+      let length = pxPos + byteWidth;
+      for (let x = pxPos; x < length; x++) {
+        let up = pxPos > 0 ? pxData[x - byteWidth] : 0;
+        let val = pxData[x] - up;
+        sum += Math.abs(val);
+      }
+      return sum;
+    }
+    function filterAvg(pxData, pxPos, byteWidth, rawData, rawPos, bpp) {
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let up = pxPos > 0 ? pxData[pxPos + x - byteWidth] : 0;
+        let val = pxData[pxPos + x] - (left + up >> 1);
+        rawData[rawPos + x] = val;
+      }
+    }
+    function filterSumAvg(pxData, pxPos, byteWidth, bpp) {
+      let sum = 0;
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let up = pxPos > 0 ? pxData[pxPos + x - byteWidth] : 0;
+        let val = pxData[pxPos + x] - (left + up >> 1);
+        sum += Math.abs(val);
+      }
+      return sum;
+    }
+    function filterPaeth(pxData, pxPos, byteWidth, rawData, rawPos, bpp) {
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let up = pxPos > 0 ? pxData[pxPos + x - byteWidth] : 0;
+        let upleft = pxPos > 0 && x >= bpp ? pxData[pxPos + x - (byteWidth + bpp)] : 0;
+        let val = pxData[pxPos + x] - paethPredictor(left, up, upleft);
+        rawData[rawPos + x] = val;
+      }
+    }
+    function filterSumPaeth(pxData, pxPos, byteWidth, bpp) {
+      let sum = 0;
+      for (let x = 0; x < byteWidth; x++) {
+        let left = x >= bpp ? pxData[pxPos + x - bpp] : 0;
+        let up = pxPos > 0 ? pxData[pxPos + x - byteWidth] : 0;
+        let upleft = pxPos > 0 && x >= bpp ? pxData[pxPos + x - (byteWidth + bpp)] : 0;
+        let val = pxData[pxPos + x] - paethPredictor(left, up, upleft);
+        sum += Math.abs(val);
+      }
+      return sum;
+    }
+    var filters = {
+      0: filterNone,
+      1: filterSub,
+      2: filterUp,
+      3: filterAvg,
+      4: filterPaeth
+    };
+    var filterSums = {
+      0: filterSumNone,
+      1: filterSumSub,
+      2: filterSumUp,
+      3: filterSumAvg,
+      4: filterSumPaeth
+    };
+    module2.exports = function(pxData, width, height, options, bpp) {
+      let filterTypes;
+      if (!("filterType" in options) || options.filterType === -1) {
+        filterTypes = [0, 1, 2, 3, 4];
+      } else if (typeof options.filterType === "number") {
+        filterTypes = [options.filterType];
+      } else {
+        throw new Error("unrecognised filter types");
+      }
+      if (options.bitDepth === 16) {
+        bpp *= 2;
+      }
+      let byteWidth = width * bpp;
+      let rawPos = 0;
+      let pxPos = 0;
+      let rawData = Buffer.alloc((byteWidth + 1) * height);
+      let sel = filterTypes[0];
+      for (let y = 0; y < height; y++) {
+        if (filterTypes.length > 1) {
+          let min = Infinity;
+          for (let i = 0; i < filterTypes.length; i++) {
+            let sum = filterSums[filterTypes[i]](pxData, pxPos, byteWidth, bpp);
+            if (sum < min) {
+              sel = filterTypes[i];
+              min = sum;
+            }
+          }
+        }
+        rawData[rawPos] = sel;
+        rawPos++;
+        filters[sel](pxData, pxPos, byteWidth, rawData, rawPos, bpp);
+        rawPos += byteWidth;
+        pxPos += byteWidth;
+      }
+      return rawData;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer.js
+var require_packer = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer.js"(exports2, module2) {
+    "use strict";
+    var constants3 = require_constants13();
+    var CrcStream = require_crc();
+    var bitPacker = require_bitpacker();
+    var filter = require_filter_pack();
+    var zlib2 = require("zlib");
+    var Packer = module2.exports = function(options) {
+      this._options = options;
+      options.deflateChunkSize = options.deflateChunkSize || 32 * 1024;
+      options.deflateLevel = options.deflateLevel != null ? options.deflateLevel : 9;
+      options.deflateStrategy = options.deflateStrategy != null ? options.deflateStrategy : 3;
+      options.inputHasAlpha = options.inputHasAlpha != null ? options.inputHasAlpha : true;
+      options.deflateFactory = options.deflateFactory || zlib2.createDeflate;
+      options.bitDepth = options.bitDepth || 8;
+      options.colorType = typeof options.colorType === "number" ? options.colorType : constants3.COLORTYPE_COLOR_ALPHA;
+      options.inputColorType = typeof options.inputColorType === "number" ? options.inputColorType : constants3.COLORTYPE_COLOR_ALPHA;
+      if ([
+        constants3.COLORTYPE_GRAYSCALE,
+        constants3.COLORTYPE_COLOR,
+        constants3.COLORTYPE_COLOR_ALPHA,
+        constants3.COLORTYPE_ALPHA
+      ].indexOf(options.colorType) === -1) {
+        throw new Error(
+          "option color type:" + options.colorType + " is not supported at present"
+        );
+      }
+      if ([
+        constants3.COLORTYPE_GRAYSCALE,
+        constants3.COLORTYPE_COLOR,
+        constants3.COLORTYPE_COLOR_ALPHA,
+        constants3.COLORTYPE_ALPHA
+      ].indexOf(options.inputColorType) === -1) {
+        throw new Error(
+          "option input color type:" + options.inputColorType + " is not supported at present"
+        );
+      }
+      if (options.bitDepth !== 8 && options.bitDepth !== 16) {
+        throw new Error(
+          "option bit depth:" + options.bitDepth + " is not supported at present"
+        );
+      }
+    };
+    Packer.prototype.getDeflateOptions = function() {
+      return {
+        chunkSize: this._options.deflateChunkSize,
+        level: this._options.deflateLevel,
+        strategy: this._options.deflateStrategy
+      };
+    };
+    Packer.prototype.createDeflate = function() {
+      return this._options.deflateFactory(this.getDeflateOptions());
+    };
+    Packer.prototype.filterData = function(data, width, height) {
+      let packedData = bitPacker(data, width, height, this._options);
+      let bpp = constants3.COLORTYPE_TO_BPP_MAP[this._options.colorType];
+      let filteredData = filter(packedData, width, height, this._options, bpp);
+      return filteredData;
+    };
+    Packer.prototype._packChunk = function(type, data) {
+      let len = data ? data.length : 0;
+      let buf = Buffer.alloc(len + 12);
+      buf.writeUInt32BE(len, 0);
+      buf.writeUInt32BE(type, 4);
+      if (data) {
+        data.copy(buf, 8);
+      }
+      buf.writeInt32BE(
+        CrcStream.crc32(buf.slice(4, buf.length - 4)),
+        buf.length - 4
+      );
+      return buf;
+    };
+    Packer.prototype.packGAMA = function(gamma) {
+      let buf = Buffer.alloc(4);
+      buf.writeUInt32BE(Math.floor(gamma * constants3.GAMMA_DIVISION), 0);
+      return this._packChunk(constants3.TYPE_gAMA, buf);
+    };
+    Packer.prototype.packIHDR = function(width, height) {
+      let buf = Buffer.alloc(13);
+      buf.writeUInt32BE(width, 0);
+      buf.writeUInt32BE(height, 4);
+      buf[8] = this._options.bitDepth;
+      buf[9] = this._options.colorType;
+      buf[10] = 0;
+      buf[11] = 0;
+      buf[12] = 0;
+      return this._packChunk(constants3.TYPE_IHDR, buf);
+    };
+    Packer.prototype.packIDAT = function(data) {
+      return this._packChunk(constants3.TYPE_IDAT, data);
+    };
+    Packer.prototype.packIEND = function() {
+      return this._packChunk(constants3.TYPE_IEND, null);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer-async.js
+var require_packer_async = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer-async.js"(exports2, module2) {
+    "use strict";
+    var util3 = require("util");
+    var Stream = require("stream");
+    var constants3 = require_constants13();
+    var Packer = require_packer();
+    var PackerAsync = module2.exports = function(opt) {
+      Stream.call(this);
+      let options = opt || {};
+      this._packer = new Packer(options);
+      this._deflate = this._packer.createDeflate();
+      this.readable = true;
+    };
+    util3.inherits(PackerAsync, Stream);
+    PackerAsync.prototype.pack = function(data, width, height, gamma) {
+      this.emit("data", Buffer.from(constants3.PNG_SIGNATURE));
+      this.emit("data", this._packer.packIHDR(width, height));
+      if (gamma) {
+        this.emit("data", this._packer.packGAMA(gamma));
+      }
+      let filteredData = this._packer.filterData(data, width, height);
+      this._deflate.on("error", this.emit.bind(this, "error"));
+      this._deflate.on(
+        "data",
+        function(compressedData) {
+          this.emit("data", this._packer.packIDAT(compressedData));
+        }.bind(this)
+      );
+      this._deflate.on(
+        "end",
+        function() {
+          this.emit("data", this._packer.packIEND());
+          this.emit("end");
+        }.bind(this)
+      );
+      this._deflate.end(filteredData);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/sync-inflate.js
+var require_sync_inflate = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/sync-inflate.js"(exports2, module2) {
+    "use strict";
+    var assert = require("assert").ok;
+    var zlib2 = require("zlib");
+    var util3 = require("util");
+    var kMaxLength = require("buffer").kMaxLength;
+    function Inflate(opts) {
+      if (!(this instanceof Inflate)) {
+        return new Inflate(opts);
+      }
+      if (opts && opts.chunkSize < zlib2.Z_MIN_CHUNK) {
+        opts.chunkSize = zlib2.Z_MIN_CHUNK;
+      }
+      zlib2.Inflate.call(this, opts);
+      this._offset = this._offset === void 0 ? this._outOffset : this._offset;
+      this._buffer = this._buffer || this._outBuffer;
+      if (opts && opts.maxLength != null) {
+        this._maxLength = opts.maxLength;
+      }
+    }
+    function createInflate(opts) {
+      return new Inflate(opts);
+    }
+    function _close(engine, callback) {
+      if (callback) {
+        process.nextTick(callback);
+      }
+      if (!engine._handle) {
+        return;
+      }
+      engine._handle.close();
+      engine._handle = null;
+    }
+    Inflate.prototype._processChunk = function(chunk, flushFlag, asyncCb) {
+      if (typeof asyncCb === "function") {
+        return zlib2.Inflate._processChunk.call(this, chunk, flushFlag, asyncCb);
+      }
+      let self2 = this;
+      let availInBefore = chunk && chunk.length;
+      let availOutBefore = this._chunkSize - this._offset;
+      let leftToInflate = this._maxLength;
+      let inOff = 0;
+      let buffers = [];
+      let nread = 0;
+      let error2;
+      this.on("error", function(err) {
+        error2 = err;
+      });
+      function handleChunk(availInAfter, availOutAfter) {
+        if (self2._hadError) {
+          return;
+        }
+        let have = availOutBefore - availOutAfter;
+        assert(have >= 0, "have should not go down");
+        if (have > 0) {
+          let out = self2._buffer.slice(self2._offset, self2._offset + have);
+          self2._offset += have;
+          if (out.length > leftToInflate) {
+            out = out.slice(0, leftToInflate);
+          }
+          buffers.push(out);
+          nread += out.length;
+          leftToInflate -= out.length;
+          if (leftToInflate === 0) {
+            return false;
+          }
+        }
+        if (availOutAfter === 0 || self2._offset >= self2._chunkSize) {
+          availOutBefore = self2._chunkSize;
+          self2._offset = 0;
+          self2._buffer = Buffer.allocUnsafe(self2._chunkSize);
+        }
+        if (availOutAfter === 0) {
+          inOff += availInBefore - availInAfter;
+          availInBefore = availInAfter;
+          return true;
+        }
+        return false;
+      }
+      assert(this._handle, "zlib binding closed");
+      let res;
+      do {
+        res = this._handle.writeSync(
+          flushFlag,
+          chunk,
+          // in
+          inOff,
+          // in_off
+          availInBefore,
+          // in_len
+          this._buffer,
+          // out
+          this._offset,
+          //out_off
+          availOutBefore
+        );
+        res = res || this._writeState;
+      } while (!this._hadError && handleChunk(res[0], res[1]));
+      if (this._hadError) {
+        throw error2;
+      }
+      if (nread >= kMaxLength) {
+        _close(this);
+        throw new RangeError(
+          "Cannot create final Buffer. It would be larger than 0x" + kMaxLength.toString(16) + " bytes"
+        );
+      }
+      let buf = Buffer.concat(buffers, nread);
+      _close(this);
+      return buf;
+    };
+    util3.inherits(Inflate, zlib2.Inflate);
+    function zlibBufferSync(engine, buffer2) {
+      if (typeof buffer2 === "string") {
+        buffer2 = Buffer.from(buffer2);
+      }
+      if (!(buffer2 instanceof Buffer)) {
+        throw new TypeError("Not a string or buffer");
+      }
+      let flushFlag = engine._finishFlushFlag;
+      if (flushFlag == null) {
+        flushFlag = zlib2.Z_FINISH;
+      }
+      return engine._processChunk(buffer2, flushFlag);
+    }
+    function inflateSync(buffer2, opts) {
+      return zlibBufferSync(new Inflate(opts), buffer2);
+    }
+    module2.exports = exports2 = inflateSync;
+    exports2.Inflate = Inflate;
+    exports2.createInflate = createInflate;
+    exports2.inflateSync = inflateSync;
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/sync-reader.js
+var require_sync_reader = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/sync-reader.js"(exports2, module2) {
+    "use strict";
+    var SyncReader = module2.exports = function(buffer2) {
+      this._buffer = buffer2;
+      this._reads = [];
+    };
+    SyncReader.prototype.read = function(length, callback) {
+      this._reads.push({
+        length: Math.abs(length),
+        // if length < 0 then at most this length
+        allowLess: length < 0,
+        func: callback
+      });
+    };
+    SyncReader.prototype.process = function() {
+      while (this._reads.length > 0 && this._buffer.length) {
+        let read = this._reads[0];
+        if (this._buffer.length && (this._buffer.length >= read.length || read.allowLess)) {
+          this._reads.shift();
+          let buf = this._buffer;
+          this._buffer = buf.slice(read.length);
+          read.func.call(this, buf.slice(0, read.length));
+        } else {
+          break;
+        }
+      }
+      if (this._reads.length > 0) {
+        throw new Error("There are some read requests waitng on finished stream");
+      }
+      if (this._buffer.length > 0) {
+        throw new Error("unrecognised content at end of stream");
+      }
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse-sync.js
+var require_filter_parse_sync = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/filter-parse-sync.js"(exports2) {
+    "use strict";
+    var SyncReader = require_sync_reader();
+    var Filter = require_filter_parse();
+    exports2.process = function(inBuffer, bitmapInfo) {
+      let outBuffers = [];
+      let reader = new SyncReader(inBuffer);
+      let filter = new Filter(bitmapInfo, {
+        read: reader.read.bind(reader),
+        write: function(bufferPart) {
+          outBuffers.push(bufferPart);
+        },
+        complete: function() {
+        }
+      });
+      filter.start();
+      reader.process();
+      return Buffer.concat(outBuffers);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser-sync.js
+var require_parser_sync = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/parser-sync.js"(exports2, module2) {
+    "use strict";
+    var hasSyncZlib = true;
+    var zlib2 = require("zlib");
+    var inflateSync = require_sync_inflate();
+    if (!zlib2.deflateSync) {
+      hasSyncZlib = false;
+    }
+    var SyncReader = require_sync_reader();
+    var FilterSync = require_filter_parse_sync();
+    var Parser = require_parser();
+    var bitmapper = require_bitmapper();
+    var formatNormaliser = require_format_normaliser();
+    module2.exports = function(buffer2, options) {
+      if (!hasSyncZlib) {
+        throw new Error(
+          "To use the sync capability of this library in old node versions, please pin pngjs to v2.3.0"
+        );
+      }
+      let err;
+      function handleError(_err_) {
+        err = _err_;
+      }
+      let metaData;
+      function handleMetaData(_metaData_) {
+        metaData = _metaData_;
+      }
+      function handleTransColor(transColor) {
+        metaData.transColor = transColor;
+      }
+      function handlePalette(palette) {
+        metaData.palette = palette;
+      }
+      function handleSimpleTransparency() {
+        metaData.alpha = true;
+      }
+      let gamma;
+      function handleGamma(_gamma_) {
+        gamma = _gamma_;
+      }
+      let inflateDataList = [];
+      function handleInflateData(inflatedData2) {
+        inflateDataList.push(inflatedData2);
+      }
+      let reader = new SyncReader(buffer2);
+      let parser = new Parser(options, {
+        read: reader.read.bind(reader),
+        error: handleError,
+        metadata: handleMetaData,
+        gamma: handleGamma,
+        palette: handlePalette,
+        transColor: handleTransColor,
+        inflateData: handleInflateData,
+        simpleTransparency: handleSimpleTransparency
+      });
+      parser.start();
+      reader.process();
+      if (err) {
+        throw err;
+      }
+      let inflateData = Buffer.concat(inflateDataList);
+      inflateDataList.length = 0;
+      let inflatedData;
+      if (metaData.interlace) {
+        inflatedData = zlib2.inflateSync(inflateData);
+      } else {
+        let rowSize = (metaData.width * metaData.bpp * metaData.depth + 7 >> 3) + 1;
+        let imageSize = rowSize * metaData.height;
+        inflatedData = inflateSync(inflateData, {
+          chunkSize: imageSize,
+          maxLength: imageSize
+        });
+      }
+      inflateData = null;
+      if (!inflatedData || !inflatedData.length) {
+        throw new Error("bad png - invalid inflate data response");
+      }
+      let unfilteredData = FilterSync.process(inflatedData, metaData);
+      inflateData = null;
+      let bitmapData = bitmapper.dataToBitMap(unfilteredData, metaData);
+      unfilteredData = null;
+      let normalisedBitmapData = formatNormaliser(
+        bitmapData,
+        metaData,
+        options.skipRescale
+      );
+      metaData.data = normalisedBitmapData;
+      metaData.gamma = gamma || 0;
+      return metaData;
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer-sync.js
+var require_packer_sync = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/packer-sync.js"(exports2, module2) {
+    "use strict";
+    var hasSyncZlib = true;
+    var zlib2 = require("zlib");
+    if (!zlib2.deflateSync) {
+      hasSyncZlib = false;
+    }
+    var constants3 = require_constants13();
+    var Packer = require_packer();
+    module2.exports = function(metaData, opt) {
+      if (!hasSyncZlib) {
+        throw new Error(
+          "To use the sync capability of this library in old node versions, please pin pngjs to v2.3.0"
+        );
+      }
+      let options = opt || {};
+      let packer = new Packer(options);
+      let chunks = [];
+      chunks.push(Buffer.from(constants3.PNG_SIGNATURE));
+      chunks.push(packer.packIHDR(metaData.width, metaData.height));
+      if (metaData.gamma) {
+        chunks.push(packer.packGAMA(metaData.gamma));
+      }
+      let filteredData = packer.filterData(
+        metaData.data,
+        metaData.width,
+        metaData.height
+      );
+      let compressedData = zlib2.deflateSync(
+        filteredData,
+        packer.getDeflateOptions()
+      );
+      filteredData = null;
+      if (!compressedData || !compressedData.length) {
+        throw new Error("bad png - invalid compressed data response");
+      }
+      chunks.push(packer.packIDAT(compressedData));
+      chunks.push(packer.packIEND());
+      return Buffer.concat(chunks);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/png-sync.js
+var require_png_sync = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/png-sync.js"(exports2) {
+    "use strict";
+    var parse4 = require_parser_sync();
+    var pack = require_packer_sync();
+    exports2.read = function(buffer2, options) {
+      return parse4(buffer2, options || {});
+    };
+    exports2.write = function(png, options) {
+      return pack(png, options);
+    };
+  }
+});
+
+// ../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/png.js
+var require_png = __commonJS({
+  "../node_modules/.pnpm/pngjs@7.0.0/node_modules/pngjs/lib/png.js"(exports2) {
+    "use strict";
+    var util3 = require("util");
+    var Stream = require("stream");
+    var Parser = require_parser_async();
+    var Packer = require_packer_async();
+    var PNGSync = require_png_sync();
+    var PNG2 = exports2.PNG = function(options) {
+      Stream.call(this);
+      options = options || {};
+      this.width = options.width | 0;
+      this.height = options.height | 0;
+      this.data = this.width > 0 && this.height > 0 ? Buffer.alloc(4 * this.width * this.height) : null;
+      if (options.fill && this.data) {
+        this.data.fill(0);
+      }
+      this.gamma = 0;
+      this.readable = this.writable = true;
+      this._parser = new Parser(options);
+      this._parser.on("error", this.emit.bind(this, "error"));
+      this._parser.on("close", this._handleClose.bind(this));
+      this._parser.on("metadata", this._metadata.bind(this));
+      this._parser.on("gamma", this._gamma.bind(this));
+      this._parser.on(
+        "parsed",
+        function(data) {
+          this.data = data;
+          this.emit("parsed", data);
+        }.bind(this)
+      );
+      this._packer = new Packer(options);
+      this._packer.on("data", this.emit.bind(this, "data"));
+      this._packer.on("end", this.emit.bind(this, "end"));
+      this._parser.on("close", this._handleClose.bind(this));
+      this._packer.on("error", this.emit.bind(this, "error"));
+    };
+    util3.inherits(PNG2, Stream);
+    PNG2.sync = PNGSync;
+    PNG2.prototype.pack = function() {
+      if (!this.data || !this.data.length) {
+        this.emit("error", "No data provided");
+        return this;
+      }
+      process.nextTick(
+        function() {
+          this._packer.pack(this.data, this.width, this.height, this.gamma);
+        }.bind(this)
+      );
+      return this;
+    };
+    PNG2.prototype.parse = function(data, callback) {
+      if (callback) {
+        let onParsed, onError;
+        onParsed = function(parsedData) {
+          this.removeListener("error", onError);
+          this.data = parsedData;
+          callback(null, this);
+        }.bind(this);
+        onError = function(err) {
+          this.removeListener("parsed", onParsed);
+          callback(err, null);
+        }.bind(this);
+        this.once("parsed", onParsed);
+        this.once("error", onError);
+      }
+      this.end(data);
+      return this;
+    };
+    PNG2.prototype.write = function(data) {
+      this._parser.write(data);
+      return true;
+    };
+    PNG2.prototype.end = function(data) {
+      this._parser.end(data);
+    };
+    PNG2.prototype._metadata = function(metadata2) {
+      this.width = metadata2.width;
+      this.height = metadata2.height;
+      this.emit("metadata", metadata2);
+    };
+    PNG2.prototype._gamma = function(gamma) {
+      this.gamma = gamma;
+    };
+    PNG2.prototype._handleClose = function() {
+      if (!this._parser.writable && !this._packer.readable) {
+        this.emit("close");
+      }
+    };
+    PNG2.bitblt = function(src, dst, srcX, srcY, width, height, deltaX, deltaY) {
+      srcX |= 0;
+      srcY |= 0;
+      width |= 0;
+      height |= 0;
+      deltaX |= 0;
+      deltaY |= 0;
+      if (srcX > src.width || srcY > src.height || srcX + width > src.width || srcY + height > src.height) {
+        throw new Error("bitblt reading outside image");
+      }
+      if (deltaX > dst.width || deltaY > dst.height || deltaX + width > dst.width || deltaY + height > dst.height) {
+        throw new Error("bitblt writing outside image");
+      }
+      for (let y = 0; y < height; y++) {
+        src.data.copy(
+          dst.data,
+          (deltaY + y) * dst.width + deltaX << 2,
+          (srcY + y) * src.width + srcX << 2,
+          (srcY + y) * src.width + srcX + width << 2
+        );
+      }
+    };
+    PNG2.prototype.bitblt = function(dst, srcX, srcY, width, height, deltaX, deltaY) {
+      PNG2.bitblt(this, dst, srcX, srcY, width, height, deltaX, deltaY);
+      return this;
+    };
+    PNG2.adjustGamma = function(src) {
+      if (src.gamma) {
+        for (let y = 0; y < src.height; y++) {
+          for (let x = 0; x < src.width; x++) {
+            let idx = src.width * y + x << 2;
+            for (let i = 0; i < 3; i++) {
+              let sample = src.data[idx + i] / 255;
+              sample = Math.pow(sample, 1 / 2.2 / src.gamma);
+              src.data[idx + i] = Math.round(sample * 255);
+            }
+          }
+        }
+        src.gamma = 0;
+      }
+    };
+    PNG2.prototype.adjustGamma = function() {
+      PNG2.adjustGamma(this);
+    };
   }
 });
 
@@ -76716,8 +78804,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addRaw(text, addEOL = false) {
-    this._buffer += text;
+  addRaw(text2, addEOL = false) {
+    this._buffer += text2;
     return addEOL ? this.addEOL() : this;
   }
   /**
@@ -76736,9 +78824,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addCodeBlock(code, lang) {
+  addCodeBlock(code2, lang) {
     const attrs = Object.assign({}, lang && { lang });
-    const element = this.wrap("pre", this.wrap("code", code), attrs);
+    const element = this.wrap("pre", this.wrap("code", code2), attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -76813,10 +78901,10 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text, level) {
+  addHeading(text2, level) {
     const tag = `h${level}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
-    const element = this.wrap(allowedTag, text);
+    const element = this.wrap(allowedTag, text2);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -76845,9 +78933,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addQuote(text, cite) {
+  addQuote(text2, cite) {
     const attrs = Object.assign({}, cite && { cite });
-    const element = this.wrap("blockquote", text, attrs);
+    const element = this.wrap("blockquote", text2, attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -76858,8 +78946,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addLink(text, href) {
-    const element = this.wrap("a", text, { href });
+  addLink(text2, href) {
+    const element = this.wrap("a", text2, { href });
     return this.addRaw(element).addEOL();
   }
 };
@@ -77424,14 +79512,14 @@ var ToolRunner = class extends events.EventEmitter {
           state3.processClosed = true;
           state3.CheckComplete();
         });
-        cp.on("exit", (code) => {
-          state3.processExitCode = code;
+        cp.on("exit", (code2) => {
+          state3.processExitCode = code2;
           state3.processExited = true;
-          this._debug(`Exit code ${code} received from tool '${this.toolPath}'`);
+          this._debug(`Exit code ${code2} received from tool '${this.toolPath}'`);
           state3.CheckComplete();
         });
-        cp.on("close", (code) => {
-          state3.processExitCode = code;
+        cp.on("close", (code2) => {
+          state3.processExitCode = code2;
           state3.processExited = true;
           state3.processClosed = true;
           this._debug(`STDIO streams have closed for tool '${this.toolPath}'`);
@@ -79628,13 +81716,13 @@ These characters are not allowed in the artifact name due to limitations with ce
   }
   info(`Artifact name is valid!`);
 }
-function validateFilePath(path11) {
-  if (!path11) {
+function validateFilePath(path16) {
+  if (!path16) {
     throw new Error(`Provided file path input during validation is empty`);
   }
   for (const [invalidCharacterKey, errorMessageForCharacter] of invalidArtifactFilePathCharacters) {
-    if (path11.includes(invalidCharacterKey)) {
-      throw new Error(`The path for one of the files in artifact is not valid: ${path11}. Contains the following character: ${errorMessageForCharacter}
+    if (path16.includes(invalidCharacterKey)) {
+      throw new Error(`The path for one of the files in artifact is not valid: ${path16}. Contains the following character: ${errorMessageForCharacter}
           
 Invalid characters include: ${Array.from(invalidArtifactFilePathCharacters.values()).toString()}
           
@@ -79681,16 +81769,16 @@ var GHESNotSupportedError = class extends Error {
   }
 };
 var NetworkError = class extends Error {
-  constructor(code) {
-    const message = `Unable to make request: ${code}
+  constructor(code2) {
+    const message = `Unable to make request: ${code2}
 If you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#communication-between-self-hosted-runners-and-github`;
     super(message);
-    this.code = code;
+    this.code = code2;
     this.name = "NetworkError";
   }
 };
-NetworkError.isNetworkErrorCode = (code) => {
-  if (!code)
+NetworkError.isNetworkErrorCode = (code2) => {
+  if (!code2)
     return false;
   return [
     "ECONNRESET",
@@ -79698,7 +81786,7 @@ NetworkError.isNetworkErrorCode = (code) => {
     "ETIMEDOUT",
     "ECONNREFUSED",
     "EHOSTUNREACH"
-  ].includes(code);
+  ].includes(code2);
 };
 var UsageError = class extends Error {
   constructor() {
@@ -79720,11 +81808,11 @@ var InvalidTokenError = class extends Error {
 InvalidTokenError.prototype.name = "InvalidTokenError";
 function b64DecodeUnicode(str) {
   return decodeURIComponent(atob(str).replace(/(.)/g, (m, p) => {
-    let code = p.charCodeAt(0).toString(16).toUpperCase();
-    if (code.length < 2) {
-      code = "0" + code;
+    let code2 = p.charCodeAt(0).toString(16).toUpperCase();
+    if (code2.length < 2) {
+      code2 = "0" + code2;
     }
-    return "%" + code;
+    return "%" + code2;
   }));
 }
 function base64UrlDecode(str) {
@@ -81315,8 +83403,8 @@ function getRetryAfterInMs(response) {
     if (!retryAfterHeader)
       return;
     const date = Date.parse(retryAfterHeader);
-    const diff = date - Date.now();
-    return Number.isFinite(diff) ? Math.max(0, diff) : void 0;
+    const diff2 = date - Date.now();
+    return Number.isFinite(diff2) ? Math.max(0, diff2) : void 0;
   } catch {
     return void 0;
   }
@@ -83834,18 +85922,18 @@ function handleErrorResponse(parsedResponse, operationSpec, responseSpec, option
 }
 async function parse(jsonContentTypes, xmlContentTypes, operationResponse, opts, parseXML2) {
   if (!operationResponse.request.streamResponseStatusCodes?.has(operationResponse.status) && operationResponse.bodyAsText) {
-    const text = operationResponse.bodyAsText;
+    const text2 = operationResponse.bodyAsText;
     const contentType2 = operationResponse.headers.get("Content-Type") || "";
     const contentComponents = !contentType2 ? [] : contentType2.split(";").map((component) => component.toLowerCase());
     try {
       if (contentComponents.length === 0 || contentComponents.some((component) => jsonContentTypes.indexOf(component) !== -1)) {
-        operationResponse.parsedBody = JSON.parse(text);
+        operationResponse.parsedBody = JSON.parse(text2);
         return operationResponse;
       } else if (contentComponents.some((component) => xmlContentTypes.indexOf(component) !== -1)) {
         if (!parseXML2) {
           throw new Error("Parsing XML not supported.");
         }
-        const body2 = await parseXML2(text, opts.xml);
+        const body2 = await parseXML2(text2, opts.xml);
         operationResponse.parsedBody = body2;
         return operationResponse;
       }
@@ -84042,15 +86130,15 @@ function getRequestUrl(baseUri, operationSpec, operationArguments, fallbackObjec
   let isAbsolutePath = false;
   let requestUrl = replaceAll(baseUri, urlReplacements);
   if (operationSpec.path) {
-    let path11 = replaceAll(operationSpec.path, urlReplacements);
-    if (operationSpec.path === "/{nextLink}" && path11.startsWith("/")) {
-      path11 = path11.substring(1);
+    let path16 = replaceAll(operationSpec.path, urlReplacements);
+    if (operationSpec.path === "/{nextLink}" && path16.startsWith("/")) {
+      path16 = path16.substring(1);
     }
-    if (isAbsoluteUrl(path11)) {
-      requestUrl = path11;
+    if (isAbsoluteUrl(path16)) {
+      requestUrl = path16;
       isAbsolutePath = true;
     } else {
-      requestUrl = appendPath(requestUrl, path11);
+      requestUrl = appendPath(requestUrl, path16);
     }
   }
   const { queryParams, sequenceParams } = calculateQueryParameters(operationSpec, operationArguments, fallbackObject);
@@ -84096,9 +86184,9 @@ function appendPath(url2, pathToAppend) {
   }
   const searchStart = pathToAppend.indexOf("?");
   if (searchStart !== -1) {
-    const path11 = pathToAppend.substring(0, searchStart);
+    const path16 = pathToAppend.substring(0, searchStart);
     const search = pathToAppend.substring(searchStart + 1);
-    newPath = newPath + path11;
+    newPath = newPath + path16;
     if (search) {
       parsedUrl.search = parsedUrl.search ? `${parsedUrl.search}&${search}` : search;
     }
@@ -84389,8 +86477,8 @@ var Constants = {
     AUTHORIZATION: "authorization"
   }
 };
-function isUuid(text) {
-  return /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/.test(text);
+function isUuid(text2) {
+  return /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/.test(text2);
 }
 var authorizeRequestOnTenantChallenge = async (challengeOptions) => {
   const requestOptions = requestToOptions(challengeOptions.request);
@@ -85143,9 +87231,9 @@ function validateAmpersand(xmlData, i) {
     i++;
     return validateNumberAmpersand(xmlData, i);
   }
-  let count = 0;
-  for (; i < xmlData.length; i++, count++) {
-    if (xmlData[i].match(/\w/) && count < 20)
+  let count2 = 0;
+  for (; i < xmlData.length; i++, count2++) {
+    if (xmlData[i].match(/\w/) && count2 < 20)
       continue;
     if (xmlData[i] === ";")
       break;
@@ -85153,10 +87241,10 @@ function validateAmpersand(xmlData, i) {
   }
   return i;
 }
-function getErrorObject(code, message, lineNumber) {
+function getErrorObject(code2, message, lineNumber) {
   return {
     err: {
-      code,
+      code: code2,
       msg: message,
       line: lineNumber.line || lineNumber,
       col: lineNumber.col
@@ -87574,16 +89662,16 @@ var MatcherView = class {
    * @returns {string|undefined}
    */
   getCurrentTag() {
-    const path11 = this._matcher.path;
-    return path11.length > 0 ? path11[path11.length - 1].tag : void 0;
+    const path16 = this._matcher.path;
+    return path16.length > 0 ? path16[path16.length - 1].tag : void 0;
   }
   /**
    * Get current namespace.
    * @returns {string|undefined}
    */
   getCurrentNamespace() {
-    const path11 = this._matcher.path;
-    return path11.length > 0 ? path11[path11.length - 1].namespace : void 0;
+    const path16 = this._matcher.path;
+    return path16.length > 0 ? path16[path16.length - 1].namespace : void 0;
   }
   /**
    * Get current node's attribute value.
@@ -87591,9 +89679,9 @@ var MatcherView = class {
    * @returns {*}
    */
   getAttrValue(attrName) {
-    const path11 = this._matcher.path;
-    if (path11.length === 0) return void 0;
-    return path11[path11.length - 1].values?.[attrName];
+    const path16 = this._matcher.path;
+    if (path16.length === 0) return void 0;
+    return path16[path16.length - 1].values?.[attrName];
   }
   /**
    * Check if current node has an attribute.
@@ -87601,9 +89689,9 @@ var MatcherView = class {
    * @returns {boolean}
    */
   hasAttr(attrName) {
-    const path11 = this._matcher.path;
-    if (path11.length === 0) return false;
-    const current = path11[path11.length - 1];
+    const path16 = this._matcher.path;
+    if (path16.length === 0) return false;
+    const current = path16[path16.length - 1];
     return current.values !== void 0 && attrName in current.values;
   }
   /**
@@ -87611,18 +89699,18 @@ var MatcherView = class {
    * @returns {number}
    */
   getPosition() {
-    const path11 = this._matcher.path;
-    if (path11.length === 0) return -1;
-    return path11[path11.length - 1].position ?? 0;
+    const path16 = this._matcher.path;
+    if (path16.length === 0) return -1;
+    return path16[path16.length - 1].position ?? 0;
   }
   /**
    * Get current node's repeat counter (occurrence count of this tag name).
    * @returns {number}
    */
   getCounter() {
-    const path11 = this._matcher.path;
-    if (path11.length === 0) return -1;
-    return path11[path11.length - 1].counter ?? 0;
+    const path16 = this._matcher.path;
+    if (path16.length === 0) return -1;
+    return path16[path16.length - 1].counter ?? 0;
   }
   /**
    * Get current node's sibling index (alias for getPosition).
@@ -87704,8 +89792,8 @@ var Matcher = class {
     const siblingKey = namespace ? `${namespace}:${tagName}` : tagName;
     const counter = siblings.get(siblingKey) || 0;
     let position = 0;
-    for (const count of siblings.values()) {
-      position += count;
+    for (const count2 of siblings.values()) {
+      position += count2;
     }
     siblings.set(siblingKey, counter + 1);
     const node = {
@@ -88446,12 +90534,12 @@ function tagExpWithClosingIndex(xmlData, i, closingChar = ">") {
   let result = "";
   let segmentStart = i;
   for (let index = i; index < len; index++) {
-    const code = xmlData.charCodeAt(index);
+    const code2 = xmlData.charCodeAt(index);
     if (attrBoundary) {
-      if (code === attrBoundary) attrBoundary = 0;
-    } else if (code === 34 || code === 39) {
-      attrBoundary = code;
-    } else if (code === closeCode0) {
+      if (code2 === attrBoundary) attrBoundary = 0;
+    } else if (code2 === 34 || code2 === 39) {
+      attrBoundary = code2;
+    } else if (code2 === closeCode0) {
       if (closeCode1 !== -1) {
         if (xmlData.charCodeAt(index + 1) === closeCode1) {
           result += xmlData.substring(segmentStart, index);
@@ -88461,7 +90549,7 @@ function tagExpWithClosingIndex(xmlData, i, closingChar = ">") {
         result += xmlData.substring(segmentStart, index);
         return { data: result, index };
       }
-    } else if (code === 9 && !attrBoundary) {
+    } else if (code2 === 9 && !attrBoundary) {
       result += xmlData.substring(segmentStart, index) + " ";
       segmentStart = index + 1;
     }
@@ -88604,7 +90692,7 @@ function prettify(node, options, matcher, readonlyMatcher) {
   return compress(node, options, matcher, readonlyMatcher);
 }
 function compress(arr, options, matcher, readonlyMatcher) {
-  let text;
+  let text2;
   const compressedObj = {};
   for (let i = 0; i < arr.length; i++) {
     const tagObj = arr[i];
@@ -88617,8 +90705,8 @@ function compress(arr, options, matcher, readonlyMatcher) {
       matcher.push(property, rawAttrs);
     }
     if (property === options.textNodeName) {
-      if (text === void 0) text = tagObj[property];
-      else text += "" + tagObj[property];
+      if (text2 === void 0) text2 = tagObj[property];
+      else text2 += "" + tagObj[property];
     } else if (property === void 0) {
       continue;
     } else if (tagObj[property]) {
@@ -88653,9 +90741,9 @@ function compress(arr, options, matcher, readonlyMatcher) {
       }
     }
   }
-  if (typeof text === "string") {
-    if (text.length > 0) compressedObj[options.textNodeName] = text;
-  } else if (text !== void 0) compressedObj[options.textNodeName] = text;
+  if (typeof text2 === "string") {
+    if (text2.length > 0) compressedObj[options.textNodeName] = text2;
+  } else if (text2 !== void 0) compressedObj[options.textNodeName] = text2;
   return compressedObj;
 }
 function propName(obj) {
@@ -88782,9 +90870,9 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
   }
   if (!Array.isArray(arr)) {
     if (arr !== void 0 && arr !== null) {
-      let text = arr.toString();
-      text = replaceEntitiesValue2(text, options);
-      return text;
+      let text2 = arr.toString();
+      text2 = replaceEntitiesValue2(text2, options);
+      return text2;
     }
     return "";
   }
@@ -90682,9 +92770,9 @@ var StorageSharedKeyCredentialPolicy = class extends CredentialPolicy {
    * @param request -
    */
   getCanonicalizedResourceString(request2) {
-    const path11 = getURLPath(request2.url) || "/";
+    const path16 = getURLPath(request2.url) || "/";
     let canonicalizedResourceString = "";
-    canonicalizedResourceString += `/${this.factory.accountName}${path11}`;
+    canonicalizedResourceString += `/${this.factory.accountName}${path16}`;
     const queries = getURLQueries(request2.url);
     const lowercaseQueries = {};
     if (queries) {
@@ -91174,9 +93262,9 @@ function storageSharedKeyCredentialPolicy(options) {
     return canonicalizedHeadersStringToSign;
   }
   function getCanonicalizedResourceString(request2) {
-    const path11 = getURLPath(request2.url) || "/";
+    const path16 = getURLPath(request2.url) || "/";
     let canonicalizedResourceString = "";
-    canonicalizedResourceString += `/${options.accountName}${path11}`;
+    canonicalizedResourceString += `/${options.accountName}${path16}`;
     const queries = getURLQueries(request2.url);
     const lowercaseQueries = {};
     if (queries) {
@@ -105117,10 +107205,10 @@ var StorageContextClient = class extends StorageClient {
 // ../node_modules/.pnpm/@azure+storage-blob@12.31.0/node_modules/@azure/storage-blob/dist/esm/utils/utils.common.js
 function escapeURLPath(url2) {
   const urlParsed = new URL(url2);
-  let path11 = urlParsed.pathname;
-  path11 = path11 || "/";
-  path11 = escape(path11);
-  urlParsed.pathname = path11;
+  let path16 = urlParsed.pathname;
+  path16 = path16 || "/";
+  path16 = escape(path16);
+  urlParsed.pathname = path16;
   return urlParsed.toString();
 }
 function getProxyUriFromDevConnString(connectionString) {
@@ -105200,14 +107288,14 @@ function extractConnectionStringParts(connectionString) {
     return { kind: "SASConnString", url: blobEndpoint, accountName, accountSas };
   }
 }
-function escape(text) {
-  return encodeURIComponent(text).replace(/%2F/g, "/").replace(/'/g, "%27").replace(/\+/g, "%20").replace(/%25/g, "%");
+function escape(text2) {
+  return encodeURIComponent(text2).replace(/%2F/g, "/").replace(/'/g, "%27").replace(/\+/g, "%20").replace(/%25/g, "%");
 }
 function appendToURLPath(url2, name) {
   const urlParsed = new URL(url2);
-  let path11 = urlParsed.pathname;
-  path11 = path11 ? path11.endsWith("/") ? `${path11}${name}` : `${path11}/${name}` : name;
-  urlParsed.pathname = path11;
+  let path16 = urlParsed.pathname;
+  path16 = path16 ? path16.endsWith("/") ? `${path16}${name}` : `${path16}/${name}` : name;
+  urlParsed.pathname = path16;
   return urlParsed.toString();
 }
 function setURLParameter2(url2, name, value) {
@@ -106922,13 +109010,13 @@ var RetriableReadableStream = class extends import_node_stream3.Readable {
    * @param count - How much data in original data source to read
    * @param options -
    */
-  constructor(source, getter, offset, count, options = {}) {
+  constructor(source, getter, offset, count2, options = {}) {
     super({ highWaterMark: options.highWaterMark });
     this.getter = getter;
     this.source = source;
     this.start = offset;
     this.offset = offset;
-    this.end = offset + count - 1;
+    this.end = offset + count2 - 1;
     this.maxRetryRequests = options.maxRetryRequests && options.maxRetryRequests >= 0 ? options.maxRetryRequests : 0;
     this.onProgress = options.onProgress;
     this.options = options;
@@ -107447,9 +109535,9 @@ var BlobDownloadResponse = class {
    * @param count -
    * @param options -
    */
-  constructor(originalResponse2, getter, offset, count, options = {}) {
+  constructor(originalResponse2, getter, offset, count2, options = {}) {
     this.originalResponse = originalResponse2;
-    this.blobDownloadStream = new RetriableReadableStream(this.originalResponse.readableStreamBody, getter, offset, count, options);
+    this.blobDownloadStream = new RetriableReadableStream(this.originalResponse.readableStreamBody, getter, offset, count2, options);
   }
 };
 
@@ -107576,12 +109664,12 @@ var AvroParser = class _AvroParser {
   }
   static async readArray(stream4, readItemMethod, options = {}) {
     const items = [];
-    for (let count = await _AvroParser.readLong(stream4, options); count !== 0; count = await _AvroParser.readLong(stream4, options)) {
-      if (count < 0) {
+    for (let count2 = await _AvroParser.readLong(stream4, options); count2 !== 0; count2 = await _AvroParser.readLong(stream4, options)) {
+      if (count2 < 0) {
         await _AvroParser.readLong(stream4, options);
-        count = -count;
+        count2 = -count2;
       }
-      while (count--) {
+      while (count2--) {
         const item = await readItemMethod(stream4, options);
         items.push(item);
       }
@@ -107762,14 +109850,14 @@ var AvroRecordType = class extends AvroType {
   }
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
   async read(stream4, options = {}) {
-    const record = {};
-    record["$schema"] = this._name;
+    const record2 = {};
+    record2["$schema"] = this._name;
     for (const key in this._fields) {
       if (Object.prototype.hasOwnProperty.call(this._fields, key)) {
-        record[key] = await this._fields[key].read(stream4, options);
+        record2[key] = await this._fields[key].read(stream4, options);
       }
     }
-    return record;
+    return record2;
   }
 };
 
@@ -109045,11 +111133,11 @@ var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_util3 = __toESM(require("node:util"), 1);
 async function streamToBuffer(stream4, buffer2, offset, end, encoding) {
   let pos = 0;
-  const count = end - offset;
+  const count2 = end - offset;
   return new Promise((resolve3, reject) => {
     const timeout = setTimeout(() => reject(new Error(`The operation cannot be completed in timeout.`)), REQUEST_TIMEOUT);
     stream4.on("readable", () => {
-      if (pos >= count) {
+      if (pos >= count2) {
         clearTimeout(timeout);
         resolve3();
         return;
@@ -109061,14 +111149,14 @@ async function streamToBuffer(stream4, buffer2, offset, end, encoding) {
       if (typeof chunk === "string") {
         chunk = Buffer.from(chunk, encoding);
       }
-      const chunkLength = pos + chunk.length > count ? count - pos : chunk.length;
+      const chunkLength = pos + chunk.length > count2 ? count2 - pos : chunk.length;
       buffer2.fill(chunk.slice(0, chunkLength), offset + pos, offset + pos + chunkLength);
       pos += chunkLength;
     });
     stream4.on("end", () => {
       clearTimeout(timeout);
-      if (pos < count) {
-        reject(new Error(`Stream drains before getting enough data needed. Data read: ${pos}, data need: ${count}`));
+      if (pos < count2) {
+        reject(new Error(`Stream drains before getting enough data needed. Data read: ${pos}, data need: ${count2}`));
       }
       resolve3();
     });
@@ -109285,7 +111373,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
    * }
    * ```
    */
-  async download(offset = 0, count, options = {}) {
+  async download(offset = 0, count2, options = {}) {
     options.conditions = options.conditions || {};
     options.conditions = options.conditions || {};
     ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
@@ -109301,7 +111389,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
           onDownloadProgress: isNodeLike2 ? void 0 : options.onProgress
           // for Node.js, progress is reported by RetriableReadableStream
         },
-        range: offset === 0 && !count ? void 0 : rangeToString({ offset, count }),
+        range: offset === 0 && !count2 ? void 0 : rangeToString({ offset, count: count2 }),
         rangeGetContentMD5: options.rangeGetContentMD5,
         rangeGetContentCRC64: options.rangeGetContentCrc64,
         snapshot: options.snapshot,
@@ -109811,15 +111899,15 @@ var BlobClient = class _BlobClient extends StorageClient2 {
   async downloadToBuffer(param1, param2, param3, param4 = {}) {
     let buffer2;
     let offset = 0;
-    let count = 0;
+    let count2 = 0;
     let options = param4;
     if (param1 instanceof Buffer) {
       buffer2 = param1;
       offset = param2 || 0;
-      count = typeof param3 === "number" ? param3 : 0;
+      count2 = typeof param3 === "number" ? param3 : 0;
     } else {
       offset = typeof param1 === "number" ? param1 : 0;
-      count = typeof param2 === "number" ? param2 : 0;
+      count2 = typeof param2 === "number" ? param2 : 0;
       options = param3 || {};
     }
     let blockSize = options.blockSize ?? 0;
@@ -109832,38 +111920,38 @@ var BlobClient = class _BlobClient extends StorageClient2 {
     if (offset < 0) {
       throw new RangeError("offset option must be >= 0");
     }
-    if (count && count <= 0) {
+    if (count2 && count2 <= 0) {
       throw new RangeError("count option must be greater than 0");
     }
     if (!options.conditions) {
       options.conditions = {};
     }
     return tracingClient.withSpan("BlobClient-downloadToBuffer", options, async (updatedOptions) => {
-      if (!count) {
+      if (!count2) {
         const response = await this.getProperties({
           ...options,
           tracingOptions: updatedOptions.tracingOptions
         });
-        count = response.contentLength - offset;
-        if (count < 0) {
+        count2 = response.contentLength - offset;
+        if (count2 < 0) {
           throw new RangeError(`offset ${offset} shouldn't be larger than blob size ${response.contentLength}`);
         }
       }
       if (!buffer2) {
         try {
-          buffer2 = Buffer.alloc(count);
+          buffer2 = Buffer.alloc(count2);
         } catch (error2) {
-          throw new Error(`Unable to allocate the buffer of size: ${count}(in bytes). Please try passing your own buffer to the "downloadToBuffer" method or try using other methods like "download" or "downloadToFile".	 ${error2.message}`);
+          throw new Error(`Unable to allocate the buffer of size: ${count2}(in bytes). Please try passing your own buffer to the "downloadToBuffer" method or try using other methods like "download" or "downloadToFile".	 ${error2.message}`);
         }
       }
-      if (buffer2.length < count) {
-        throw new RangeError(`The buffer's size should be equal to or larger than the request count of bytes: ${count}`);
+      if (buffer2.length < count2) {
+        throw new RangeError(`The buffer's size should be equal to or larger than the request count of bytes: ${count2}`);
       }
       let transferProgress = 0;
       const batch = new Batch(options.concurrency);
-      for (let off = offset; off < offset + count; off = off + blockSize) {
+      for (let off = offset; off < offset + count2; off = off + blockSize) {
         batch.addOperation(async () => {
-          let chunkEnd = offset + count;
+          let chunkEnd = offset + count2;
           if (off + blockSize < chunkEnd) {
             chunkEnd = off + blockSize;
           }
@@ -109902,9 +111990,9 @@ var BlobClient = class _BlobClient extends StorageClient2 {
    *                                                 content is already read and written into a local file
    *                                                 at the specified path.
    */
-  async downloadToFile(filePath, offset = 0, count, options = {}) {
+  async downloadToFile(filePath, offset = 0, count2, options = {}) {
     return tracingClient.withSpan("BlobClient-downloadToFile", options, async (updatedOptions) => {
-      const response = await this.download(offset, count, {
+      const response = await this.download(offset, count2, {
         ...options,
         tracingOptions: updatedOptions.tracingOptions
       });
@@ -110372,14 +112460,14 @@ var AppendBlobClient = class _AppendBlobClient extends BlobClient {
    * @param count - Number of bytes to be appended as a block
    * @param options -
    */
-  async appendBlockFromURL(sourceURL, sourceOffset, count, options = {}) {
+  async appendBlockFromURL(sourceURL, sourceOffset, count2, options = {}) {
     options.conditions = options.conditions || {};
     options.sourceConditions = options.sourceConditions || {};
     ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
     return tracingClient.withSpan("AppendBlobClient-appendBlockFromURL", options, async (updatedOptions) => {
       return assertResponse(await this.appendBlobContext.appendBlockFromUrl(sourceURL, 0, {
         abortSignal: options.abortSignal,
-        sourceRange: rangeToString({ offset: sourceOffset, count }),
+        sourceRange: rangeToString({ offset: sourceOffset, count: count2 }),
         sourceContentMD5: options.sourceContentMD5,
         sourceContentCrc64: options.sourceContentCrc64,
         leaseAccessConditions: options.conditions,
@@ -110711,7 +112799,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
    * @param options - Options to the Block Blob Stage Block From URL operation.
    * @returns Response data for the Block Blob Stage Block From URL operation.
    */
-  async stageBlockFromURL(blockId2, sourceURL, offset = 0, count, options = {}) {
+  async stageBlockFromURL(blockId2, sourceURL, offset = 0, count2, options = {}) {
     ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
     return tracingClient.withSpan("BlockBlobClient-stageBlockFromURL", options, async (updatedOptions) => {
       return assertResponse(await this.blockBlobContext.stageBlockFromURL(blockId2, 0, sourceURL, {
@@ -110719,7 +112807,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
         leaseAccessConditions: options.conditions,
         sourceContentMD5: options.sourceContentMD5,
         sourceContentCrc64: options.sourceContentCrc64,
-        sourceRange: offset === 0 && !count ? void 0 : rangeToString({ offset, count }),
+        sourceRange: offset === 0 && !count2 ? void 0 : rangeToString({ offset, count: count2 }),
         cpkInfo: options.customerProvidedKey,
         encryptionScope: options.encryptionScope,
         copySourceAuthorization: httpAuthorizationToString(options.sourceAuthorization),
@@ -110948,10 +113036,10 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
   async uploadFile(filePath, options = {}) {
     return tracingClient.withSpan("BlockBlobClient-uploadFile", options, async (updatedOptions) => {
       const size = (await fsStat(filePath)).size;
-      return this.uploadSeekableInternal((offset, count) => {
+      return this.uploadSeekableInternal((offset, count2) => {
         return () => fsCreateReadStream(filePath, {
           autoClose: true,
-          end: count ? offset + count - 1 : Infinity,
+          end: count2 ? offset + count2 - 1 : Infinity,
           start: offset
         });
       }, size, {
@@ -111158,11 +113246,11 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Upload Pages operation.
    * @returns Response data for the Page Blob Upload Pages operation.
    */
-  async uploadPages(body2, offset, count, options = {}) {
+  async uploadPages(body2, offset, count2, options = {}) {
     options.conditions = options.conditions || {};
     ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
     return tracingClient.withSpan("PageBlobClient-uploadPages", options, async (updatedOptions) => {
-      return assertResponse(await this.pageBlobContext.uploadPages(count, body2, {
+      return assertResponse(await this.pageBlobContext.uploadPages(count2, body2, {
         abortSignal: options.abortSignal,
         leaseAccessConditions: options.conditions,
         modifiedAccessConditions: {
@@ -111172,7 +113260,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
         requestOptions: {
           onUploadProgress: options.onProgress
         },
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         sequenceNumberAccessConditions: options.conditions,
         transactionalContentMD5: options.transactionalContentMD5,
         transactionalContentCrc64: options.transactionalContentCrc64,
@@ -111193,12 +113281,12 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param count - Number of bytes to be uploaded from source page blob
    * @param options -
    */
-  async uploadPagesFromURL(sourceURL, sourceOffset, destOffset, count, options = {}) {
+  async uploadPagesFromURL(sourceURL, sourceOffset, destOffset, count2, options = {}) {
     options.conditions = options.conditions || {};
     options.sourceConditions = options.sourceConditions || {};
     ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
     return tracingClient.withSpan("PageBlobClient-uploadPagesFromURL", options, async (updatedOptions) => {
-      return assertResponse(await this.pageBlobContext.uploadPagesFromURL(sourceURL, rangeToString({ offset: sourceOffset, count }), 0, rangeToString({ offset: destOffset, count }), {
+      return assertResponse(await this.pageBlobContext.uploadPagesFromURL(sourceURL, rangeToString({ offset: sourceOffset, count: count2 }), 0, rangeToString({ offset: destOffset, count: count2 }), {
         abortSignal: options.abortSignal,
         sourceContentMD5: options.sourceContentMD5,
         sourceContentCrc64: options.sourceContentCrc64,
@@ -111231,7 +113319,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Clear Pages operation.
    * @returns Response data for the Page Blob Clear Pages operation.
    */
-  async clearPages(offset = 0, count, options = {}) {
+  async clearPages(offset = 0, count2, options = {}) {
     options.conditions = options.conditions || {};
     return tracingClient.withSpan("PageBlobClient-clearPages", options, async (updatedOptions) => {
       return assertResponse(await this.pageBlobContext.clearPages(0, {
@@ -111241,7 +113329,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           ...options.conditions,
           ifTags: options.conditions?.tagConditions
         },
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         sequenceNumberAccessConditions: options.conditions,
         cpkInfo: options.customerProvidedKey,
         encryptionScope: options.encryptionScope,
@@ -111258,7 +113346,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Get Ranges operation.
    * @returns Response data for the Page Blob Get Ranges operation.
    */
-  async getPageRanges(offset = 0, count, options = {}) {
+  async getPageRanges(offset = 0, count2, options = {}) {
     options.conditions = options.conditions || {};
     return tracingClient.withSpan("PageBlobClient-getPageRanges", options, async (updatedOptions) => {
       const response = assertResponse(await this.pageBlobContext.getPageRanges({
@@ -111268,7 +113356,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           ...options.conditions,
           ifTags: options.conditions?.tagConditions
         },
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         tracingOptions: updatedOptions.tracingOptions
       }));
       return rangeResponseFromModel(response);
@@ -111286,7 +113374,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param marker - A string value that identifies the portion of the list to be returned with the next list operation.
    * @param options - Options to PageBlob Get Page Ranges Segment operation.
    */
-  async listPageRangesSegment(offset = 0, count, marker2, options = {}) {
+  async listPageRangesSegment(offset = 0, count2, marker2, options = {}) {
     return tracingClient.withSpan("PageBlobClient-getPageRangesSegment", options, async (updatedOptions) => {
       return assertResponse(await this.pageBlobContext.getPageRanges({
         abortSignal: options.abortSignal,
@@ -111295,7 +113383,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           ...options.conditions,
           ifTags: options.conditions?.tagConditions
         },
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         marker: marker2,
         maxPageSize: options.maxPageSize,
         tracingOptions: updatedOptions.tracingOptions
@@ -111316,11 +113404,11 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    *                          items. The marker value is opaque to the client.
    * @param options - Options to List Page Ranges operation.
    */
-  async *listPageRangeItemSegments(offset = 0, count, marker2, options = {}) {
+  async *listPageRangeItemSegments(offset = 0, count2, marker2, options = {}) {
     let getPageRangeItemSegmentsResponse;
     if (!!marker2 || marker2 === void 0) {
       do {
-        getPageRangeItemSegmentsResponse = await this.listPageRangesSegment(offset, count, marker2, options);
+        getPageRangeItemSegmentsResponse = await this.listPageRangesSegment(offset, count2, marker2, options);
         marker2 = getPageRangeItemSegmentsResponse.continuationToken;
         yield await getPageRangeItemSegmentsResponse;
       } while (marker2);
@@ -111333,9 +113421,9 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param count - Number of bytes to get.
    * @param options - Options to List Page Ranges operation.
    */
-  async *listPageRangeItems(offset = 0, count, options = {}) {
+  async *listPageRangeItems(offset = 0, count2, options = {}) {
     let marker2;
-    for await (const getPageRangesSegment of this.listPageRangeItemSegments(offset, count, marker2, options)) {
+    for await (const getPageRangesSegment of this.listPageRangeItemSegments(offset, count2, marker2, options)) {
       yield* ExtractPageRangeInfoItems(getPageRangesSegment);
     }
   }
@@ -111411,9 +113499,9 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Get Ranges operation.
    * @returns An asyncIterableIterator that supports paging.
    */
-  listPageRanges(offset = 0, count, options = {}) {
+  listPageRanges(offset = 0, count2, options = {}) {
     options.conditions = options.conditions || {};
-    const iter = this.listPageRangeItems(offset, count, options);
+    const iter = this.listPageRangeItems(offset, count2, options);
     return {
       /**
        * The next method, part of the iteration protocol
@@ -111431,7 +113519,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
        * Return an AsyncIterableIterator that works a page at a time
        */
       byPage: (settings = {}) => {
-        return this.listPageRangeItemSegments(offset, count, settings.continuationToken, {
+        return this.listPageRangeItemSegments(offset, count2, settings.continuationToken, {
           maxPageSize: settings.maxPageSize,
           ...options
         });
@@ -111448,7 +113536,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Get Page Ranges Diff operation.
    * @returns Response data for the Page Blob Get Page Range Diff operation.
    */
-  async getPageRangesDiff(offset, count, prevSnapshot, options = {}) {
+  async getPageRangesDiff(offset, count2, prevSnapshot, options = {}) {
     options.conditions = options.conditions || {};
     return tracingClient.withSpan("PageBlobClient-getPageRangesDiff", options, async (updatedOptions) => {
       const result = assertResponse(await this.pageBlobContext.getPageRangesDiff({
@@ -111459,7 +113547,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           ifTags: options.conditions?.tagConditions
         },
         prevsnapshot: prevSnapshot,
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         tracingOptions: updatedOptions.tracingOptions
       }));
       return rangeResponseFromModel(result);
@@ -111479,7 +113567,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param marker - A string value that identifies the portion of the get to be returned with the next get operation.
    * @param options - Options to the Page Blob Get Page Ranges Diff operation.
    */
-  async listPageRangesDiffSegment(offset, count, prevSnapshotOrUrl, marker2, options = {}) {
+  async listPageRangesDiffSegment(offset, count2, prevSnapshotOrUrl, marker2, options = {}) {
     return tracingClient.withSpan("PageBlobClient-getPageRangesDiffSegment", options, async (updatedOptions) => {
       return assertResponse(await this.pageBlobContext.getPageRangesDiff({
         abortSignal: options?.abortSignal,
@@ -111491,7 +113579,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
         prevsnapshot: prevSnapshotOrUrl,
         range: rangeToString({
           offset,
-          count
+          count: count2
         }),
         marker: marker2,
         maxPageSize: options?.maxPageSize,
@@ -111515,11 +113603,11 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    *                          items. The marker value is opaque to the client.
    * @param options - Options to the Page Blob Get Page Ranges Diff operation.
    */
-  async *listPageRangeDiffItemSegments(offset, count, prevSnapshotOrUrl, marker2, options) {
+  async *listPageRangeDiffItemSegments(offset, count2, prevSnapshotOrUrl, marker2, options) {
     let getPageRangeItemSegmentsResponse;
     if (!!marker2 || marker2 === void 0) {
       do {
-        getPageRangeItemSegmentsResponse = await this.listPageRangesDiffSegment(offset, count, prevSnapshotOrUrl, marker2, options);
+        getPageRangeItemSegmentsResponse = await this.listPageRangesDiffSegment(offset, count2, prevSnapshotOrUrl, marker2, options);
         marker2 = getPageRangeItemSegmentsResponse.continuationToken;
         yield await getPageRangeItemSegmentsResponse;
       } while (marker2);
@@ -111533,9 +113621,9 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param prevSnapshotOrUrl - Timestamp of snapshot to retrieve the difference or URL of snapshot to retrieve the difference.
    * @param options - Options to the Page Blob Get Page Ranges Diff operation.
    */
-  async *listPageRangeDiffItems(offset, count, prevSnapshotOrUrl, options) {
+  async *listPageRangeDiffItems(offset, count2, prevSnapshotOrUrl, options) {
     let marker2;
-    for await (const getPageRangesSegment of this.listPageRangeDiffItemSegments(offset, count, prevSnapshotOrUrl, marker2, options)) {
+    for await (const getPageRangesSegment of this.listPageRangeDiffItemSegments(offset, count2, prevSnapshotOrUrl, marker2, options)) {
       yield* ExtractPageRangeInfoItems(getPageRangesSegment);
     }
   }
@@ -111621,9 +113709,9 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Get Ranges operation.
    * @returns An asyncIterableIterator that supports paging.
    */
-  listPageRangesDiff(offset, count, prevSnapshot, options = {}) {
+  listPageRangesDiff(offset, count2, prevSnapshot, options = {}) {
     options.conditions = options.conditions || {};
-    const iter = this.listPageRangeDiffItems(offset, count, prevSnapshot, {
+    const iter = this.listPageRangeDiffItems(offset, count2, prevSnapshot, {
       ...options
     });
     return {
@@ -111643,7 +113731,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
        * Return an AsyncIterableIterator that works a page at a time
        */
       byPage: (settings = {}) => {
-        return this.listPageRangeDiffItemSegments(offset, count, prevSnapshot, settings.continuationToken, {
+        return this.listPageRangeDiffItemSegments(offset, count2, prevSnapshot, settings.continuationToken, {
           maxPageSize: settings.maxPageSize,
           ...options
         });
@@ -111660,7 +113748,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    * @param options - Options to the Page Blob Get Page Ranges Diff operation.
    * @returns Response data for the Page Blob Get Page Range Diff operation.
    */
-  async getPageRangesDiffForManagedDisks(offset, count, prevSnapshotUrl2, options = {}) {
+  async getPageRangesDiffForManagedDisks(offset, count2, prevSnapshotUrl2, options = {}) {
     options.conditions = options.conditions || {};
     return tracingClient.withSpan("PageBlobClient-GetPageRangesDiffForManagedDisks", options, async (updatedOptions) => {
       const response = assertResponse(await this.pageBlobContext.getPageRangesDiff({
@@ -111671,7 +113759,7 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           ifTags: options.conditions?.tagConditions
         },
         prevSnapshotUrl: prevSnapshotUrl2,
-        range: rangeToString({ offset, count }),
+        range: rangeToString({ offset, count: count2 }),
         tracingOptions: updatedOptions.tracingOptions
       }));
       return rangeResponseFromModel(response);
@@ -112204,8 +114292,8 @@ var Context = class {
       if ((0, import_fs2.existsSync)(process.env.GITHUB_EVENT_PATH)) {
         this.payload = JSON.parse((0, import_fs2.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
       } else {
-        const path11 = process.env.GITHUB_EVENT_PATH;
-        process.stdout.write(`GITHUB_EVENT_PATH ${path11} does not exist${import_os4.EOL}`);
+        const path16 = process.env.GITHUB_EVENT_PATH;
+        process.stdout.write(`GITHUB_EVENT_PATH ${path16} does not exist${import_os4.EOL}`);
       }
     }
     this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -112811,8 +114899,8 @@ var convertMarkedBigIntsReviver = (key, value, context6, userReviver) => {
   if (typeof userReviver !== "function") return value;
   return userReviver(key, value, context6);
 };
-var JSONParseV2 = (text, reviver) => {
-  return JSON.parse(text, (key, value, context6) => {
+var JSONParseV2 = (text2, reviver) => {
+  return JSON.parse(text2, (key, value, context6) => {
     const isBigNumber = typeof value === "number" && (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER);
     const isInt = context6 && intRegex.test(context6.source);
     const isBigInt = isBigNumber && isInt;
@@ -112825,20 +114913,20 @@ var MAX_INT = Number.MAX_SAFE_INTEGER.toString();
 var MAX_DIGITS = MAX_INT.length;
 var stringsOrLargeNumbers = /"(?:\\.|[^"])*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
 var noiseValueWithQuotes = /^"-?\d+n+"$/;
-var JSONParse = (text, reviver) => {
-  if (!text) return originalParse(text, reviver);
-  if (isContextSourceSupported()) return JSONParseV2(text, reviver);
-  const serializedData = text.replace(
+var JSONParse = (text2, reviver) => {
+  if (!text2) return originalParse(text2, reviver);
+  if (isContextSourceSupported()) return JSONParseV2(text2, reviver);
+  const serializedData = text2.replace(
     stringsOrLargeNumbers,
-    (text2, digits, fractional, exponential) => {
-      const isString = text2[0] === '"';
-      const isNoise = isString && noiseValueWithQuotes.test(text2);
-      if (isNoise) return text2.substring(0, text2.length - 1) + 'n"';
+    (text3, digits, fractional, exponential) => {
+      const isString = text3[0] === '"';
+      const isNoise = isString && noiseValueWithQuotes.test(text3);
+      if (isNoise) return text3.substring(0, text3.length - 1) + 'n"';
       const isFractionalOrExponential = fractional || exponential;
       const isLessThanMaxSafeInt = digits && (digits.length < MAX_DIGITS || digits.length === MAX_DIGITS && digits <= MAX_INT);
       if (isString || isFractionalOrExponential || isLessThanMaxSafeInt)
-        return text2;
-      return '"' + text2 + 'n"';
+        return text3;
+      return '"' + text3 + 'n"';
     }
   );
   return originalParse(
@@ -113007,12 +115095,12 @@ async function getResponseData(response) {
   }
   const mimetype = (0, import_content_type.parse)(contentType2);
   if (isJSONResponse(mimetype)) {
-    let text = "";
+    let text2 = "";
     try {
-      text = await response.text();
-      return JSONParse(text);
+      text2 = await response.text();
+      return JSONParse(text2);
     } catch (err) {
-      return text;
+      return text2;
     }
   } else if (mimetype.type.startsWith("text/") || mimetype.parameters.charset?.toLowerCase() === "utf-8") {
     return response.text().catch(noop);
@@ -115969,10 +118057,10 @@ var scrubQueryParameters = (url2) => {
   parsed.search = "";
   return parsed.toString();
 };
-function exists2(path11) {
+function exists2(path16) {
   return __awaiter17(this, void 0, void 0, function* () {
     try {
-      yield import_promises3.default.access(path11);
+      yield import_promises3.default.access(path16);
       return true;
     } catch (error2) {
       if (error2.code === "ENOENT") {
@@ -116183,17 +118271,17 @@ function requestLog(octokit) {
     octokit.log.debug("request", options);
     const start = Date.now();
     const requestOptions = octokit.request.endpoint.parse(options);
-    const path11 = requestOptions.url.replace(options.baseUrl, "");
+    const path16 = requestOptions.url.replace(options.baseUrl, "");
     return request2(options).then((response) => {
       const requestId2 = response.headers["x-github-request-id"];
       octokit.log.info(
-        `${requestOptions.method} ${path11} - ${response.status} with id ${requestId2} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path16} - ${response.status} with id ${requestId2} in ${Date.now() - start}ms`
       );
       return response;
     }).catch((error2) => {
       const requestId2 = error2.response?.headers["x-github-request-id"] || "UNKNOWN";
       octokit.log.error(
-        `${requestOptions.method} ${path11} - ${error2.status} with id ${requestId2} in ${Date.now() - start}ms`
+        `${requestOptions.method} ${path16} - ${error2.status} with id ${requestId2} in ${Date.now() - start}ms`
       );
       throw error2;
     });
@@ -116790,8 +118878,8 @@ function writeRunStamp(reportDir, env) {
 }
 
 // src/index.ts
-var fs9 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
+var fs14 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
 
 // ../packages/witness/src/report/diff-shape.ts
 var NOISE_MAX_DIFF_PERCENT = 1;
@@ -116907,6 +118995,26 @@ function fnv1a(value) {
 }
 
 // ../packages/witness/src/report/environment.ts
+var PRESENCE_DEFAULTS = { container: "false", label: "", "ci.provider": "none" };
+var RENDERING_FIELDS = /* @__PURE__ */ new Set([
+  "browser.name",
+  "browser.version",
+  "browser.channel",
+  "browser.headless",
+  "os.platform",
+  "os.arch",
+  "os.distro",
+  "render.viewport",
+  "render.deviceScaleFactor",
+  "render.colorScheme",
+  "render.reducedMotion",
+  "render.locale",
+  "render.timezone",
+  "adapter.captureMethod",
+  "container",
+  "label"
+]);
+var RELEASE_IS_OS_VERSION = /* @__PURE__ */ new Set(["darwin", "win32"]);
 function flatten(env) {
   const flat = /* @__PURE__ */ new Map();
   const put = (key, value) => {
@@ -116928,6 +119036,28 @@ function flatten(env) {
     }
   }
   return flat;
+}
+function isRenderingField(field, baseline, candidate) {
+  if (field.startsWith("render.")) return true;
+  if (field === "os.release") {
+    return baseline.os.platform === candidate.os.platform && RELEASE_IS_OS_VERSION.has(candidate.os.platform);
+  }
+  return RENDERING_FIELDS.has(field);
+}
+function diffEnvironments(baseline, candidate) {
+  const a = flatten(baseline);
+  const b = flatten(candidate);
+  const keys = /* @__PURE__ */ new Set([...a.keys(), ...b.keys(), ...Object.keys(PRESENCE_DEFAULTS)]);
+  const delta = [];
+  for (const key of keys) {
+    const fallback = PRESENCE_DEFAULTS[key];
+    const left = a.get(key) ?? fallback;
+    const right = b.get(key) ?? fallback;
+    if (left === void 0 || right === void 0) continue;
+    if (left !== right) delta.push(key);
+  }
+  delta.sort();
+  return { delta, renderingDelta: delta.filter((f) => isRenderingField(f, baseline, candidate)) };
 }
 var MECHANISMS = {
   cdp: "CDP",
@@ -116994,22 +119124,22 @@ function describeEnvironmentChange(baseline, candidate, fields) {
     if (field === "browser.name" || field === "browser.version") continue;
     const left = a.get(field);
     const right = b.get(field);
-    let text;
+    let text2;
     if (field === "browser.headless" || field === "container") {
-      text = `${field === "container" ? "container" : "headless"} ${yesNo(left)} \u2192 ${yesNo(right)}`;
+      text2 = `${field === "container" ? "container" : "headless"} ${yesNo(left)} \u2192 ${yesNo(right)}`;
     } else if (field === "label") {
-      text = `environment label ${left || "none"} \u2192 ${right || "none"}`;
+      text2 = `environment label ${left || "none"} \u2192 ${right || "none"}`;
     } else if (field === "os.distro") {
-      text = `${left ?? "unknown"} \u2192 ${right ?? "unknown"}`;
+      text2 = `${left ?? "unknown"} \u2192 ${right ?? "unknown"}`;
     } else if (field === "adapter.captureMethod") {
-      text = `capture method ${describeCaptureMethod(left ?? "?")} \u2192 ${describeCaptureMethod(right ?? "?")}`;
+      text2 = `capture method ${describeCaptureMethod(left ?? "?")} \u2192 ${describeCaptureMethod(right ?? "?")}`;
     } else if (/^(framework|adapter|driver)\.version$/.test(field)) {
       const owner = field.split(".")[0];
-      text = `${b.get(`${owner}.name`) ?? owner} ${left ?? "?"} \u2192 ${right ?? "?"}`;
+      text2 = `${b.get(`${owner}.name`) ?? owner} ${left ?? "?"} \u2192 ${right ?? "?"}`;
     } else {
-      text = `${LABELS[field] ?? field} ${left ?? "none"} \u2192 ${right ?? "none"}`;
+      text2 = `${LABELS[field] ?? field} ${left ?? "none"} \u2192 ${right ?? "none"}`;
     }
-    parts.push({ rank: rank(field), text });
+    parts.push({ rank: rank(field), text: text2 });
   }
   return parts.sort((x, y) => x.rank - y.rank).map((p) => p.text).join(", ");
 }
@@ -117027,6 +119157,40 @@ function snapshotEnvironmentChange(snapshot2) {
   const e = snapshot2.environment;
   if (!e || e.renderingDelta.length === 0 || !e.baseline || !e.candidate) return null;
   return describeEnvironmentChange(e.baseline, e.candidate, e.renderingDelta);
+}
+var SECTIONS_ORDER = [
+  "os",
+  "browser",
+  "framework",
+  "adapter",
+  "driver",
+  "render",
+  "ci",
+  "container",
+  "label",
+  "project"
+];
+function commonEnvironment(envs) {
+  if (envs.length === 0) return null;
+  const same = (values) => values.every((v) => JSON.stringify(v) === JSON.stringify(values[0]));
+  const out = {};
+  for (const section of SECTIONS_ORDER) {
+    const values = envs.map((e) => e[section]);
+    if (values.every((v) => v === void 0)) continue;
+    const first = values[0];
+    if (first && typeof first === "object" && !Array.isArray(first)) {
+      if (values.some((v) => !v || typeof v !== "object")) continue;
+      const shared = {};
+      for (const key of Object.keys(first)) {
+        const inner = values.map((v) => v[key]);
+        if (same(inner)) shared[key] = inner[0];
+      }
+      if (Object.keys(shared).length > 0) out[section] = shared;
+    } else if (same(values)) {
+      out[section] = first;
+    }
+  }
+  return out;
 }
 function environmentChangeGroups(snapshots) {
   const groups = /* @__PURE__ */ new Map();
@@ -117082,10 +119246,10 @@ function determineStatus(results, config) {
   if (missing > 0) {
     const s = missing === 1 ? "" : "s";
     const names = (results.missingBaselines ?? []).slice(0, 10);
-    const list = names.length > 0 ? `
+    const list2 = names.length > 0 ? `
 
 ${names.map((n) => `- \`${n}\``).join("\n")}` : "";
-    const detail = `${missing} committed baseline${s} received no capture this run. A deleted or renamed test stops guarding its page without anything failing.` + list;
+    const detail = `${missing} committed baseline${s} received no capture this run. A deleted or renamed test stops guarding its page without anything failing.` + list2;
     const others = label ? `
 
 Also ${label}: review the diffs in the report artifact, then approve intentional changes with \`/testivai approve\` on this pull request.` : "";
@@ -117139,6 +119303,16 @@ ${detail}${others}`
     summary: `${label}. This does not block the merge. Review the diffs in the report artifact, then approve intentional changes with \`/testivai approve\` on this pull request.`
   };
 }
+
+// ../packages/witness/src/capture/health-limits.ts
+var HEALTH_LIMITS = {
+  /** Entries kept per list. */
+  list: 10,
+  /** Characters kept of a URL (host and path). */
+  url: 200,
+  /** Longest family, weight, style or error text accepted. */
+  text: 200
+};
 
 // ../packages/witness/src/report/health.ts
 var NAMED = 3;
@@ -117217,7 +119391,47 @@ function assessHealth(health) {
   if (failed.other && failed.other.count > 0) warnings.push(...requestLines("request", failed.other.entries, failed.other.count));
   return { unhealthy: problems.size > 0, problems: [...problems], reasons, warnings };
 }
+var requestKey = (e) => `${e.url}\0${e.status}`;
+function completeKeys(items, total, key) {
+  if (items.length !== total || items.length >= HEALTH_LIMITS.list) return null;
+  return items.map(key).sort();
+}
+var sameKeys = (a, b) => a !== null && b !== null && a.length === b.length && a.every((k, i) => k === b[i]);
+function sameHealthFailures(a, b) {
+  if (a.fonts.status === "loading" || b.fonts.status === "loading") return false;
+  if (a.fonts.status !== b.fonts.status || a.resources.status !== b.resources.status) return false;
+  const fontKey = (f) => `${f.family}\0${f.weight}\0${f.style}`;
+  const fonts = (h) => completeKeys(h.fonts.failed, h.fonts.failed.length, fontKey);
+  const sheets = (h) => completeKeys(h.stylesheets.urls, h.stylesheets.failed, (u) => u);
+  const requests = (h, type) => {
+    const group2 = h.resources.failed[type] ?? { count: 0, entries: [] };
+    return completeKeys(group2.entries, group2.count, requestKey);
+  };
+  return sameKeys(fonts(a), fonts(b)) && sameKeys(sheets(a), sheets(b)) && sameKeys(requests(a, "css"), requests(b, "css")) && sameKeys(requests(a, "font"), requests(b, "font"));
+}
 var BASELINE_HEALTH_PREFIX = "baseline: ";
+function snapshotCaptureHealth(baseline, candidate) {
+  if (!baseline && !candidate) return void 0;
+  const c = candidate ? assessHealth(candidate) : null;
+  const b = baseline ? assessHealth(baseline) : null;
+  const unhealthy = c?.unhealthy && b?.unhealthy ? "both" : c?.unhealthy ? "candidate" : b?.unhealthy ? "baseline" : null;
+  const fromBaseline = (lines) => lines.map((l) => `${BASELINE_HEALTH_PREFIX}${l}`);
+  return {
+    ...candidate ? { candidate } : {},
+    ...baseline ? { baseline } : {},
+    unhealthy,
+    ...unhealthy === "both" && baseline && candidate && sameHealthFailures(baseline, candidate) ? { sameOnBothSides: true } : {},
+    reasons: [...c?.reasons ?? [], ...fromBaseline(b?.reasons ?? [])],
+    warnings: [...c?.warnings ?? [], ...fromBaseline(b?.warnings ?? [])]
+  };
+}
+function isUnhealthyCapture(snapshot2) {
+  return Boolean(snapshot2.captureHealth?.unhealthy);
+}
+function healthAllowsTolerances(snapshot2) {
+  if (!isUnhealthyCapture(snapshot2)) return true;
+  return snapshot2.captureHealth?.unhealthy === "both" && snapshot2.captureHealth.sameOnBothSides === true;
+}
 var UNHEALTHY_CAPTURE_NEXT = "an unhealthy capture is a glitch of the capture or a broken asset, not render noise: fix the page, the server or the test and re-run; never approve it as a baseline";
 var UNHEALTHY_BASELINE_NEXT = "re-baseline from a healthy run";
 var SAME_FAILURES_NEXT = "the same assets failed in both captures, so the pass tolerances (maxDiffPercent, maxDiffPixels, shiftTolerance) still apply, but this is never render noise and noise auto-pass never applies: fix the broken asset, then re-baseline from a healthy run";
@@ -117424,10 +119638,10 @@ function renderEnvironmentAndPageHints(snapshot2) {
 }
 var MAX_UPLOAD_ERROR = 500;
 function quoteUploadError(message) {
-  let text = message.replace(new RegExp("\\p{Cc}+", "gu"), " ").replace(/\s+/g, " ").trim().replace(/`/g, "'");
-  if (!text) text = "unknown error";
-  if (text.length > MAX_UPLOAD_ERROR) text = `${text.slice(0, MAX_UPLOAD_ERROR - 1)}\u2026`;
-  return `\`${text}\``;
+  let text2 = message.replace(new RegExp("\\p{Cc}+", "gu"), " ").replace(/\s+/g, " ").trim().replace(/`/g, "'");
+  if (!text2) text2 = "unknown error";
+  if (text2.length > MAX_UPLOAD_ERROR) text2 = `${text2.slice(0, MAX_UPLOAD_ERROR - 1)}\u2026`;
+  return `\`${text2}\``;
 }
 function uploadFailedNotice(uploadError, approvable) {
   let notice2 = `> **The visual report could not be uploaded** (${quoteUploadError(uploadError)}), so there is no report to download. The results here come from this run's \`results.json\`.
@@ -117438,7 +119652,7 @@ function uploadFailedNotice(uploadError, approvable) {
   return `${notice2}
 `;
 }
-function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER, links = {}, uploadError) {
+function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER, links = {}, uploadError, notice2) {
   const { summary: summary2, snapshots } = results;
   const reportUrl = safeReportUrl(links.reportUrl);
   const thumbnails = thumbnailUrls(reportUrl, links.thumbnails);
@@ -117454,6 +119668,7 @@ function buildComment(results, artifactUrl, marker2 = UPSERT_MARKER, links = {},
 ${summaryLine} \u2014 **${summary2.total} total**
 
 `;
+  comment += notice2 ?? "";
   if (reportUrl) {
     const zip = artifactUrl ? ` \xB7 or [download it as a ZIP](${artifactUrl})` : "";
     comment += `> **[Open the visual report](${reportUrl})** \u2014 baseline, current and diff side by side${zip}
@@ -117525,7 +119740,7 @@ ${picture}${domHint}
   comment += "---\n> Content that changes between runs (timestamps, ads, rotating images) can show up as a pixel diff unless you hide it with `ignoreSelectors` or exclude it with `mask`. An identical DOM points to render noise only when the styles are verified unchanged and the diff is small and scattered, as the hint then says; otherwise a stylesheet-only change, a bad capture, or a change the style check does not cover is not ruled out. Reviewing with an AI agent? [`@testivai/mcp`](https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md) serves this report as structured data (`explain_snapshot`).\n\n*Generated by [TestivAI](https://github.com/testivai/testivai-oss)*\n";
   return comment;
 }
-function buildEmptyComment(artifactUrl, marker2 = UPSERT_MARKER, links = {}, uploadError) {
+function buildEmptyComment(artifactUrl, marker2 = UPSERT_MARKER, links = {}, uploadError, notice2) {
   const reportUrl = safeReportUrl(links.reportUrl);
   const link = reportUrl ? `
 > **[Open the visual report](${reportUrl})**${artifactUrl ? ` \xB7 or [download it as a ZIP](${artifactUrl})` : ""}
@@ -117539,7 +119754,9 @@ ${uploadFailedNotice(uploadError, false).trimEnd()}
 ### TestivAI Visual Report
 
 No visual snapshots were captured in this test run.
-${link}
+${notice2 ? `
+${notice2.trimEnd()}
+` : ""}${link}
 ---
 *Generated by [TestivAI](https://testiv.ai)*
 `;
@@ -117562,10 +119779,3062 @@ async function writeJobSummary(core, markdown) {
   }
 }
 
+// src/missing-report.ts
+var fs13 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
+
+// ../packages/witness/src/report/generator.ts
+var fs12 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
+var import_child_process = require("child_process");
+
+// ../packages/witness/src/report/compare.ts
+var fs10 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
+var import_pngjs = __toESM(require_png());
+
+// ../packages/witness/src/diff/ignore.ts
+function applyIgnoreRegions(baseline, candidate, width, height, regions) {
+  for (const region of regions) {
+    const x0 = Math.max(0, Math.min(region.x, width));
+    const y0 = Math.max(0, Math.min(region.y, height));
+    const x1 = Math.max(0, Math.min(region.x + region.width, width));
+    const y1 = Math.max(0, Math.min(region.y + region.height, height));
+    for (let y = y0; y < y1; y++) {
+      const rowOffset = y * width * 4;
+      for (let x = x0; x < x1; x++) {
+        const pixelOffset = rowOffset + x * 4;
+        baseline[pixelOffset] = candidate[pixelOffset];
+        baseline[pixelOffset + 1] = candidate[pixelOffset + 1];
+        baseline[pixelOffset + 2] = candidate[pixelOffset + 2];
+        baseline[pixelOffset + 3] = candidate[pixelOffset + 3];
+      }
+    }
+  }
+}
+
+// ../packages/witness/src/diff/mask.ts
+var EDGES = ["top", "right", "bottom", "left"];
+var RECT_KEYS = ["x", "y", "width", "height"];
+function parseDim(value, allowNegative = false) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (!allowNegative && value < 0) return null;
+    if (value > 0 && value < 1) return { kind: "ratio", value };
+    return { kind: "px", value };
+  }
+  if (typeof value === "string") {
+    const m = /^(\d+(?:\.\d+)?)%$/.exec(value.trim());
+    if (!m) return null;
+    const pct = Number(m[1]);
+    return { kind: "ratio", value: pct / 100 };
+  }
+  return null;
+}
+function parseMaskSpec(spec) {
+  if (typeof spec === "string") {
+    if (spec.trim().length === 0) {
+      return { ok: false, error: "mask: selector must be a non-empty string" };
+    }
+    return { ok: true, mask: { type: "selector", selector: spec.trim() } };
+  }
+  if (spec === null || typeof spec !== "object" || Array.isArray(spec)) {
+    return {
+      ok: false,
+      error: "mask: expected a CSS selector string or a region object like { x, y, width, height } or { top: 24 }"
+    };
+  }
+  const obj = spec;
+  const presentEdges = EDGES.filter((e) => obj[e] !== void 0);
+  const presentRect = RECT_KEYS.filter((k) => obj[k] !== void 0);
+  if (presentEdges.length > 0) {
+    if (presentRect.length > 0) {
+      return { ok: false, error: "mask: cannot mix edge shorthands with x/y/width/height" };
+    }
+    if (presentEdges.length > 1) {
+      return {
+        ok: false,
+        error: `mask: use exactly one edge per shorthand (got ${presentEdges.join(", ")}) \u2014 define separate masks instead`
+      };
+    }
+    const edge = presentEdges[0];
+    const size = parseDim(obj[edge]);
+    if (!size || size.value < 0) {
+      return { ok: false, error: `mask: { ${edge}: \u2026 } must be a positive number of px, a 0\u20131 ratio, or "NN%"` };
+    }
+    return { ok: true, mask: { type: "edge", edge, size } };
+  }
+  if (presentRect.length !== RECT_KEYS.length) {
+    const missing = RECT_KEYS.filter((k) => obj[k] === void 0);
+    return { ok: false, error: `mask: region object is missing ${missing.join(", ")}` };
+  }
+  const dims = {};
+  for (const key of RECT_KEYS) {
+    const dim = parseDim(obj[key]);
+    if (!dim) {
+      return { ok: false, error: `mask: ${key} must be a number of px, a 0\u20131 ratio, or "NN%" (got ${JSON.stringify(obj[key])})` };
+    }
+    if (dim.value < 0) {
+      return { ok: false, error: `mask: ${key} cannot be negative` };
+    }
+    dims[key] = dim;
+  }
+  return {
+    ok: true,
+    mask: { type: "region", x: dims.x, y: dims.y, width: dims.width, height: dims.height }
+  };
+}
+function resolveDim(dim, total) {
+  return dim.kind === "ratio" ? Math.round(dim.value * total) : Math.round(dim.value);
+}
+function clampRect(x, y, width, height, imgWidth, imgHeight) {
+  const x0 = Math.max(0, Math.min(x, imgWidth));
+  const y0 = Math.max(0, Math.min(y, imgHeight));
+  const x1 = Math.max(0, Math.min(x + width, imgWidth));
+  const y1 = Math.max(0, Math.min(y + height, imgHeight));
+  if (x1 <= x0 || y1 <= y0) return null;
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+function resolveMasks(specs, imgWidth, imgHeight, capturedRects, origin = "config") {
+  const rects = [];
+  const warnings = [];
+  for (const spec of specs) {
+    const parsed = parseMaskSpec(spec);
+    if (!parsed.ok) {
+      warnings.push(parsed.error);
+      continue;
+    }
+    const mask = parsed.mask;
+    if (mask.type === "selector") {
+      const matches = (capturedRects ?? []).filter((r) => r.selector === mask.selector);
+      if (matches.length === 0) {
+        warnings.push(
+          `mask: no captured geometry for selector "${mask.selector}" \u2014 the adapter records mask rects at capture time; this capture has none, so the mask was skipped`
+        );
+        continue;
+      }
+      for (const m of matches) {
+        const rect2 = clampRect(m.x, m.y, m.width, m.height, imgWidth, imgHeight);
+        if (rect2) {
+          rects.push({ ...rect2, source: { type: "selector", spec: mask.selector, origin } });
+        }
+      }
+      continue;
+    }
+    if (mask.type === "edge") {
+      const size = resolveDim(mask.size, mask.edge === "top" || mask.edge === "bottom" ? imgHeight : imgWidth);
+      const raw = mask.edge === "top" ? { x: 0, y: 0, width: imgWidth, height: size } : mask.edge === "bottom" ? { x: 0, y: imgHeight - size, width: imgWidth, height: size } : mask.edge === "left" ? { x: 0, y: 0, width: size, height: imgHeight } : { x: imgWidth - size, y: 0, width: size, height: imgHeight };
+      const rect2 = clampRect(raw.x, raw.y, raw.width, raw.height, imgWidth, imgHeight);
+      if (rect2) rects.push({ ...rect2, source: { type: "edge", spec, origin } });
+      continue;
+    }
+    const rect = clampRect(
+      resolveDim(mask.x, imgWidth),
+      resolveDim(mask.y, imgHeight),
+      resolveDim(mask.width, imgWidth),
+      resolveDim(mask.height, imgHeight),
+      imgWidth,
+      imgHeight
+    );
+    if (rect) rects.push({ ...rect, source: { type: "region", spec, origin } });
+  }
+  return { rects, warnings };
+}
+function applyMaskRects(baseline, candidate, width, _height, rects) {
+  for (const r of rects) {
+    for (let y = r.y; y < r.y + r.height; y++) {
+      const rowOffset = y * width * 4;
+      for (let x = r.x; x < r.x + r.width; x++) {
+        const i = rowOffset + x * 4;
+        baseline[i] = candidate[i];
+        baseline[i + 1] = candidate[i + 1];
+        baseline[i + 2] = candidate[i + 2];
+        baseline[i + 3] = candidate[i + 3];
+      }
+    }
+  }
+}
+var HATCH_PERIOD = 8;
+var HATCH_RGBA = [128, 128, 128, 140];
+function hatchMaskRects(diff8, width, _height, rects) {
+  for (const r of rects) {
+    for (let y = r.y; y < r.y + r.height; y++) {
+      const rowOffset = y * width * 4;
+      for (let x = r.x; x < r.x + r.width; x++) {
+        const onStripe = (x + y) % HATCH_PERIOD === 0;
+        const onBorder = x === r.x || x === r.x + r.width - 1 || y === r.y || y === r.y + r.height - 1;
+        if (!onStripe && !onBorder) continue;
+        const i = rowOffset + x * 4;
+        diff8[i] = HATCH_RGBA[0];
+        diff8[i + 1] = HATCH_RGBA[1];
+        diff8[i + 2] = HATCH_RGBA[2];
+        diff8[i + 3] = HATCH_RGBA[3];
+      }
+    }
+  }
+}
+
+// ../packages/witness/src/diff/resize.ts
+function normalizeDimensions(baseline, bw, bh, candidate, cw, ch, mode) {
+  if (bw === cw && bh === ch) {
+    return {
+      normalizedBaseline: new Uint8ClampedArray(baseline),
+      normalizedCandidate: new Uint8ClampedArray(candidate),
+      width: bw,
+      height: bh,
+      sizeMismatch: {
+        baseline: { width: bw, height: bh },
+        candidate: { width: cw, height: ch },
+        normalized: { width: bw, height: bh }
+      }
+    };
+  }
+  if (mode === "error") {
+    throw new Error(
+      `Size mismatch: baseline is ${bw}\xD7${bh}, candidate is ${cw}\xD7${ch}. Set handleSizeMismatch to 'pad' or 'crop' to handle this automatically.`
+    );
+  }
+  let targetWidth;
+  let targetHeight;
+  if (mode === "pad") {
+    targetWidth = Math.max(bw, cw);
+    targetHeight = Math.max(bh, ch);
+  } else {
+    targetWidth = Math.min(bw, cw);
+    targetHeight = Math.min(bh, ch);
+  }
+  const normalizedBaseline = new Uint8ClampedArray(targetWidth * targetHeight * 4);
+  const normalizedCandidate = new Uint8ClampedArray(targetWidth * targetHeight * 4);
+  const copyWidthB = Math.min(bw, targetWidth);
+  const copyHeightB = Math.min(bh, targetHeight);
+  for (let y = 0; y < copyHeightB; y++) {
+    const srcStart = y * bw * 4;
+    const dstStart = y * targetWidth * 4;
+    const bytesToCopy = copyWidthB * 4;
+    normalizedBaseline.set(
+      baseline.slice(srcStart, srcStart + bytesToCopy),
+      dstStart
+    );
+  }
+  const copyWidthC = Math.min(cw, targetWidth);
+  const copyHeightC = Math.min(ch, targetHeight);
+  for (let y = 0; y < copyHeightC; y++) {
+    const srcStart = y * cw * 4;
+    const dstStart = y * targetWidth * 4;
+    const bytesToCopy = copyWidthC * 4;
+    normalizedCandidate.set(
+      candidate.slice(srcStart, srcStart + bytesToCopy),
+      dstStart
+    );
+  }
+  return {
+    normalizedBaseline,
+    normalizedCandidate,
+    width: targetWidth,
+    height: targetHeight,
+    sizeMismatch: {
+      baseline: { width: bw, height: bh },
+      candidate: { width: cw, height: ch },
+      normalized: { width: targetWidth, height: targetHeight }
+    }
+  };
+}
+
+// ../packages/witness/src/diff/regions.ts
+var DEFAULT_REGION_OPTIONS = {
+  minSize: 10,
+  mergeDistance: 12
+};
+function detectRegions(diff8, width, height, options = {}) {
+  const opts = typeof options === "number" ? { minSize: options, mergeDistance: 0 } : { ...DEFAULT_REGION_OPTIONS, ...options };
+  const minSize = opts.minSize;
+  const changed = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      if (diff8[idx + 3] > 0) {
+        changed[y * width + x] = 1;
+      }
+    }
+  }
+  const labels = new Int32Array(width * height).fill(-1);
+  const parent = [];
+  let nextLabel = 0;
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+  function union2(a, b) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) {
+      parent[rb] = ra;
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (!changed[idx]) continue;
+      const neighbors = [];
+      if (x > 0 && labels[idx - 1] >= 0) {
+        neighbors.push(labels[idx - 1]);
+      }
+      if (y > 0 && labels[idx - width] >= 0) {
+        neighbors.push(labels[idx - width]);
+      }
+      if (neighbors.length === 0) {
+        labels[idx] = nextLabel;
+        parent.push(nextLabel);
+        nextLabel++;
+      } else {
+        const minLabel = Math.min(...neighbors.map(find));
+        labels[idx] = minLabel;
+        for (const n of neighbors) {
+          union2(minLabel, n);
+        }
+      }
+    }
+  }
+  const boxes = /* @__PURE__ */ new Map();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (labels[idx] < 0) continue;
+      const root = find(labels[idx]);
+      const box = boxes.get(root);
+      if (box) {
+        box.x0 = Math.min(box.x0, x);
+        box.y0 = Math.min(box.y0, y);
+        box.x1 = Math.max(box.x1, x);
+        box.y1 = Math.max(box.y1, y);
+        box.count++;
+      } else {
+        boxes.set(root, { x0: x, y0: y, x1: x, y1: y, count: 1 });
+      }
+    }
+  }
+  const regions = [];
+  for (const box of boxes.values()) {
+    if (box.count < minSize) continue;
+    const regionWidth = box.x1 - box.x0 + 1;
+    const regionHeight = box.y1 - box.y0 + 1;
+    const regionArea = regionWidth * regionHeight;
+    regions.push({
+      x: box.x0,
+      y: box.y0,
+      width: regionWidth,
+      height: regionHeight,
+      diffPixels: box.count,
+      diffPercent: regionArea > 0 ? box.count / regionArea * 100 : 0
+    });
+  }
+  const merged = mergeRegions(regions, opts.mergeDistance);
+  merged.sort((a, b) => a.y - b.y || a.x - b.x);
+  return merged;
+}
+function mergeRegions(regions, distance) {
+  if (distance <= 0 || regions.length < 2) return regions;
+  const gap = (a, b) => {
+    const dx = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
+    const dy = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
+    return Math.max(dx, dy);
+  };
+  const out = [...regions];
+  let mergedAny = true;
+  while (mergedAny) {
+    mergedAny = false;
+    outer: for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        if (gap(out[i], out[j]) <= distance) {
+          const a = out[i];
+          const b = out[j];
+          const x0 = Math.min(a.x, b.x);
+          const y0 = Math.min(a.y, b.y);
+          const x1 = Math.max(a.x + a.width, b.x + b.width);
+          const y1 = Math.max(a.y + a.height, b.y + b.height);
+          const union2 = {
+            x: x0,
+            y: y0,
+            width: x1 - x0,
+            height: y1 - y0,
+            diffPixels: a.diffPixels + b.diffPixels,
+            diffPercent: 0
+            // recomputed below
+          };
+          out.splice(j, 1);
+          out[i] = union2;
+          mergedAny = true;
+          break outer;
+        }
+      }
+    }
+  }
+  for (const r of out) {
+    const area = r.width * r.height;
+    r.diffPercent = area > 0 ? r.diffPixels / area * 100 : 0;
+  }
+  return out;
+}
+
+// ../packages/witness/src/diff/minimap.ts
+function applyMinimap(diff32, miniMap, miniWidth, miniHeight, width, height, scale, color) {
+  for (let i = 0; i < miniWidth * miniHeight; i++) {
+    if (miniMap[i] > 0) {
+      const miniX = i % miniWidth;
+      const miniY = i / miniWidth | 0;
+      const x0 = miniX * scale;
+      const x1 = Math.min(x0 + scale, width);
+      const y0 = miniY * scale;
+      const y1 = Math.min(y0 + scale, height);
+      for (let y = y0; y < y1; y++) {
+        let d32i = x0 + y * width;
+        for (let x = x0; x < x1; x++) {
+          diff32[d32i++] |= color;
+        }
+      }
+    }
+  }
+}
+
+// ../packages/witness/src/diff/diff.ts
+var MINIMAP_SCALE = 128;
+var COLOR32_MINIMAP = 545193984;
+var HASH_SPREAD = 4034073399;
+var DEFAULT_OPTIONS = {
+  threshold: 0.1,
+  cumulatedThreshold: 0.5,
+  enableMinimap: false,
+  detectRegions: false
+};
+function diff(baseline8, candidate8, diff8, width, height, options = {}) {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  let sizeMismatch;
+  let effectiveWidth = width;
+  let effectiveHeight = height;
+  let effectiveBaseline = baseline8;
+  let effectiveCandidate = candidate8;
+  const expectedLen = width * height * 4;
+  const dims = opts.dimensions;
+  const dimsDiffer = dims !== void 0 && (dims.baseline.width !== dims.candidate.width || dims.baseline.height !== dims.candidate.height);
+  let overlap;
+  if (dimsDiffer || baseline8.length !== expectedLen || candidate8.length !== expectedLen) {
+    if (opts.handleSizeMismatch) {
+      const bw = dims ? dims.baseline.width : width;
+      const bh = dims ? dims.baseline.height : Math.round(baseline8.length / (width * 4));
+      const cw = dims ? dims.candidate.width : width;
+      const ch = dims ? dims.candidate.height : Math.round(candidate8.length / (width * 4));
+      const normalized = normalizeDimensions(
+        baseline8,
+        bw,
+        bh,
+        candidate8,
+        cw,
+        ch,
+        opts.handleSizeMismatch
+      );
+      effectiveBaseline = normalized.normalizedBaseline;
+      effectiveCandidate = normalized.normalizedCandidate;
+      effectiveWidth = normalized.width;
+      effectiveHeight = normalized.height;
+      if (bw !== cw || bh !== ch) {
+        sizeMismatch = normalized.sizeMismatch;
+        if (opts.handleSizeMismatch === "pad") {
+          overlap = { width: Math.min(bw, cw), height: Math.min(bh, ch) };
+        }
+      }
+      if (diff8.length !== effectiveWidth * effectiveHeight * 4) {
+        diff8 = new Uint8ClampedArray(effectiveWidth * effectiveHeight * 4);
+      }
+    } else {
+      throw new Error(
+        `Buffer size mismatch: expected ${expectedLen} bytes (${width}\xD7${height}\xD74), got baseline=${baseline8.length}, candidate=${candidate8.length}. Set handleSizeMismatch option to 'pad', 'crop', or 'error'.`
+      );
+    }
+  }
+  if (opts.ignoreRegions && opts.ignoreRegions.length > 0) {
+    effectiveBaseline = new Uint8ClampedArray(effectiveBaseline);
+    effectiveCandidate = new Uint8ClampedArray(effectiveCandidate);
+    applyIgnoreRegions(effectiveBaseline, effectiveCandidate, effectiveWidth, effectiveHeight, opts.ignoreRegions);
+  }
+  const masks = opts.masks ?? [];
+  if (masks.length > 0) {
+    effectiveBaseline = new Uint8ClampedArray(effectiveBaseline);
+    applyMaskRects(effectiveBaseline, effectiveCandidate, effectiveWidth, effectiveHeight, masks);
+  }
+  const raw = pbdDiffCore(
+    effectiveBaseline,
+    effectiveCandidate,
+    diff8,
+    effectiveWidth,
+    effectiveHeight,
+    opts.threshold,
+    opts.cumulatedThreshold,
+    opts.enableMinimap
+  );
+  let diffCount = raw.diff;
+  if (overlap) {
+    diffCount += flagPadding(diff8, effectiveWidth, effectiveHeight, overlap.width, overlap.height);
+  }
+  const totalPixels = effectiveWidth * effectiveHeight;
+  const diffPercent = totalPixels > 0 ? diffCount / totalPixels * 100 : 0;
+  const isIdentical = diffCount === 0;
+  const result = {
+    diffCount,
+    cumulatedDiff: raw.cumulatedDiff,
+    hash: raw.hash,
+    diffPercent,
+    totalPixels,
+    isIdentical
+  };
+  if (sizeMismatch) {
+    result.sizeMismatch = sizeMismatch;
+  }
+  if (opts.detectRegions && !isIdentical) {
+    result.regions = detectRegions(diff8, effectiveWidth, effectiveHeight, opts.regionOptions ?? {});
+    outlineRegions(diff8, effectiveWidth, effectiveHeight, result.regions);
+  }
+  washBackground(effectiveBaseline, diff8, effectiveWidth, effectiveHeight);
+  if (masks.length > 0) {
+    hatchMaskRects(diff8, effectiveWidth, effectiveHeight, masks);
+  }
+  return result;
+}
+function flagPadding(diff8, width, height, overlapWidth, overlapHeight) {
+  let flagged = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = y < overlapHeight ? overlapWidth : 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (diff8[i + 3] !== 0) continue;
+      diff8[i] = 211;
+      diff8[i + 1] = 47;
+      diff8[i + 2] = 47;
+      diff8[i + 3] = 255;
+      flagged++;
+    }
+  }
+  return flagged;
+}
+function washBackground(baseline8, diff8, width, height) {
+  const len = width * height * 4;
+  for (let i = 0; i < len; i += 4) {
+    if (diff8[i + 3] !== 0) continue;
+    const luma = 0.299 * baseline8[i] + 0.587 * baseline8[i + 1] + 0.114 * baseline8[i + 2];
+    const v = 216 + luma * 0.15 | 0;
+    diff8[i] = v;
+    diff8[i + 1] = v;
+    diff8[i + 2] = v;
+    diff8[i + 3] = 255;
+  }
+}
+function outlineRegions(diff8, width, height, regions) {
+  const setPx = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const i = (y * width + x) * 4;
+    diff8[i] = 211;
+    diff8[i + 1] = 47;
+    diff8[i + 2] = 47;
+    diff8[i + 3] = 255;
+  };
+  for (const r of regions) {
+    const x0 = r.x - 2, y0 = r.y - 2;
+    const x1 = r.x + r.width + 1, y1 = r.y + r.height + 1;
+    for (let s = 0; s < 2; s++) {
+      for (let x = x0 + s; x <= x1 - s; x++) {
+        setPx(x, y0 + s);
+        setPx(x, y1 - s);
+      }
+      for (let y = y0 + s; y <= y1 - s; y++) {
+        setPx(x0 + s, y);
+        setPx(x1 - s, y);
+      }
+    }
+  }
+}
+function pbdDiffCore(baseline8, candidate8, diff8, width, height, threshold, cumulatedThreshold, enableMinimap) {
+  const area = width * height;
+  const _b8l = baseline8.length;
+  const deltaThreshold = threshold * threshold * 35215;
+  const bBuffer = baseline8.buffer;
+  const bOffset = baseline8.byteOffset;
+  const cBuffer = candidate8.buffer;
+  const cOffset = candidate8.byteOffset;
+  const dBuffer = diff8.buffer;
+  const dOffset = diff8.byteOffset;
+  const baseline32 = new Uint32Array(bBuffer, bOffset, area);
+  const candidate32 = new Uint32Array(cBuffer, cOffset, area);
+  const diff32 = new Uint32Array(dBuffer, dOffset, area);
+  let b8i = 0;
+  let b32i = 0;
+  let d32i = 0;
+  let diffCount = 0;
+  let hash = 0;
+  let hashStart = 0;
+  let cumulatedDiff = 0;
+  const deltaRange = Math.max(1, 35215 - deltaThreshold);
+  const miniHeight = Math.ceil(height / MINIMAP_SCALE);
+  const miniWidth = Math.ceil(width / MINIMAP_SCALE);
+  const miniMap = new Uint8ClampedArray(miniWidth * miniHeight);
+  const maxDimension = Math.max(width, height);
+  const maxMiniDimension = Math.max(miniWidth, miniHeight);
+  const axisMiniIndex = new Uint32Array(maxDimension);
+  let miniIndex = 0;
+  for (let i = 0; i < maxMiniDimension; i++) {
+    axisMiniIndex.fill(i, miniIndex, Math.min(miniIndex + MINIMAP_SCALE, maxDimension));
+    miniIndex += MINIMAP_SCALE;
+  }
+  for (let y = 0; y < height; y++) {
+    const miniIndexY = axisMiniIndex[y] * miniWidth;
+    let hashIndex = (y ^ HASH_SPREAD) * HASH_SPREAD;
+    for (let x = 0; x < width; x++, d32i++, b32i++, b8i += 4, hashIndex++) {
+      if (baseline32[b32i] === candidate32[b32i]) {
+        continue;
+      }
+      const dr = candidate8[b8i] - baseline8[b8i];
+      const dg = candidate8[b8i + 1] - baseline8[b8i + 1];
+      const db = candidate8[b8i + 2] - baseline8[b8i + 2];
+      const dy = dr * 0.29889531 + dg * 0.58662247 + db * 0.11448223;
+      const di = dr * 0.59597799 - dg * 0.2741761 - db * 0.32180189;
+      const dq = dr * 0.21147017 - dg * 0.52261711 + db * 0.31114694;
+      const delta = dy * dy * 0.5053 + di * di * 0.299 + dq * dq * 0.1957;
+      if (delta > deltaThreshold) {
+        miniMap[miniIndexY + axisMiniIndex[x]]++;
+        diffCount++;
+        const dyAbs = Math.abs(dy);
+        cumulatedDiff += dyAbs;
+        const t = Math.sqrt(Math.min(1, (delta - deltaThreshold) / deltaRange));
+        let hr, hg, hb;
+        if (t < 0.5) {
+          const u = t * 2;
+          hr = 255;
+          hg = 235 - 83 * u | 0;
+          hb = 59 - 59 * u | 0;
+        } else {
+          const u = (t - 0.5) * 2;
+          hr = 255 - 44 * u | 0;
+          hg = 152 - 105 * u | 0;
+          hb = 47 * u | 0;
+        }
+        diff32[d32i] = 255 << 24 | hb << 16 | hg << 8 | hr;
+        if (hash === 0) {
+          hashStart = hashIndex;
+        }
+        hash += hashIndex;
+      }
+    }
+  }
+  hash -= hashStart;
+  cumulatedDiff /= 256;
+  if (enableMinimap) {
+    applyMinimap(diff32, miniMap, miniWidth, miniHeight, width, height, MINIMAP_SCALE, COLOR32_MINIMAP);
+  }
+  if (cumulatedDiff <= cumulatedThreshold) {
+    return { diff: 0, cumulatedDiff: 0, hash: 0 };
+  }
+  return { diff: diffCount, cumulatedDiff, hash };
+}
+
+// ../packages/witness/src/diff/dom-diff.ts
+function domDiff(baselineHtml, candidateHtml, options = {}) {
+  if (!baselineHtml || !candidateHtml) {
+    return { domChanged: false, summary: null };
+  }
+  if (baselineHtml === candidateHtml) {
+    return { domChanged: false, summary: null };
+  }
+  const volatile = new Set((options.volatileAttributes ?? []).map((a) => a.toLowerCase()));
+  const baselineTok = tokenize(baselineHtml, volatile);
+  const candidateTok = tokenize(candidateHtml, volatile);
+  const baselineBuckets = bucketize(baselineTok.events);
+  const candidateBuckets = bucketize(candidateTok.events);
+  let textUnmatched = 0;
+  const textKeys = /* @__PURE__ */ new Set([...baselineTok.texts.keys(), ...candidateTok.texts.keys()]);
+  for (const key of textKeys) {
+    textUnmatched += Math.abs((baselineTok.texts.get(key) ?? 0) - (candidateTok.texts.get(key) ?? 0));
+  }
+  const textChanges = Math.ceil(textUnmatched / 2);
+  let added = 0;
+  let removed = 0;
+  let attributeChanges = 0;
+  const allTags = /* @__PURE__ */ new Set([...baselineBuckets.keys(), ...candidateBuckets.keys()]);
+  for (const tag of allTags) {
+    const baselineForTag = baselineBuckets.get(tag) ?? /* @__PURE__ */ new Map();
+    const candidateForTag = candidateBuckets.get(tag) ?? /* @__PURE__ */ new Map();
+    const baselineCount = sumValues(baselineForTag);
+    const candidateCount = sumValues(candidateForTag);
+    if (candidateCount > baselineCount) {
+      added += candidateCount - baselineCount;
+    } else if (baselineCount > candidateCount) {
+      removed += baselineCount - candidateCount;
+    }
+    const overlap = Math.min(baselineCount, candidateCount);
+    let matchingPairs = 0;
+    for (const [sig, candCount] of candidateForTag) {
+      const baseCount = baselineForTag.get(sig) ?? 0;
+      matchingPairs += Math.min(baseCount, candCount);
+    }
+    attributeChanges += overlap - matchingPairs;
+  }
+  const domChanged = added > 0 || removed > 0 || attributeChanges > 0 || textChanges > 0;
+  return {
+    domChanged,
+    summary: domChanged ? { added, removed, attributeChanges, textChanges } : null
+  };
+}
+function bucketize(events2) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const ev of events2) {
+    let inner = buckets.get(ev.tag);
+    if (!inner) {
+      inner = /* @__PURE__ */ new Map();
+      buckets.set(ev.tag, inner);
+    }
+    inner.set(ev.attrSig, (inner.get(ev.attrSig) ?? 0) + 1);
+  }
+  return buckets;
+}
+function sumValues(m) {
+  let total = 0;
+  for (const v of m.values()) total += v;
+  return total;
+}
+function tokenize(html, volatile = /* @__PURE__ */ new Set()) {
+  const events2 = [];
+  const texts = /* @__PURE__ */ new Map();
+  const len = html.length;
+  let i = 0;
+  const collectText = (from, to) => {
+    if (to <= from) return;
+    const normalized = html.slice(from, to).replace(/\s+/g, " ").trim();
+    if (!normalized) return;
+    texts.set(normalized, (texts.get(normalized) ?? 0) + 1);
+  };
+  while (i < len) {
+    const lt = html.indexOf("<", i);
+    if (lt < 0) {
+      collectText(i, len);
+      break;
+    }
+    collectText(i, lt);
+    i = lt + 1;
+    if (i >= len) break;
+    const c = html[i];
+    if (c === "!" && html.startsWith("!--", i)) {
+      const end = html.indexOf("-->", i + 3);
+      if (end < 0) break;
+      i = end + 3;
+      continue;
+    }
+    if (c === "!") {
+      const end = html.indexOf(">", i + 1);
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+    if (c === "?") {
+      const end = html.indexOf("?>", i + 1);
+      if (end < 0) break;
+      i = end + 2;
+      continue;
+    }
+    if (c === "/") {
+      const end = html.indexOf(">", i + 1);
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+    const tagEnd = findTagEnd(html, i);
+    if (tagEnd < 0) break;
+    const raw = html.slice(i, tagEnd);
+    const ev = parseOpenTag(raw, volatile);
+    if (ev) {
+      events2.push(ev);
+      if (ev.tag === "script" || ev.tag === "style") {
+        const closeNeedle = `</${ev.tag}`;
+        const closeIdx = indexOfCaseInsensitive(html, closeNeedle, tagEnd + 1);
+        if (closeIdx < 0) break;
+        const gtAfter = html.indexOf(">", closeIdx);
+        i = gtAfter < 0 ? len : gtAfter + 1;
+        continue;
+      }
+    }
+    i = tagEnd + 1;
+  }
+  return { events: events2, texts };
+}
+function findTagEnd(html, start) {
+  let i = start;
+  let inQuote = null;
+  const len = html.length;
+  while (i < len) {
+    const c = html[i];
+    if (inQuote) {
+      if (c === inQuote) inQuote = null;
+    } else {
+      if (c === '"' || c === "'") inQuote = c;
+      else if (c === ">") return i;
+    }
+    i++;
+  }
+  return -1;
+}
+function parseOpenTag(raw, volatile = /* @__PURE__ */ new Set()) {
+  const trimmed = raw.trim().replace(/\/$/, "").trim();
+  if (!trimmed) return null;
+  const m = /^([a-zA-Z][a-zA-Z0-9-]*)/.exec(trimmed);
+  if (!m) return null;
+  const tag = m[1].toLowerCase();
+  let rest = trimmed.slice(m[0].length).trim();
+  const attrs = {};
+  while (rest.length > 0) {
+    const am = /^([a-zA-Z_:][a-zA-Z0-9_:.-]*)/.exec(rest);
+    if (!am) break;
+    const name = am[1].toLowerCase();
+    rest = rest.slice(am[0].length);
+    let value = "";
+    if (rest.startsWith("=")) {
+      rest = rest.slice(1).trimStart();
+      if (rest.startsWith('"') || rest.startsWith("'")) {
+        const quote = rest[0];
+        const end = rest.indexOf(quote, 1);
+        if (end < 0) break;
+        value = rest.slice(1, end);
+        rest = rest.slice(end + 1);
+      } else {
+        const ws = rest.search(/\s/);
+        if (ws < 0) {
+          value = rest;
+          rest = "";
+        } else {
+          value = rest.slice(0, ws);
+          rest = rest.slice(ws);
+        }
+      }
+    }
+    attrs[name] = value;
+    rest = rest.trimStart();
+  }
+  const keys = Object.keys(attrs).sort();
+  const attrSig = keys.map((k) => {
+    if (volatile.has(k)) return `${k}=*`;
+    const v = attrs[k];
+    return v.startsWith("blob:") ? `${k}=blob:*` : `${k}=${v}`;
+  }).join("\0");
+  return { tag, attrSig };
+}
+function indexOfCaseInsensitive(haystack, needle, fromIndex) {
+  const h = haystack.toLowerCase();
+  const n = needle.toLowerCase();
+  return h.indexOf(n, fromIndex);
+}
+
+// ../packages/witness/src/baselines/store.ts
+var fs9 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
+
+// ../packages/witness/src/capture/environment.ts
+var ENVIRONMENT_POLICIES = ["warn", "separate", "strict"];
+function readEnvironment(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const e = raw;
+  const obj = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
+  if (!obj(e.os) || typeof e.os.platform !== "string") return null;
+  if (!obj(e.browser) || typeof e.browser.name !== "string") return null;
+  if (!obj(e.adapter) || typeof e.adapter.captureMethod !== "string") return null;
+  return e;
+}
+var PLATFORMS = ["aix", "android", "darwin", "freebsd", "haiku", "linux", "openbsd", "sunos", "win32", "cygwin", "netbsd"];
+function parseEnvironmentVariant(name) {
+  const segments = name.split("__");
+  if (segments.length < 3) return null;
+  const platform2 = segments[segments.length - 1];
+  if (!PLATFORMS.includes(platform2)) return null;
+  return { base: segments.slice(0, -2).join("__"), browser: segments[segments.length - 2], platform: platform2 };
+}
+
+// ../packages/witness/src/capture/health.ts
+var RESOURCE_TYPES = ["css", "font", "img", "script", "other"];
+var HEALTH_PROBE_EXPRESSION = `(function () {
+  var LIMIT = ${HEALTH_LIMITS.list};
+  var MAX = ${HEALTH_LIMITS.url};
+  var out = {};
+  var base;
+  try { base = document.baseURI || undefined; } catch (e) {}
+  function where(href) {
+    try {
+      var u = new URL(String(href), base);
+      if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'file:') return (u.host + u.pathname).slice(0, MAX);
+      return u.protocol;
+    } catch (e) { return ''; }
+  }
+  var sheetHrefs = {};
+  function kindOf(url, initiator) {
+    if (initiator === 'fetch' || initiator === 'xmlhttprequest' || initiator === 'beacon') return 'other';
+    if (initiator === 'link' && sheetHrefs[url]) return 'css';
+    var m = /\\.([a-z0-9]+)$/i.exec(url);
+    var ext = m ? m[1].toLowerCase() : '';
+    if (/^(woff2?|ttf|otf|eot)$/.test(ext)) return 'font';
+    if (ext === 'css') return 'css';
+    if (/^(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/.test(ext)) return 'img';
+    if (/^m?js$/.test(ext)) return 'script';
+    if (ext) return 'other';
+    if (initiator === 'img' || initiator === 'image' || initiator === 'input') return 'img';
+    if (initiator === 'script') return 'script';
+    return 'other';
+  }
+  try {
+    var set = document.fonts;
+    if (set && typeof set.status === 'string' && typeof set.forEach === 'function') {
+      var faces = [];
+      set.forEach(function (face) {
+        if (face && face.status === 'error' && faces.length < LIMIT) {
+          faces.push({
+            family: String(face.family).replace(/^\\s*["']|["']\\s*$/g, '').slice(0, MAX),
+            weight: String(face.weight).slice(0, MAX),
+            style: String(face.style).slice(0, MAX)
+          });
+        }
+      });
+      out.fonts = { status: set.status === 'loaded' ? 'loaded' : 'loading', failed: faces };
+    } else {
+      out.fonts = { status: 'unavailable', failed: [] };
+    }
+  } catch (e) { out.fonts = { status: 'unavailable', failed: [] }; }
+  var statusByUrl = {};
+  try {
+    var timed = typeof performance !== 'undefined' && performance && typeof performance.getEntriesByType === 'function' ? performance.getEntriesByType('resource') : [];
+    for (var t = 0; t < timed.length; t++) {
+      if (typeof timed[t].responseStatus === 'number') statusByUrl[timed[t].name] = timed[t].responseStatus;
+    }
+  } catch (e) {}
+  try {
+    var links = document.querySelectorAll('link[rel]');
+    var sheetsFailed = 0, sheetUrls = [];
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var rel = ' ' + String(link.getAttribute('rel') || '').toLowerCase().replace(/\\s+/g, ' ') + ' ';
+      if (rel.indexOf(' stylesheet ') === -1) continue;
+      if (link.getAttribute('href')) sheetHrefs[where(link.href)] = true;
+      if (rel.indexOf(' alternate ') !== -1) continue;
+      if (link.disabled || !link.getAttribute('href')) continue;
+      if (!link.sheet || statusByUrl[link.href] >= 400) {
+        sheetsFailed++;
+        if (sheetUrls.length < LIMIT) sheetUrls.push(where(link.href));
+      }
+    }
+    out.stylesheets = { failed: sheetsFailed, urls: sheetUrls };
+  } catch (e) {}
+  try {
+    var imgs = document.images, broken = 0, imageUrls = [];
+    for (var j = 0; j < imgs.length; j++) {
+      var img = imgs[j];
+      var src = img.currentSrc || img.src || '';
+      if (!src) continue;
+      if (img.complete && img.naturalWidth === 0) {
+        broken++;
+        if (imageUrls.length < LIMIT) imageUrls.push(where(src));
+      }
+    }
+    out.images = { broken: broken, urls: imageUrls };
+  } catch (e) {}
+  try {
+    var timing = typeof PerformanceResourceTiming !== 'undefined' ? PerformanceResourceTiming : null;
+    var perf = typeof performance !== 'undefined' ? performance : null;
+    if (!timing || !timing.prototype || !('responseStatus' in timing.prototype) || !perf || typeof perf.getEntriesByType !== 'function') {
+      out.resources = { status: 'unavailable', failed: {} };
+    } else {
+      var failed = {}, seen = {};
+      var entries = perf.getEntriesByType('resource');
+      for (var k = 0; k < entries.length; k++) {
+        var entry = entries[k];
+        var status = entry.responseStatus;
+        if (typeof status !== 'number' || status < 400) continue;
+        var url = where(entry.name);
+        if (entry.initiatorType === 'other' && url.indexOf('/') === url.length - 12 && url.slice(-12) === '/favicon.ico') continue;
+        var type = kindOf(url, entry.initiatorType);
+        if (seen[type + ' ' + url]) continue;
+        seen[type + ' ' + url] = true;
+        var group = failed[type] || (failed[type] = { count: 0, entries: [] });
+        group.count++;
+        if (group.entries.length < LIMIT) group.entries.push({ url: url, status: status });
+      }
+      out.resources = { status: 'checked', failed: failed };
+    }
+  } catch (e) { out.resources = { status: 'unavailable', failed: {} }; }
+  return out;
+})()`;
+var Malformed = class extends Error {
+};
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+function record(v) {
+  if (!isRecord(v)) throw new Malformed();
+  return v;
+}
+function count(v) {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) throw new Malformed();
+  return v;
+}
+function text(v, max) {
+  if (typeof v !== "string" || v.length > max) throw new Malformed();
+  return v;
+}
+function oneOf(v, allowed) {
+  if (typeof v !== "string" || !allowed.includes(v)) throw new Malformed();
+  return v;
+}
+function list(v, item) {
+  if (!Array.isArray(v)) throw new Malformed();
+  return v.slice(0, HEALTH_LIMITS.list).map(item);
+}
+function readFailures(v) {
+  const g = record(v);
+  return {
+    count: count(g.count),
+    entries: list(g.entries, (e) => {
+      const entry = record(e);
+      const out = { url: text(entry.url, HEALTH_LIMITS.url), status: count(entry.status) };
+      if (entry.error !== void 0) out.error = text(entry.error, HEALTH_LIMITS.text);
+      return out;
+    })
+  };
+}
+function readHealthBlock(raw) {
+  const h = record(raw);
+  const fonts = record(h.fonts);
+  const stylesheets = record(h.stylesheets);
+  const images = record(h.images);
+  const resources = record(h.resources);
+  const failed = {};
+  for (const [type, group2] of Object.entries(record(resources.failed))) {
+    failed[oneOf(type, RESOURCE_TYPES)] = readFailures(group2);
+  }
+  return {
+    fonts: {
+      status: oneOf(fonts.status, ["loaded", "loading", "unavailable"]),
+      failed: list(fonts.failed, (f) => {
+        const face = record(f);
+        return { family: text(face.family, HEALTH_LIMITS.text), weight: text(face.weight, HEALTH_LIMITS.text), style: text(face.style, HEALTH_LIMITS.text) };
+      })
+    },
+    stylesheets: { failed: count(stylesheets.failed), urls: list(stylesheets.urls, (u) => text(u, HEALTH_LIMITS.url)) },
+    images: { broken: count(images.broken), urls: list(images.urls, (u) => text(u, HEALTH_LIMITS.url)) },
+    resources: { status: oneOf(resources.status, ["checked", "unavailable"]), failed }
+  };
+}
+function parseHealth(raw) {
+  try {
+    return readHealthBlock(raw);
+  } catch {
+    return null;
+  }
+}
+
+// ../packages/witness/src/baselines/store.ts
+function resolveBaselinesDir(projectRoot, override) {
+  let dir = override;
+  if (!dir) {
+    try {
+      const raw = fs9.readFileSync(path10.join(projectRoot, ".testivai", "config.json"), "utf-8");
+      const cfg = JSON.parse(raw);
+      if (typeof cfg.baselinesDir === "string" && cfg.baselinesDir.length > 0) {
+        dir = cfg.baselinesDir;
+      }
+    } catch {
+    }
+  }
+  if (!dir) dir = path10.join(".testivai", "baselines");
+  dir = dir.split("{platform}").join(process.platform);
+  return path10.isAbsolute(dir) ? dir : path10.join(projectRoot, dir);
+}
+var BaselineStore = class {
+  constructor(projectRoot, baselinesDirOverride) {
+    this.projectRoot = projectRoot;
+    this.baselinesDir = resolveBaselinesDir(projectRoot, baselinesDirOverride);
+    this.tempDir = path10.join(projectRoot, ".testivai", "temp");
+  }
+  /**
+   * Check if a baseline exists for the given snapshot name.
+   */
+  exists(name) {
+    const screenshotPath = this.getBaselineScreenshotPath(name);
+    return fs9.existsSync(screenshotPath);
+  }
+  /**
+   * Read a baseline screenshot as a Buffer.
+   * Returns null if the baseline does not exist.
+   */
+  read(name) {
+    const screenshotPath = this.getBaselineScreenshotPath(name);
+    if (!fs9.existsSync(screenshotPath)) {
+      return null;
+    }
+    return fs9.readFileSync(screenshotPath);
+  }
+  /**
+   * Read baseline metadata.
+   * Returns null if the baseline does not exist.
+   */
+  readMetadata(name) {
+    const metadataPath = this.getBaselineMetadataPath(name);
+    if (!fs9.existsSync(metadataPath)) {
+      return null;
+    }
+    const raw = fs9.readFileSync(metadataPath, "utf-8");
+    return JSON.parse(raw);
+  }
+  /**
+   * Write a screenshot and metadata to the baseline directory.
+   * Creates the directory if it doesn't exist.
+   *
+   * @param dom - Optional DOM HTML captured at the same time as the
+   *   screenshot. Stored as `dom.html` for the noise-hint compare.
+   */
+  write(name, screenshot, metadata2, dom) {
+    const baselineDir = this.getBaselineDir(name);
+    fs9.mkdirSync(baselineDir, { recursive: true });
+    fs9.writeFileSync(this.getBaselineScreenshotPath(name), screenshot);
+    if (dom !== void 0) {
+      fs9.writeFileSync(this.getBaselineDomPath(name), dom);
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const meta = {
+      name,
+      createdAt: now,
+      updatedAt: now,
+      ...metadata2
+    };
+    fs9.writeFileSync(this.getBaselineMetadataPath(name), JSON.stringify(meta, null, 2));
+  }
+  /**
+   * Read the baseline DOM HTML if one was captured.
+   * Returns null when no DOM file exists for this snapshot.
+   */
+  readDom(name) {
+    const domPath = this.getBaselineDomPath(name);
+    if (!fs9.existsSync(domPath)) return null;
+    return fs9.readFileSync(domPath, "utf-8");
+  }
+  /**
+   * Approve a temp screenshot as the new baseline.
+   * Backs up the previous baseline to `.previous/` if one exists.
+   */
+  approve(name) {
+    const tempScreenshot = this.getTempScreenshotPath(name);
+    if (!fs9.existsSync(tempScreenshot)) {
+      throw new Error(
+        `No temp screenshot found for "${name}". Run your tests first to generate screenshots.`
+      );
+    }
+    const baselineDir = this.getBaselineDir(name);
+    const previousDir = path10.join(baselineDir, ".previous");
+    const currentScreenshot = this.getBaselineScreenshotPath(name);
+    const currentMetadata = this.getBaselineMetadataPath(name);
+    const currentDom = this.getBaselineDomPath(name);
+    const tempDom = this.getTempDomPath(name);
+    const currentElements = path10.join(this.getBaselineDir(name), "elements.json");
+    const tempElements = path10.join(this.getTempDir(), name, "elements.json");
+    if (fs9.existsSync(currentScreenshot)) {
+      fs9.mkdirSync(previousDir, { recursive: true });
+      fs9.copyFileSync(currentScreenshot, path10.join(previousDir, "screenshot.png"));
+      if (fs9.existsSync(currentMetadata)) {
+        fs9.copyFileSync(currentMetadata, path10.join(previousDir, "metadata.json"));
+      }
+      if (fs9.existsSync(currentDom)) {
+        fs9.copyFileSync(currentDom, path10.join(previousDir, "dom.html"));
+      }
+      if (fs9.existsSync(currentElements)) {
+        fs9.copyFileSync(currentElements, path10.join(previousDir, "elements.json"));
+      }
+    }
+    fs9.mkdirSync(baselineDir, { recursive: true });
+    fs9.copyFileSync(tempScreenshot, currentScreenshot);
+    if (fs9.existsSync(tempDom)) {
+      fs9.copyFileSync(tempDom, currentDom);
+    } else if (fs9.existsSync(currentDom)) {
+      fs9.rmSync(currentDom);
+    }
+    if (fs9.existsSync(tempElements)) {
+      fs9.copyFileSync(tempElements, currentElements);
+    } else if (fs9.existsSync(currentElements)) {
+      fs9.rmSync(currentElements);
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existingMeta = this.readMetadata(name);
+    const tempMeta = this.readTempMetadata(name);
+    const environment = readEnvironment(tempMeta?.environment);
+    const health = parseHealth(tempMeta?.health);
+    const meta = {
+      name,
+      createdAt: existingMeta?.createdAt ?? now,
+      updatedAt: now,
+      approvedBy: "local",
+      ...environment ? { environment } : {},
+      ...health ? { health } : {}
+    };
+    fs9.writeFileSync(currentMetadata, JSON.stringify(meta, null, 2));
+  }
+  /**
+   * Find the baseline name whose `.previous/screenshot.png` has the newest
+   * modification time. Returns null when no baseline has a `.previous/` backup.
+   */
+  findLatestUndoable() {
+    if (!fs9.existsSync(this.baselinesDir)) return null;
+    let latestName = null;
+    let latestMtime = 0;
+    for (const entry of fs9.readdirSync(this.baselinesDir)) {
+      const entryPath = path10.join(this.baselinesDir, entry);
+      if (!fs9.statSync(entryPath).isDirectory()) continue;
+      const prevScreenshot = path10.join(entryPath, ".previous", "screenshot.png");
+      if (fs9.existsSync(prevScreenshot)) {
+        const mtime = fs9.statSync(prevScreenshot).mtimeMs;
+        if (mtime > latestMtime) {
+          latestMtime = mtime;
+          latestName = entry;
+        }
+      }
+    }
+    return latestName;
+  }
+  /**
+   * Undo the last approve by restoring the `.previous/` backup.
+   */
+  undo(name) {
+    const baselineDir = this.getBaselineDir(name);
+    const previousDir = path10.join(baselineDir, ".previous");
+    if (!fs9.existsSync(previousDir)) {
+      throw new Error(
+        `No previous baseline found for "${name}". Cannot undo.`
+      );
+    }
+    const previousScreenshot = path10.join(previousDir, "screenshot.png");
+    const previousMetadata = path10.join(previousDir, "metadata.json");
+    const previousDom = path10.join(previousDir, "dom.html");
+    const currentScreenshot = this.getBaselineScreenshotPath(name);
+    const currentMetadata = this.getBaselineMetadataPath(name);
+    const currentDom = this.getBaselineDomPath(name);
+    if (fs9.existsSync(previousScreenshot)) {
+      fs9.copyFileSync(previousScreenshot, currentScreenshot);
+    }
+    if (fs9.existsSync(previousMetadata)) {
+      fs9.copyFileSync(previousMetadata, currentMetadata);
+    }
+    if (fs9.existsSync(previousDom)) {
+      fs9.copyFileSync(previousDom, currentDom);
+    } else if (fs9.existsSync(currentDom)) {
+      fs9.rmSync(currentDom);
+    }
+    fs9.rmSync(previousDir, { recursive: true, force: true });
+  }
+  /**
+   * List all baseline names.
+   */
+  list() {
+    if (!fs9.existsSync(this.baselinesDir)) {
+      return [];
+    }
+    return fs9.readdirSync(this.baselinesDir).filter((entry) => {
+      const entryPath = path10.join(this.baselinesDir, entry);
+      return fs9.statSync(entryPath).isDirectory();
+    });
+  }
+  /**
+   * Write a temp screenshot (captured during a test run).
+   *
+   * @param dom - Optional DOM HTML captured at the same time as the
+   *   screenshot. Stored as `dom.html` next to the screenshot.
+   */
+  writeTemp(name, screenshot, dom) {
+    const tempDir = path10.join(this.tempDir, name);
+    fs9.mkdirSync(tempDir, { recursive: true });
+    fs9.writeFileSync(this.getTempScreenshotPath(name), screenshot);
+    if (dom !== void 0) {
+      fs9.writeFileSync(this.getTempDomPath(name), dom);
+    }
+  }
+  /**
+   * Merge fields into the capture's temp metadata.json (creating it), so
+   * each part of an adapter (masks, environment…) adds its own without
+   * losing the others. A malformed file is replaced.
+   */
+  writeTempMetadata(name, fields) {
+    const dir = path10.join(this.tempDir, name);
+    fs9.mkdirSync(dir, { recursive: true });
+    const merged = { ...this.readTempMetadata(name) ?? {}, ...fields };
+    fs9.writeFileSync(this.getTempMetadataPath(name), JSON.stringify(merged, null, 2));
+  }
+  /** The capture's temp metadata.json, or null when absent or malformed. */
+  readTempMetadata(name) {
+    try {
+      const parsed = JSON.parse(fs9.readFileSync(this.getTempMetadataPath(name), "utf-8"));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  /**
+   * Read a temp screenshot.
+   */
+  readTemp(name) {
+    const tempPath = this.getTempScreenshotPath(name);
+    if (!fs9.existsSync(tempPath)) {
+      return null;
+    }
+    return fs9.readFileSync(tempPath);
+  }
+  /**
+   * Read the temp DOM HTML if one was captured.
+   * Returns null when no temp DOM file exists for this snapshot.
+   */
+  readTempDom(name) {
+    const domPath = this.getTempDomPath(name);
+    if (!fs9.existsSync(domPath)) return null;
+    return fs9.readFileSync(domPath, "utf-8");
+  }
+  /**
+   * List all temp snapshot names.
+   */
+  listTemp() {
+    if (!fs9.existsSync(this.tempDir)) {
+      return [];
+    }
+    return fs9.readdirSync(this.tempDir).filter((entry) => {
+      const entryPath = path10.join(this.tempDir, entry);
+      return fs9.statSync(entryPath).isDirectory();
+    });
+  }
+  /**
+   * Clear all temp files.
+   */
+  clearTemp() {
+    if (fs9.existsSync(this.tempDir)) {
+      fs9.rmSync(this.tempDir, { recursive: true, force: true });
+    }
+  }
+  // ── Path helpers ──────────────────────────────────────────────────────────
+  getBaselineDir(name) {
+    return path10.join(this.baselinesDir, name);
+  }
+  getBaselineScreenshotPath(name) {
+    return path10.join(this.baselinesDir, name, "screenshot.png");
+  }
+  getBaselineMetadataPath(name) {
+    return path10.join(this.baselinesDir, name, "metadata.json");
+  }
+  getBaselineDomPath(name) {
+    return path10.join(this.baselinesDir, name, "dom.html");
+  }
+  getTempScreenshotPath(name) {
+    return path10.join(this.tempDir, name, "screenshot.png");
+  }
+  getTempDomPath(name) {
+    return path10.join(this.tempDir, name, "dom.html");
+  }
+  getTempMetadataPath(name) {
+    return path10.join(this.tempDir, name, "metadata.json");
+  }
+  getBaselinesDir() {
+    return this.baselinesDir;
+  }
+  getTempDir() {
+    return this.tempDir;
+  }
+};
+
+// ../packages/witness/src/report/thumbnail.ts
+var THUMBNAIL_LIMITS = {
+  /** The widest strip, the three panels and both separators together. */
+  maxWidth: 800,
+  /** The tallest strip. */
+  maxHeight: 400,
+  /** Pixels of context around the changed regions, on every side. */
+  padding: 24,
+  /** How many of the largest regions (by area) the area covers. */
+  regions: 3,
+  /** Rows in the band shown when the diff has no regions. */
+  bandHeight: 400,
+  /** Pixels between two panels. */
+  separator: 2
+};
+var THUMBNAIL_PADDING_RGBA = [175, 184, 193, 255];
+var SEPARATOR_RGBA = [87, 96, 106, 255];
+function thumbnailArea(regions, diff2) {
+  const canvas = { x: 0, y: 0, width: diff2.width, height: diff2.height };
+  const inside = (regions ?? []).map((r) => intersect(r, canvas)).filter((r) => r !== null).sort((a, b) => b.width * b.height - a.width * a.height).slice(0, THUMBNAIL_LIMITS.regions);
+  if (inside.length > 0) {
+    const p = THUMBNAIL_LIMITS.padding;
+    const box = inside.reduce(union);
+    return intersect({ x: box.x - p, y: box.y - p, width: box.width + 2 * p, height: box.height + 2 * p }, canvas);
+  }
+  const first = firstDifferingRow(diff2);
+  if (first === null) return null;
+  const height = Math.min(THUMBNAIL_LIMITS.bandHeight, diff2.height);
+  return { x: 0, y: Math.min(first, diff2.height - height), width: diff2.width, height };
+}
+function renderThumbnail(images, area) {
+  const { maxWidth, maxHeight, separator } = THUMBNAIL_LIMITS;
+  const scale = Math.min(1, (maxWidth - 2 * separator) / (3 * area.width), maxHeight / area.height);
+  const panelWidth = Math.max(1, Math.round(area.width * scale));
+  const panelHeight = Math.max(1, Math.round(area.height * scale));
+  const width = 3 * panelWidth + 2 * separator;
+  const out = new Uint8ClampedArray(width * panelHeight * 4);
+  const starts = (size, n) => Int32Array.from({ length: n + 1 }, (_2, i) => Math.floor(i * size / n));
+  const colStart = starts(area.width, panelWidth);
+  const rowStart = starts(area.height, panelHeight);
+  const columnOf = new Int32Array(area.width);
+  for (let c = 0; c < panelWidth; c++) columnOf.fill(c, colStart[c], colStart[c + 1]);
+  const sums = new Float64Array(panelWidth * 4);
+  const pad = THUMBNAIL_PADDING_RGBA;
+  [images.baseline, images.current, images.diff].forEach((image, panel) => {
+    const left = panel * (panelWidth + separator);
+    const inWidth = Math.max(0, Math.min(area.width, image.width - area.x));
+    for (let oy = 0; oy < panelHeight; oy++) {
+      sums.fill(0);
+      for (let y = area.y + rowStart[oy]; y < area.y + rowStart[oy + 1]; y++) {
+        const hasRow = y < image.height;
+        const rowOffset = (y * image.width + area.x) * 4;
+        for (let xi = 0; xi < area.width; xi++) {
+          const s = columnOf[xi] * 4;
+          if (hasRow && xi < inWidth) {
+            const i = rowOffset + xi * 4;
+            sums[s] += image.data[i];
+            sums[s + 1] += image.data[i + 1];
+            sums[s + 2] += image.data[i + 2];
+            sums[s + 3] += image.data[i + 3];
+          } else {
+            sums[s] += pad[0];
+            sums[s + 1] += pad[1];
+            sums[s + 2] += pad[2];
+            sums[s + 3] += pad[3];
+          }
+        }
+      }
+      const rowsHere = rowStart[oy + 1] - rowStart[oy];
+      for (let ox = 0; ox < panelWidth; ox++) {
+        const n = rowsHere * (colStart[ox + 1] - colStart[ox]);
+        const o = (oy * width + left + ox) * 4;
+        for (let ch = 0; ch < 4; ch++) out[o + ch] = Math.round(sums[ox * 4 + ch] / n);
+      }
+    }
+  });
+  for (const left of [panelWidth, 2 * panelWidth + separator]) {
+    for (let y = 0; y < panelHeight; y++) {
+      for (let x = left; x < left + separator; x++) out.set(SEPARATOR_RGBA, (y * width + x) * 4);
+    }
+  }
+  return { data: out, width, height: panelHeight };
+}
+function firstDifferingRow(diff2) {
+  const { data, width, height } = diff2;
+  for (let y = 0; y < height; y++) {
+    for (let i = y * width * 4, end = i + width * 4; i < end; i += 4) {
+      if (data[i + 3] !== 0 && (data[i] !== data[i + 1] || data[i + 1] !== data[i + 2])) return y;
+    }
+  }
+  return null;
+}
+function intersect(a, b) {
+  if (![a.x, a.y, a.width, a.height].every(Number.isFinite)) return null;
+  const x = Math.max(Math.floor(a.x), b.x);
+  const y = Math.max(Math.floor(a.y), b.y);
+  const right = Math.min(Math.ceil(a.x + a.width), b.x + b.width);
+  const bottom = Math.min(Math.ceil(a.y + a.height), b.y + b.height);
+  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
+}
+function union(a, b) {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
+}
+
+// ../packages/witness/src/diff/attribution.ts
+function parseElementMap(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (item && typeof item === "object" && typeof item.path === "string" && typeof item.x === "number" && typeof item.y === "number" && typeof item.width === "number" && typeof item.height === "number") {
+      const e = item;
+      out.push({
+        path: e.path,
+        x: e.x,
+        y: e.y,
+        width: e.width,
+        height: e.height,
+        styleHash: typeof e.styleHash === "string" ? e.styleHash : ""
+      });
+    }
+  }
+  return out;
+}
+function overlapArea(a, b) {
+  const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+function containsPoint(r, px, py) {
+  return px >= r.x && px < r.x + r.width && py >= r.y && py < r.y + r.height;
+}
+function bbox(a, b) {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y
+  };
+}
+var MATCH_COVERAGE = 0.5;
+var MAX_ELEMENTS_PER_REGION = 3;
+function attributeRegions(regions, baselineMap, candidateMap) {
+  if (baselineMap.length === 0 || candidateMap.length === 0) {
+    return regions;
+  }
+  const baselineByPath = new Map(baselineMap.map((e) => [e.path, e]));
+  return regions.map((region) => {
+    const cx = region.x + region.width / 2;
+    const cy = region.y + region.height / 2;
+    const regionArea = region.width * region.height;
+    const matches = candidateMap.map((el) => {
+      const b = baselineByPath.get(el.path);
+      const span = b ? bbox(b, el) : el;
+      const coverage = regionArea > 0 ? overlapArea(span, region) / regionArea : 0;
+      return { el, baseline: b, coverage, center: containsPoint(span, cx, cy) };
+    }).filter((m) => m.coverage >= MATCH_COVERAGE || m.center).sort((a, b) => a.el.width * a.el.height - b.el.width * b.el.height).slice(0, MAX_ELEMENTS_PER_REGION);
+    if (matches.length === 0) return region;
+    const roleOf = (m) => {
+      const b = m.baseline;
+      if (b && b.width === m.el.width && b.height === m.el.height && b.styleHash === m.el.styleHash && (b.x !== m.el.x || b.y !== m.el.y)) {
+        return { role: "shifted", dx: m.el.x - b.x, dy: m.el.y - b.y };
+      }
+      return { role: "changed", dx: 0, dy: 0 };
+    };
+    const attributed = { ...region };
+    attributed.elements = matches.map((m) => ({ selector: m.el.path, role: roleOf(m).role }));
+    const primary = roleOf(matches[0]);
+    if (primary.role === "shifted") {
+      attributed.classification = "shift";
+      attributed.shift = { dx: primary.dx, dy: primary.dy };
+    } else {
+      attributed.classification = "change";
+    }
+    return attributed;
+  });
+}
+function compareStyleHashes(baselineMap, candidateMap) {
+  if (baselineMap.length === 0 || candidateMap.length === 0) {
+    return { status: "unavailable", changed: [] };
+  }
+  const baselineByPath = new Map(baselineMap.map((e) => [e.path, e.styleHash]));
+  const changed = [];
+  let comparable = 0;
+  for (const el of candidateMap) {
+    const b = baselineByPath.get(el.path);
+    if (b === void 0) continue;
+    if (b === "" || el.styleHash === "") continue;
+    comparable++;
+    if (b !== el.styleHash) changed.push(el.path);
+  }
+  if (comparable === 0) return { status: "unavailable", changed: [] };
+  return changed.length > 0 ? { status: "mismatch", changed } : { status: "match", changed: [] };
+}
+function detectPageShift(baselineMap, candidateMap, minElements = 3) {
+  if (baselineMap.length === 0 || candidateMap.length === 0) return null;
+  const baselineByPath = new Map(baselineMap.map((e) => [e.path, e]));
+  const moved = [];
+  for (const el of candidateMap) {
+    const b = baselineByPath.get(el.path);
+    if (!b || b.width !== el.width || b.height !== el.height || b.styleHash !== el.styleHash) {
+      continue;
+    }
+    const dx = el.x - b.x;
+    const dy = el.y - b.y;
+    if (dx === 0 && dy !== 0) moved.push({ dy, baselineY: b.y });
+  }
+  if (moved.length < minElements) return null;
+  const groups = /* @__PURE__ */ new Map();
+  for (const m of moved) {
+    const g = groups.get(m.dy) ?? [];
+    g.push(m);
+    groups.set(m.dy, g);
+  }
+  let best = [];
+  for (const g of groups.values()) if (g.length > best.length) best = g;
+  if (best.length < minElements || best.length / moved.length < 0.8) return null;
+  return {
+    dy: best[0].dy,
+    belowY: Math.min(...best.map((m) => m.baselineY)),
+    count: best.length
+  };
+}
+
+// ../packages/witness/src/report/compare.ts
+function readElementMap(projectRoot, kind, name) {
+  const p = kind === "baselines" ? path11.join(resolveBaselinesDir(projectRoot), name, "elements.json") : path11.join(projectRoot, ".testivai", "temp", name, "elements.json");
+  try {
+    return parseElementMap(JSON.parse(fs10.readFileSync(p, "utf-8")));
+  } catch {
+    return [];
+  }
+}
+function readTempMaskMetadata(projectRoot, name) {
+  const metaPath = path11.join(projectRoot, ".testivai", "temp", name, "metadata.json");
+  try {
+    const parsed = JSON.parse(fs10.readFileSync(metaPath, "utf-8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function compareAll(options) {
+  const { projectRoot, reportDir, threshold = 0.1, passCriteria = {}, diffRegions } = options;
+  const store = new BaselineStore(projectRoot);
+  const tempNames = store.listTemp();
+  const results = [];
+  const imagesDir = path11.join(reportDir, "images");
+  for (const name of tempNames) {
+    const snapshotImagesDir = path11.join(imagesDir, name);
+    fs10.mkdirSync(snapshotImagesDir, { recursive: true });
+    const tempBuffer = store.readTemp(name);
+    if (!tempBuffer) continue;
+    const currentPath = path11.join(snapshotImagesDir, "current.png");
+    fs10.writeFileSync(currentPath, tempBuffer);
+    if (!store.exists(name)) {
+      const firstHealth = snapshotCaptureHealth(null, parseHealth(store.readTempMetadata(name)?.health));
+      results.push({
+        name,
+        status: "new",
+        diffPercent: 0,
+        diffCount: 0,
+        totalPixels: 0,
+        currentPath: `images/${name}/current.png`,
+        ...firstHealth ? { captureHealth: firstHealth } : {}
+      });
+      continue;
+    }
+    const baselineBuffer = store.read(name);
+    const baselinePath = path11.join(snapshotImagesDir, "baseline.png");
+    fs10.writeFileSync(baselinePath, baselineBuffer);
+    const captureMeta = readTempMaskMetadata(projectRoot, name);
+    const { result, pixels } = compareBuffers(
+      baselineBuffer,
+      tempBuffer,
+      name,
+      snapshotImagesDir,
+      threshold,
+      {
+        configMasks: options.mask ?? [],
+        callMasks: [
+          ...captureMeta.masks ?? [],
+          ...captureMeta.maskSelectors ?? []
+        ],
+        capturedRects: captureMeta.maskRects,
+        regionOptions: diffRegions
+      }
+    );
+    const baselineMeta = store.readMetadata(name);
+    if (baselineMeta) {
+      result.baselineApprovedAt = baselineMeta.updatedAt ?? baselineMeta.createdAt;
+    }
+    const candidateMeta = store.readTempMetadata(name);
+    const baselineEnv = readEnvironment(baselineMeta?.environment);
+    const candidateEnv = readEnvironment(candidateMeta?.environment);
+    if (baselineEnv && candidateEnv) {
+      const { delta, renderingDelta } = diffEnvironments(baselineEnv, candidateEnv);
+      result.environment = delta.length > 0 ? { delta, renderingDelta, baseline: baselineEnv, candidate: candidateEnv } : { delta, renderingDelta };
+      if (options.environmentPolicy === "strict" && renderingDelta.length > 0) {
+        result.status = "changed";
+        result.environment.policy = "strict";
+      }
+    }
+    const health = snapshotCaptureHealth(parseHealth(baselineMeta?.health), parseHealth(candidateMeta?.health));
+    if (health) result.captureHealth = health;
+    if (result.status === "changed") {
+      const baselineDom = store.readDom(name);
+      const candidateDom = store.readTempDom(name);
+      const domSignal = computeDomSignal(baselineDom, candidateDom, options.volatileAttributes);
+      const baselineElements = readElementMap(projectRoot, "baselines", name);
+      const candidateElements = readElementMap(projectRoot, "temp", name);
+      if (domSignal) {
+        const styleComparison = compareStyleHashes(baselineElements, candidateElements);
+        domSignal.styleCheck = styleComparison.status;
+        if (styleComparison.status === "mismatch") {
+          domSignal.styleChanges = {
+            count: styleComparison.changed.length,
+            elements: styleComparison.changed.slice(0, 10)
+          };
+          domSignal.noiseHint = false;
+        }
+        if (isUnhealthyCapture(result)) domSignal.noiseHint = false;
+        result.dom = domSignal;
+      }
+      if (result.regions && result.regions.length > 0) {
+        result.regions = attributeRegions(result.regions, baselineElements, candidateElements);
+      }
+      const pageShift = detectPageShift(baselineElements, candidateElements);
+      if (pageShift) {
+        result.pageShift = pageShift;
+      }
+      applyPassCriteria(result, passCriteria);
+    }
+    if (result.status === "changed" && pixels) {
+      writeThumbnail(result, pixels, snapshotImagesDir, name);
+    }
+    results.push(result);
+  }
+  return results;
+}
+function writeThumbnail(result, pixels, snapshotImagesDir, name) {
+  const area = thumbnailArea(result.regions, pixels.diff);
+  if (!area) return;
+  const strip = renderThumbnail(pixels, area);
+  fs10.writeFileSync(path11.join(snapshotImagesDir, "thumb.png"), encodePng(Buffer.from(strip.data.buffer), strip.width, strip.height));
+  result.thumbPath = `images/${name}/thumb.png`;
+}
+function applyPassCriteria(result, criteria) {
+  const {
+    maxDiffPercent = 0,
+    maxDiffPixels,
+    noiseAutoPass = false,
+    noiseMaxDiffPercent = 1,
+    shiftTolerance = 0
+  } = criteria;
+  if (result.sizeMismatch || result.environment?.policy === "strict") return;
+  if (result.diffCount === 0 && result.totalPixels > 0) {
+    result.status = "passed";
+    result.diffPercent = 0;
+    return;
+  }
+  if (!healthAllowsTolerances(result)) return;
+  const withinPercent = result.diffPercent <= maxDiffPercent;
+  const withinPixels = maxDiffPixels !== void 0 && result.diffCount <= maxDiffPixels;
+  if (withinPercent || withinPixels) {
+    result.status = "passed";
+    result.autoPassed = "threshold";
+    return;
+  }
+  if (noiseAutoPass && !isUnhealthyCapture(result) && result.dom?.noiseHint === true && result.dom.styleCheck === "match" && result.diffPercent <= noiseMaxDiffPercent && diffShape(result).kind !== "concentrated") {
+    result.status = "passed";
+    result.autoPassed = "noise";
+    return;
+  }
+  if (shiftTolerance > 0 && result.regions && result.regions.length > 0) {
+    const allSmallShifts = result.regions.every(
+      (r) => r.classification === "shift" && r.shift !== void 0 && Math.abs(r.shift.dx) <= shiftTolerance && Math.abs(r.shift.dy) <= shiftTolerance
+    );
+    if (allSmallShifts) {
+      result.status = "passed";
+      result.autoPassed = "shift";
+    }
+  }
+}
+function computeDomSignal(baselineDom, candidateDom, volatileAttributes) {
+  if (!baselineDom || !candidateDom) return null;
+  const result = domDiff(baselineDom, candidateDom, { volatileAttributes });
+  return {
+    changed: result.domChanged,
+    summary: result.summary,
+    // Provisional: pixels differ, DOM does not. compareAll() clears this on
+    // a style mismatch; with styleCheck 'unavailable' a stylesheet-only
+    // change is not ruled out, so on its own this is not "likely noise".
+    noiseHint: !result.domChanged
+  };
+}
+function readPngDims(buffer2) {
+  if (buffer2.length < 24 || buffer2.readUInt32BE(12) !== 1229472850) {
+    return null;
+  }
+  return { width: buffer2.readUInt32BE(16), height: buffer2.readUInt32BE(20) };
+}
+function decodePng(buffer2) {
+  const png = import_pngjs.PNG.sync.read(buffer2);
+  return { data: png.data, width: png.width, height: png.height };
+}
+function encodePng(data, width, height) {
+  const png = new import_pngjs.PNG({ width, height });
+  png.data = data;
+  return import_pngjs.PNG.sync.write(png);
+}
+function compareBuffers(baselineBuffer, candidateBuffer, name, snapshotImagesDir, threshold, maskContext = { configMasks: [], callMasks: [] }) {
+  if (baselineBuffer.equals(candidateBuffer)) {
+    const result = {
+      name,
+      status: "passed",
+      diffPercent: 0,
+      diffCount: 0,
+      totalPixels: 0,
+      baselinePath: `images/${name}/baseline.png`,
+      currentPath: `images/${name}/current.png`
+    };
+    const specCount = maskContext.configMasks.length + maskContext.callMasks.length;
+    if (specCount > 0) {
+      const dims = readPngDims(baselineBuffer);
+      if (dims) {
+        const fromConfig = resolveMasks(
+          maskContext.configMasks,
+          dims.width,
+          dims.height,
+          maskContext.capturedRects,
+          "config"
+        );
+        const fromCall = resolveMasks(
+          maskContext.callMasks,
+          dims.width,
+          dims.height,
+          maskContext.capturedRects,
+          "call"
+        );
+        const rects = [...fromConfig.rects, ...fromCall.rects];
+        const warnings = [...fromConfig.warnings, ...fromCall.warnings];
+        if (rects.length > 0) result.masks = rects;
+        if (warnings.length > 0) result.maskWarnings = warnings;
+      }
+    }
+    return { result };
+  }
+  try {
+    const baseline = decodePng(baselineBuffer);
+    const candidate = decodePng(candidateBuffer);
+    const sizeMismatch = baseline.width !== candidate.width || baseline.height !== candidate.height ? {
+      baseline: { width: baseline.width, height: baseline.height },
+      candidate: { width: candidate.width, height: candidate.height }
+    } : void 0;
+    const width = Math.max(baseline.width, candidate.width);
+    const height = Math.max(baseline.height, candidate.height);
+    const baseline8 = new Uint8ClampedArray(baseline.data.length);
+    baseline8.set(baseline.data);
+    const candidate8 = new Uint8ClampedArray(candidate.data.length);
+    candidate8.set(candidate.data);
+    const diffOutput = new Uint8ClampedArray(width * height * 4);
+    const fromConfig = resolveMasks(
+      maskContext.configMasks,
+      width,
+      height,
+      maskContext.capturedRects,
+      "config"
+    );
+    const fromCall = resolveMasks(
+      maskContext.callMasks,
+      width,
+      height,
+      maskContext.capturedRects,
+      "call"
+    );
+    const maskRects = [...fromConfig.rects, ...fromCall.rects];
+    const maskWarnings = [...fromConfig.warnings, ...fromCall.warnings];
+    const diffResult = diff(baseline8, candidate8, diffOutput, baseline.width, baseline.height, {
+      threshold,
+      masks: maskRects,
+      detectRegions: true,
+      regionOptions: maskContext.regionOptions,
+      ...sizeMismatch ? { handleSizeMismatch: "pad", dimensions: sizeMismatch } : {}
+    });
+    const diffPngBuffer = encodePng(Buffer.from(diffOutput.buffer), width, height);
+    const diffPath = path11.join(snapshotImagesDir, "diff.png");
+    fs10.writeFileSync(diffPath, diffPngBuffer);
+    const status = "changed";
+    const result = {
+      name,
+      status,
+      diffPercent: diffResult.diffPercent,
+      diffCount: diffResult.diffCount,
+      totalPixels: diffResult.totalPixels,
+      baselinePath: `images/${name}/baseline.png`,
+      currentPath: `images/${name}/current.png`,
+      diffPath: `images/${name}/diff.png`
+    };
+    if (sizeMismatch) result.sizeMismatch = sizeMismatch;
+    if (diffResult.regions) result.regions = diffResult.regions;
+    if (maskRects.length > 0) result.masks = maskRects;
+    if (maskWarnings.length > 0) result.maskWarnings = maskWarnings;
+    return { result, pixels: { baseline, current: candidate, diff: { data: diffOutput, width, height } } };
+  } catch (_err) {
+    return {
+      result: {
+        name,
+        status: "changed",
+        diffPercent: 100,
+        diffCount: 0,
+        totalPixels: 0,
+        baselinePath: `images/${name}/baseline.png`,
+        currentPath: `images/${name}/current.png`
+      }
+    };
+  }
+}
+
+// ../packages/witness/src/report/template.ts
+var REPORT_CSP = [
+  "default-src 'none'",
+  "img-src 'self'",
+  "style-src 'unsafe-inline'",
+  "script-src 'unsafe-inline'",
+  "base-uri 'none'",
+  "form-action 'none'"
+].join("; ");
+function renderHtml(data, options = {}) {
+  const { summary: summary2, snapshots, version: version3, timestamp } = data;
+  const changed = snapshots.filter((s) => s.status === "changed");
+  const newSnapshots = snapshots.filter((s) => s.status === "new");
+  const passed = snapshots.filter((s) => s.status === "passed");
+  const missing = data.missingBaselines ?? [];
+  const envGroups = environmentChangeGroups(snapshots).filter((g) => g.snapshots.length >= 2);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  ${options.csp ? `<meta http-equiv="Content-Security-Policy" content="${REPORT_CSP}">
+  ` : ""}<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${options.noindex ? '<meta name="robots" content="noindex, nofollow">\n  ' : ""}<title>TestivAI Visual Report</title>
+  <style>
+    /* \u2500\u2500 Theme tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+       Light is the default (no attribute); html[data-theme="dark"] overrides.
+       The toggle persists to localStorage("testivai-theme"). */
+    :root {
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --surface-2: #eef1f4;
+      --border: #d0d7de;
+      --border-soft: #e4e8ec;
+      --text: #1f2328;
+      --text-muted: #59636e;
+      --accent: #0e7490;
+      --accent-contrast: #ffffff;
+      --link: #0969da;
+      --changed: #cf222e;      --changed-bg: #cf222e14;
+      --new: #bc4c00;          --new-bg: #bc4c0014;
+      --passed: #1a7f37;       --passed-bg: #1a7f3714;
+      --info: #0969da;         --info-bg: #0969da12;
+      --code-bg: #eff2f5;
+      --shadow: 0 1px 3px rgba(31,35,40,0.06), 0 8px 24px rgba(31,35,40,0.04);
+      --sidebar-bg: #ffffff;
+      --hatch-a: #eef1f4; --hatch-b: #e4e8ec;
+    }
+    html[data-theme="dark"] {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2129;
+      --border: #30363d;
+      --border-soft: #21262d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #00d4ff;
+      --accent-contrast: #08111f;
+      --link: #58a6ff;
+      --changed: #f85149;      --changed-bg: #f8514922;
+      --new: #f0883e;          --new-bg: #f0883e22;
+      --passed: #3fb950;       --passed-bg: #3fb95022;
+      --info: #79c0ff;         --info-bg: #1f6feb1a;
+      --code-bg: #0d1117;
+      --shadow: none;
+      --sidebar-bg: #08111f;
+      --hatch-a: #161b22; --hatch-b: #1c2129;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+    code, .mono { font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; }
+
+    /* Mobile top bar (hidden on desktop) */
+    .mobile-topbar { display: none; position: sticky; top: 0; z-index: 50; align-items: center; gap: 12px; padding: 10px 14px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border-soft); }
+    .menu-toggle { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 16px; line-height: 1; cursor: pointer; }
+    .topbar-title { font-size: 15px; font-weight: 700; color: var(--accent); }
+    .topbar-title span { font-weight: 400; font-size: 12px; color: var(--text-muted); }
+    .sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 55; }
+
+    /* Sidebar */
+    .sidebar { width: 264px; background: var(--sidebar-bg); padding: 24px 16px; flex-shrink: 0; border-right: 1px solid var(--border-soft); position: fixed; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; display: flex; flex-direction: column; }
+    .brand-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .sidebar h1 { font-size: 18px; color: var(--accent); letter-spacing: -0.2px; }
+    .theme-toggle { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: all .15s; }
+    .theme-toggle:hover { border-color: var(--accent); }
+    .sidebar .version { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+    .sidebar .timestamp { font-size: 11px; color: var(--text-muted); margin-bottom: 20px; }
+
+    /* Summary cards */
+    .summary-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+    .card { padding: 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-soft); box-shadow: var(--shadow); }
+    .card .label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.6px; }
+    .card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    .card.total .value { color: var(--text); }
+    .card.changed .value { color: var(--changed); }
+    .card.new .value { color: var(--new); }
+    .card.passed .value { color: var(--passed); }
+
+    /* Nav */
+    .nav { list-style: none; margin-bottom: 20px; }
+    .nav li { margin-bottom: 2px; }
+    .nav a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--text-muted); text-decoration: none; font-size: 13px; transition: all 0.15s; }
+    .nav a:hover { background: var(--surface-2); color: var(--text); }
+    .nav a .count { float: right; background: var(--surface-2); border: 1px solid var(--border-soft); padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+
+    /* Agent CTA */
+    .cta { background: var(--surface); border: 1px solid var(--border-soft); padding: 14px; border-radius: 10px; box-shadow: var(--shadow); }
+    .cta h3 { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+    .cta p { font-size: 11px; color: var(--text-muted); line-height: 1.55; }
+    .cta code { background: var(--code-bg); border-radius: 4px; padding: 1px 4px; font-size: 10px; }
+    .cta a { display: inline-block; margin-top: 8px; padding: 6px 14px; background: var(--accent); color: var(--accent-contrast); border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; }
+
+    /* Main content */
+    .main { margin-left: 264px; flex: 1; padding: 32px 36px; max-width: 1280px; }
+    .section { margin-bottom: 44px; }
+    .section-title { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+    .section-title::before { content: ''; width: 8px; height: 8px; border-radius: 50%; }
+    .section-title.changed { color: var(--changed); } .section-title.changed::before { background: var(--changed); }
+    .section-title.new { color: var(--new); } .section-title.new::before { background: var(--new); }
+    .section-title.passed { color: var(--passed); } .section-title.passed::before { background: var(--passed); }
+
+    /* Notices at the top of a published report (run, pull request, fork) */
+    .report-notice { background: var(--info-bg); border: 1px solid var(--border-soft); border-left: 4px solid var(--info); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+    .report-notice.warning { background: var(--new-bg); border-left-color: var(--new); }
+    .report-notice a { color: var(--link); }
+
+    /* Snapshot card */
+    .snapshot { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .snapshot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .snapshot-name { font-size: 15px; font-weight: 650; color: inherit; text-decoration: none; }
+    .snapshot-name:hover { text-decoration: underline; }
+    .snapshot:target { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .snapshot-badge { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+    .badge-changed { background: var(--changed-bg); color: var(--changed); }
+    .badge-new { background: var(--new-bg); color: var(--new); }
+    .badge-passed { background: var(--passed-bg); color: var(--passed); }
+    .snapshot-stats { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+
+    /* Layered analysis panel \u2014 the same evidence agents get via MCP */
+    .analysis { border: 1px solid var(--border-soft); background: var(--surface-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+    .analysis-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .analysis-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+    .analysis-mcp { font-size: 10px; color: var(--text-muted); }
+    .analysis-mcp code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; }
+    .verdict { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5; font-weight: 550; margin-bottom: 8px; }
+    .verdict.v-noise { background: var(--info-bg); color: var(--info); border: 1px solid var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+    /* Identical DOM, styles not compared: unknown, so a warning look (dashed = not verified), never the info-blue noise style */
+    .verdict.v-unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
+    /* Identical DOM and styles, but a diff concentrated in one area or large: not noise, a warning look */
+    .verdict.v-unexplained { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
+    .verdict.v-style { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
+    .verdict.v-drift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+    .env-notice { background: var(--info-bg); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 13px; color: var(--info); }
+    .env-notice code { background: var(--code-bg); border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+    .env-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .verdict.v-size { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
+    .verdict.v-structural { background: var(--changed-bg); color: var(--changed); border: 1px solid color-mix(in srgb, var(--changed) 30%, transparent); }
+    .verdict.v-shift { background: var(--info-bg); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+    .verdict.v-new { background: var(--new-bg); color: var(--new); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); }
+    .verdict.v-pass { background: var(--passed-bg); color: var(--passed); border: 1px solid color-mix(in srgb, var(--passed) 30%, transparent); }
+    /* Unhealthy capture: a font, stylesheet or other asset failed to load; never the noise style */
+    .verdict.v-unhealthy { background: var(--changed-bg); color: var(--changed); border: 1px dashed color-mix(in srgb, var(--changed) 55%, transparent); }
+    .health-hint { font-size: 12px; color: var(--new); margin-top: 6px; }
+    .verdict code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
+
+    /* DOM / style signal */
+    .dom-hint { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
+    .dom-hint.noise { background: var(--info-bg); color: var(--info); }
+    .dom-hint.unverified { background: var(--new-bg); color: var(--new); border: 1px dashed color-mix(in srgb, var(--new) 55%, transparent); }
+    .dom-hint.unexplained { background: var(--new-bg); color: var(--new); }
+    .dom-hint.changed { background: var(--surface); border: 1px solid var(--border-soft); color: var(--text); }
+    .dom-hint.style-changed { background: var(--new-bg); color: var(--new); }
+    .dom-hint.style-changed code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 11px; }
+    .dom-hint .label { font-weight: 600; }
+    .dom-hint .summary { color: inherit; opacity: 0.85; }
+
+    /* 3-column diff view */
+    .diff-view { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .diff-view.two-col { grid-template-columns: 1fr 1fr; }
+    .diff-view.one-col { grid-template-columns: 1fr; }
+    .diff-col { text-align: center; }
+    .diff-col label { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+    .heat-legend { text-transform: none; letter-spacing: 0; font-size: 10px; margin-left: 6px; }
+    .heat-bar { display: inline-block; width: 44px; height: 7px; border-radius: 4px; vertical-align: middle; margin: 0 3px; background: linear-gradient(90deg, #ffeb3b, #ff9800, #d32f2f); }
+    .diff-col img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; transition: transform 0.2s; background: #fff; }
+    .diff-col img:hover { transform: scale(1.02); }
+
+    /* Approve command */
+    .approve-cmd { margin-top: 16px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .approve-cmd code { font-size: 13px; color: var(--accent); }
+    .approve-cmd button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+    .approve-cmd button:hover { border-color: var(--accent); }
+    .approve-cmd button.copied { background: var(--passed); border-color: var(--passed); color: #fff; }
+
+    /* Regions */
+    .regions { margin-top: 8px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 8px; font-size: 12px; }
+    .regions .regions-title { color: var(--text-muted); font-weight: 600; margin-bottom: 6px; }
+    .regions ul { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+    .regions li a { display: inline-block; padding: 3px 10px; border-radius: 10px; background: var(--changed-bg); color: var(--changed); text-decoration: none; font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; font-size: 11px; }
+    .regions li a:hover { filter: brightness(0.95); }
+    .regions li a.region-shift { background: var(--info-bg); color: var(--info); }
+    .page-shift { margin-top: 8px; padding: 8px 10px; background: var(--info-bg); border-radius: 6px; font-size: 12px; color: var(--info); }
+
+    /* Masks (audit trail) */
+    .masks { margin-top: 8px; padding: 10px 12px; background: repeating-linear-gradient(45deg, var(--hatch-a), var(--hatch-a) 6px, var(--hatch-b) 6px, var(--hatch-b) 8px); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-muted); }
+    .masks .label { font-weight: 600; color: var(--text); }
+    .masks code { color: var(--link); font-size: 11px; }
+    .mask-warning { margin-top: 8px; padding: 10px 12px; background: var(--new-bg); border-radius: 8px; font-size: 12px; color: var(--new); }
+
+    /* Zoom overlay */
+    .zoom-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; cursor: zoom-out; }
+    .zoom-overlay.active { display: flex; }
+    .zoom-overlay img { max-width: 95%; max-height: 95%; border-radius: 8px; }
+
+    /* Missing-baselines notice (coverage loss) */
+    .missing-notice { background: var(--new-bg); border: 1px solid color-mix(in srgb, var(--new) 30%, transparent); border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 13px; color: var(--new); }
+    .missing-notice .m-title { font-weight: 700; margin-bottom: 4px; }
+    .missing-notice code { background: var(--code-bg); border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+    .missing-notice .m-hint { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
+
+    /* Notices / empty state */
+    .oss-notice { margin-top: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 8px; font-size: 11px; color: var(--text-muted); line-height: 1.6; box-shadow: var(--shadow); }
+    .oss-notice h4 { margin: 0 0 8px; font-size: 11px; color: var(--text); }
+    .oss-notice p { margin: 0 0 6px; }
+    .oss-notice p:last-child { margin-bottom: 0; }
+    .oss-notice code { background: var(--code-bg); border-radius: 3px; padding: 1px 4px; font-size: 10px; }
+    .oss-notice a { color: var(--link); }
+    .empty { text-align: center; padding: 48px; color: var(--text-muted); }
+    .empty .icon { font-size: 48px; margin-bottom: 16px; }
+
+    /* Mobile / narrow screens: sidebar becomes an off-canvas drawer, collapsed
+       by default; diff images stack; everything wraps instead of overflowing. */
+    @media (max-width: 900px) {
+      body { display: block; }
+      .mobile-topbar { display: flex; }
+      .sidebar { z-index: 60; width: min(300px, 85vw); transform: translateX(-105%); transition: transform 0.2s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-backdrop.active { display: block; }
+      .main { margin-left: 0; padding: 16px; max-width: 100%; }
+      .section, .snapshot { scroll-margin-top: 64px; }
+      .snapshot { padding: 14px; }
+      .snapshot-header { flex-wrap: wrap; gap: 6px; }
+      .diff-view, .diff-view.two-col { grid-template-columns: 1fr; }
+      .diff-col img:hover { transform: none; }
+      .approve-cmd { flex-wrap: wrap; gap: 8px; }
+      .approve-cmd code { overflow-wrap: anywhere; }
+      .analysis-head { flex-wrap: wrap; gap: 4px; }
+      .verdict code, .missing-notice code { overflow-wrap: anywhere; }
+    }
+  </style>
+</head>
+<body>
+  <header class="mobile-topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation" aria-expanded="false">\u2630</button>
+    <span class="topbar-title">TestivAI <span>Visual Report</span></span>
+  </header>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-row">
+      <h1>TestivAI</h1>
+      <button class="theme-toggle" id="themeToggle" title="Switch between light and dark theme">Dark</button>
+    </div>
+    <div class="version">Visual Report v${escapeHtml(version3)}</div>
+    <div class="timestamp">${escapeHtml(new Date(timestamp).toLocaleString())}</div>
+
+    <div class="summary-cards">
+      <div class="card total"><div class="label">Total</div><div class="value">${summary2.total}</div></div>
+      <div class="card changed"><div class="label">Changed</div><div class="value">${summary2.changed}</div></div>
+      <div class="card new"><div class="label">New</div><div class="value">${summary2.newSnapshots}</div></div>
+      <div class="card passed"><div class="label">Passed</div><div class="value">${summary2.passed}</div></div>
+    </div>
+
+    <ul class="nav">
+      ${summary2.changed > 0 ? `<li><a href="#changed">Changed <span class="count">${summary2.changed}</span></a></li>` : ""}
+      ${summary2.newSnapshots > 0 ? `<li><a href="#new">New <span class="count">${summary2.newSnapshots}</span></a></li>` : ""}
+      ${summary2.passed > 0 ? `<li><a href="#passed">Passed <span class="count">${summary2.passed}</span></a></li>` : ""}
+    </ul>
+
+    <div class="cta">
+      <h3>Reviewing with an AI agent?</h3>
+      <p>The <code>@testivai/mcp</code> server gives Claude Code, Cursor, and any MCP client this report as structured data \u2014 including <code>explain_snapshot</code>, which attributes each diff to selectors and explains why it happened.</p>
+      <a href="https://github.com/testivai/testivai-oss/blob/main/docs/guides/ai-agents.md" target="_blank">Agent setup guide</a>
+    </div>
+
+    <div class="oss-notice">
+      <h4>Pixel-exact mode</h4>
+      <p>Playwright, WebdriverIO, Selenium and <code>testivai witness</code> captures are stabilized by default (animations, transitions, caret, web fonts). Other dynamic content (timestamps, ads, rotating images) still shows up as a diff until you configure it.</p>
+      <p>Noise is labeled, not removed: <strong>DOM unchanged</strong> with matching computed styles means likely render noise only when the diff is also small and scattered; a diff concentrated in one area, or over ${NOISE_MAX_DIFF_PERCENT}% of pixels, gets its own verdict. When styles were not compared, a stylesheet-only change is not ruled out. A capture whose web fonts or stylesheets failed to load reads <strong>Unhealthy capture</strong>, never noise.</p>
+      <p>To reduce noise:<br>
+        \u2022 Add <code>ignoreSelectors</code> or <code>mask</code> for dynamic elements<br>
+        \u2022 For variable-height regions, ignore them with <code>mode: "collapse"</code> (<code>@testivai/witness-playwright</code> only)<br>
+        \u2022 Raise <code>threshold</code>, or set <code>maxDiffPercent</code> / <code>maxDiffPixels</code> / <code>shiftTolerance</code> in <code>.testivai/config.json</code>
+      </p>
+    </div>
+  </aside>
+
+  <main class="main">
+    ${renderNotices(options.notices ?? [])}
+    ${envGroups.map(
+    (g) => `
+    <div class="env-notice">
+      <div>${escapeHtml(environmentChangeLine(g))}</div>
+      ${g.snapshots.slice(0, 20).map((n) => `<code>${escapeHtml(n)}</code>`).join(" ")}${g.snapshots.length > 20 ? " \u2026" : ""}
+    </div>`
+  ).join("")}
+    ${missing.length > 0 ? `
+    <div class="missing-notice">
+      <div class="m-title">${missing.length} baseline${missing.length === 1 ? "" : "s"} received no capture this run</div>
+      ${missing.map((n) => `<code>${escapeHtml(n)}</code>`).join(" ")}
+      <div class="m-hint">A deleted or renamed test silently stops guarding its page. If intentional, remove the baseline (and commit); if this was a filtered run (<code>--grep</code>), ignore this notice.</div>
+    </div>` : ""}
+    ${summary2.total === 0 ? `
+    <div class="empty">
+      
+      <h2>No snapshots found</h2>
+      <p>Run your tests to capture snapshots, then re-run the report.</p>
+    </div>` : ""}
+
+    ${changed.length > 0 ? `
+    <section class="section" id="changed">
+      <h2 class="section-title changed">Changed (${changed.length})</h2>
+      ${changed.map((s) => renderSnapshot(s)).join("\n")}
+    </section>` : ""}
+
+    ${newSnapshots.length > 0 ? `
+    <section class="section" id="new">
+      <h2 class="section-title new">New (${newSnapshots.length})</h2>
+      ${newSnapshots.map((s) => renderSnapshot(s)).join("\n")}
+    </section>` : ""}
+
+    ${passed.length > 0 ? `
+    <section class="section" id="passed">
+      <h2 class="section-title passed">Passed (${passed.length})</h2>
+      ${passed.map((s) => renderSnapshot(s)).join("\n")}
+    </section>` : ""}
+  </main>
+
+  <div class="zoom-overlay" id="zoomOverlay"><img id="zoomImg" src="" alt="Zoomed"></div>
+
+  <script>
+    // Theme: light is the default; a stored preference of "dark" overrides.
+    (function () {
+      const KEY = 'testivai-theme';
+      const btn = document.getElementById('themeToggle');
+      const apply = (theme) => {
+        if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        else document.documentElement.removeAttribute('data-theme');
+        btn.textContent = theme === 'dark' ? 'Light' : 'Dark';
+      };
+      let theme = 'light';
+      try { theme = localStorage.getItem(KEY) === 'dark' ? 'dark' : 'light'; } catch {}
+      apply(theme);
+      btn.addEventListener('click', () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem(KEY, theme); } catch {}
+        apply(theme);
+      });
+    })();
+
+    // Mobile drawer: collapsed by default; hamburger toggles, backdrop or a
+    // nav tap closes. Inert on desktop (the topbar/backdrop are display:none).
+    (function () {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      const toggle = document.getElementById('menuToggle');
+      const set = (open) => {
+        sidebar.classList.toggle('open', open);
+        backdrop.classList.toggle('active', open);
+        toggle.setAttribute('aria-expanded', String(open));
+      };
+      toggle.addEventListener('click', () => set(!sidebar.classList.contains('open')));
+      backdrop.addEventListener('click', () => set(false));
+      sidebar.querySelectorAll('.nav a').forEach(a => a.addEventListener('click', () => set(false)));
+    })();
+
+    document.querySelectorAll('.diff-col img').forEach(img => {
+      img.addEventListener('click', () => {
+        document.getElementById('zoomImg').src = img.src;
+        document.getElementById('zoomOverlay').classList.add('active');
+      });
+    });
+    document.getElementById('zoomOverlay').addEventListener('click', () => {
+      document.getElementById('zoomOverlay').classList.remove('active');
+    });
+
+    document.querySelectorAll('.region-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        const diff = chip.dataset.diff;
+        if (diff) {
+          document.getElementById('zoomImg').src = diff;
+          document.getElementById('zoomOverlay').classList.add('active');
+        }
+      });
+    });
+
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        navigator.clipboard.writeText(cmd).then(() => {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+  </script>
+</body>
+</html>`;
+}
+function renderNotices(notices) {
+  return notices.map((n) => {
+    const links = (n.links ?? []).filter((l) => isHttpsUrl(l.href)).map((l) => ` \xB7 <a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a>`).join("");
+    return `<div class="report-notice ${n.tone === "warning" ? "warning" : "info"}">${escapeHtml(n.text)}${links}</div>`;
+  }).join("\n    ");
+}
+function isHttpsUrl(value) {
+  if (/[\s"'<>`\\]/.test(value)) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+function renderSnapshot(snapshot2) {
+  const badgeClass = snapshot2.status === "changed" ? "badge-changed" : snapshot2.status === "new" ? "badge-new" : "badge-passed";
+  const hasBaseline = !!snapshot2.baselinePath;
+  const hasDiff = !!snapshot2.diffPath;
+  const hasCurrent = !!snapshot2.currentPath;
+  let gridClass = "diff-view";
+  if (hasBaseline && hasDiff && hasCurrent) gridClass += "";
+  else if (hasCurrent && !hasBaseline) gridClass += " one-col";
+  else gridClass += " two-col";
+  const anchor = snapshotAnchorId(snapshot2.name);
+  return `
+    <div class="snapshot" id="${anchor}">
+      <div class="snapshot-header">
+        <a class="snapshot-name" href="#${anchor}" title="Link to this snapshot">${escapeHtml(snapshot2.name)}</a>
+        <span class="snapshot-badge ${badgeClass}">${snapshot2.status}</span>
+      </div>
+      ${renderStats(snapshot2)}
+      ${renderAnalysis(snapshot2)}
+      <div class="${gridClass}">
+        ${hasBaseline ? `<div class="diff-col"><label>Baseline</label><img src="${escapeHtml(snapshot2.baselinePath ?? "")}" alt="Baseline"></div>` : ""}
+        ${hasDiff ? `<div class="diff-col"><label>Diff <span class="heat-legend" title="Heatmap: color = difference magnitude">subtle <span class="heat-bar"></span> strong</span></label><img src="${escapeHtml(snapshot2.diffPath ?? "")}" alt="Diff heatmap"></div>` : ""}
+        ${hasCurrent ? `<div class="diff-col"><label>Current</label><img src="${escapeHtml(snapshot2.currentPath ?? "")}" alt="Current"></div>` : ""}
+      </div>
+      ${snapshot2.status === "changed" || snapshot2.status === "new" ? `
+      <div class="approve-cmd">
+        <code>npx testivai approve ${escapeHtml(snapshot2.name)}</code>
+        <button class="copy-btn" data-cmd="npx testivai approve ${escapeHtml(snapshot2.name)}">Copy</button>
+      </div>` : ""}
+    </div>`;
+}
+function renderStats(snapshot2) {
+  const parts = [];
+  if (snapshot2.status === "changed" || snapshot2.autoPassed) {
+    parts.push(
+      `Diff: ${snapshot2.diffPercent.toFixed(2)}% (${snapshot2.diffCount} pixels)${snapshot2.autoPassed ? ` \u2014 auto-passed: ${autoPassNote(snapshot2)}` : ""}`
+    );
+  }
+  if (snapshot2.sizeMismatch) {
+    parts.push(escapeHtml(formatSizeMismatch(snapshot2.sizeMismatch)));
+  }
+  if (snapshot2.baselineApprovedAt) {
+    const d = new Date(snapshot2.baselineApprovedAt);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(`baseline approved ${d.toISOString().slice(0, 10)}`);
+    }
+  }
+  if (parts.length === 0) return "";
+  return `<div class="snapshot-stats">${parts.join(" \xB7 ")}</div>`;
+}
+function autoPassNote(snapshot2) {
+  if (snapshot2.autoPassed === "noise") {
+    if (snapshot2.dom?.styleCheck !== "match") return "DOM unchanged, styles not compared, within noise tolerance";
+    return diffShape(snapshot2).kind === "concentrated" ? "DOM and computed styles unchanged, within noise tolerance, but the diff is concentrated in one area" : "DOM and computed styles unchanged, within noise tolerance";
+  }
+  if (snapshot2.autoPassed === "shift") return "pure element shifts within layout tolerance";
+  return "within configured diff tolerance";
+}
+function renderAnalysis(snapshot2) {
+  const verdict = renderVerdict(snapshot2);
+  const layers = [renderDomHint(snapshot2), renderHealthWarnings(snapshot2), renderEnvironment(snapshot2), renderRegions(snapshot2), renderMasks(snapshot2)].filter(Boolean).join("");
+  if (!verdict && !layers) return "";
+  return `
+      <div class="analysis">
+        <div class="analysis-head">
+          <span class="analysis-title">Layered analysis</span>
+          <span class="analysis-mcp">agents get this via <code>@testivai/mcp</code> \xB7 <code>explain_snapshot</code></span>
+        </div>
+        ${verdict}
+        ${layers}
+      </div>`;
+}
+function renderVerdict(snapshot2) {
+  const unhealthy = unhealthyVerdict(snapshot2);
+  if (unhealthy) return unhealthy;
+  if (snapshot2.status === "new") return baseVerdict(snapshot2);
+  const change = snapshotEnvironmentChange(snapshot2);
+  if (change && snapshot2.environment?.policy === "strict") {
+    return `<div class="verdict v-size"><span>Environment changed (strict policy) \u2014 ${escapeHtml(change)} since the baseline. environmentPolicy is "strict", so this snapshot is changed whatever its pixels say (${snapshot2.diffPercent.toFixed(2)}% differ). Approve it to re-baseline in this environment, or capture it in the baseline's.</span></div>`;
+  }
+  const env = snapshot2.environment;
+  if (change && env?.baseline && env.candidate && snapshot2.sizeMismatch && env.renderingDelta.includes("adapter.captureMethod")) {
+    const from = describeCaptureMethod(env.baseline.adapter.captureMethod);
+    const to = describeCaptureMethod(env.candidate.adapter.captureMethod);
+    const dom = snapshot2.dom?.changed && snapshot2.dom.summary ? ` The DOM also changed (${escapeHtml(summarizeDom(snapshot2.dom.summary))}): review that on its own.` : "";
+    return `<div class="verdict v-drift"><span>Capture method changed \u2014 ${escapeHtml(from)} \u2192 ${escapeHtml(to)} since the baseline (${escapeHtml(formatSizes(snapshot2.sizeMismatch))}): the size change comes from how the screenshot was taken, not from the page. Re-baseline with this capture method, or capture the way the baseline was.${dom}</span></div>`;
+  }
+  if (change && isRenderingDrift(snapshot2)) {
+    const size = snapshot2.sizeMismatch ? `; that also explains the size change (${escapeHtml(formatSizeMismatch(snapshot2.sizeMismatch))})` : "";
+    const next = snapshot2.status === "changed" ? "Re-baseline once the images are confirmed to match apart from rendering." : `Auto-passed by the '${escapeHtml(snapshot2.autoPassed ?? "")}' criterion; re-baseline in this environment so the tolerance keeps measuring the page, not the machine.`;
+    return `<div class="verdict v-drift"><span>Rendering drift \u2014 the environment changed since the baseline (${escapeHtml(change)}), and the DOM and computed styles are identical: the machine changed, not the page${size}. ${next}</span></div>`;
+  }
+  const base = baseVerdict(snapshot2);
+  if (change && base && (snapshot2.status === "changed" || snapshot2.autoPassed)) {
+    const note = ` The environment also changed since the baseline (${escapeHtml(change)}), which can add rendering differences of its own.`;
+    return base.replace(/<\/span><\/div>$/, `${note}</span></div>`);
+  }
+  return base;
+}
+var capitalize2 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function unhealthyVerdict(snapshot2) {
+  const reading = captureHealthReading(snapshot2.captureHealth);
+  if (!reading) return "";
+  let then;
+  if (snapshot2.status === "new") then = `This is a first capture: ${reading.next}.`;
+  else if (snapshot2.status === "passed") {
+    const who = reading.side === "both" ? "neither image shows" : reading.side === "baseline" ? "the baseline does not show" : "the current capture does not show";
+    const passed = snapshot2.autoPassed ? `It auto-passed by the '${snapshot2.autoPassed}' criterion` : "It passed";
+    then = `${passed}, but ${who} the page as built: ${reading.next}.`;
+  } else then = `${capitalize2(reading.next)}.`;
+  let env = "";
+  const change = snapshotEnvironmentChange(snapshot2);
+  if (change && snapshot2.status === "changed") {
+    if (snapshot2.environment?.policy === "strict") env = ` Environment changed too (strict policy) \u2014 ${change} since the baseline.`;
+    else if (isRenderingDrift(snapshot2)) env = ` Rendering drift too \u2014 the environment changed since the baseline (${change}), with the DOM and computed styles identical; judge it once the capture is healthy.`;
+    else env = ` The environment also changed since the baseline (${change}), which can add rendering differences of its own.`;
+  }
+  return `<div class="verdict v-unhealthy"><span>Unhealthy capture \u2014 ${escapeHtml(reading.detail)}. ${escapeHtml(then)}${escapeHtml(env)}</span></div>`;
+}
+function renderHealthWarnings(snapshot2) {
+  const warnings = snapshot2.captureHealth?.warnings ?? [];
+  if (warnings.length === 0) return "";
+  return `
+      <div class="health-hint">Capture warnings \u2014 ${escapeHtml(warnings.join("; "))}</div>`;
+}
+function baseVerdict(snapshot2) {
+  if (snapshot2.status === "passed" && !snapshot2.autoPassed) {
+    if (snapshot2.dom?.changed && snapshot2.dom.summary) {
+      return `<div class="verdict v-pass"><span>Passed \u2014 nothing visible changed, but the DOM differs (${escapeHtml(summarizeDom(snapshot2.dom.summary))}): hidden or off-screen content, or markup with no painted effect. Nothing to approve; worth knowing if the change was meant to be visible.</span></div>`;
+    }
+    return "";
+  }
+  if (snapshot2.status === "new") {
+    return `<div class="verdict v-new"><span>First capture \u2014 no baseline yet. Review the image, then approve to make it the baseline.</span></div>`;
+  }
+  if (snapshot2.sizeMismatch) {
+    const change = `${escapeHtml(describeSizeChange(snapshot2.sizeMismatch))} (${escapeHtml(formatSizes(snapshot2.sizeMismatch))})`;
+    if (sizeMismatchKind(snapshot2.sizeMismatch) === "width") {
+      return `<div class="verdict v-size"><span>Size changed \u2014 ${change} between the two captures, so this is not a page change. Re-capture at the baseline's viewport and device scale, or re-baseline if the new size is intended.</span></div>`;
+    }
+    const identical = Boolean(snapshot2.dom && !snapshot2.dom.changed);
+    const dom = snapshot2.dom?.changed && snapshot2.dom.summary ? `; DOM ${escapeHtml(summarizeDom(snapshot2.dom.summary))}` : identical ? "; DOM identical" : "";
+    const reading = escapeHtml(explainHeightChange(snapshot2.sizeMismatch, { dom: snapshot2.dom, pageShift: snapshot2.pageShift }));
+    const closing = identical ? "Compare the images before approving." : "Compare the images and confirm the change is intended before approving.";
+    return `<div class="verdict v-size"><span>Size changed \u2014 ${change}${dom}: ${reading}. ${closing}</span></div>`;
+  }
+  if (snapshot2.autoPassed && snapshot2.dom?.changed && snapshot2.dom.summary) {
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot2.autoPassed)}</code> criterion \u2014 within the configured tolerance, but the DOM differs (${escapeHtml(summarizeDom(snapshot2.dom.summary))}). Nothing to approve; check the tolerance is meant to cover a markup change.</span></div>`;
+  }
+  if (snapshot2.dom?.styleCheck === "mismatch" && snapshot2.dom.styleChanges && !snapshot2.dom.changed) {
+    const n = snapshot2.dom.styleChanges.count;
+    const first = snapshot2.dom.styleChanges.elements[0];
+    const el = first ? `<code>${escapeHtml(first.split(" > ").slice(-1)[0])}</code>` : "";
+    return `<div class="verdict v-style"><span>Style-only change \u2014 a real change, not noise: ${n} element${n === 1 ? "" : "s"} restyled with identical DOM${el ? ` (${el}${n > 1 ? ", \u2026" : ""})` : ""}. Confirm it's intended before approving.</span></div>`;
+  }
+  if (snapshot2.pageShift) {
+    const p = snapshot2.pageShift;
+    return `<div class="verdict v-shift"><span>Layout shift \u2014 everything below y=${p.belowY} moved ${p.dy > 0 ? "down" : "up"} ${Math.abs(p.dy)}px (${p.count} elements together). Look <em>above</em> that line for inserted or removed content; the moved elements themselves are unchanged.</span></div>`;
+  }
+  if (snapshot2.dom?.changed && snapshot2.dom.summary) {
+    return `<div class="verdict v-structural"><span>Structural change \u2014 the DOM differs (${escapeHtml(summarizeDom(snapshot2.dom.summary))}). Review the diff and confirm the change is intended before approving.</span></div>`;
+  }
+  if (snapshot2.dom?.noiseHint) {
+    if (snapshot2.dom.styleCheck === "match") {
+      const shape = diffShape(snapshot2);
+      const next = snapshot2.status === "changed" ? "Compare the images before approving." : "Compare the images before relying on the auto-pass.";
+      if (shape.kind === "concentrated") {
+        return `<div class="verdict v-unexplained"><span>Diff concentrated in one area \u2014 the DOM and computed styles are identical, but ${describeRegions(shape)}, changed. Render noise is small and scattered, so this is a bad capture, or a change the style check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). ${next}</span></div>`;
+      }
+      if (shape.kind === "large") {
+        return `<div class="verdict v-unexplained"><span>Large diff \u2014 the DOM and computed styles are identical, but ${snapshot2.diffPercent.toFixed(2)}% of pixels differ, spread across the page: more than render noise usually changes. Often fonts or rendering that differ between the machines that captured the baseline and the current image; it can also be a bad capture or a change the style check does not cover (${STYLE_CHECK_DOES_NOT_COVER}). ${next}</span></div>`;
+      }
+      return `<div class="verdict v-noise"><span>Likely render noise \u2014 pixels differ but the DOM and computed styles are identical and the diff is small and scattered (anti-aliasing, font hinting). Worth a glance, not a block.</span></div>`;
+    }
+    return `<div class="verdict v-unverified"><span>Styles not compared \u2014 could be render noise or a stylesheet-only change: pixels differ and the DOM is identical, but computed styles were not compared (no comparable style digests on both sides), so a stylesheet-only change is not ruled out. Compare the images before approving.</span></div>`;
+  }
+  if (snapshot2.autoPassed) {
+    return `<div class="verdict v-pass"><span>Auto-passed via the <code>${escapeHtml(snapshot2.autoPassed)}</code> criterion \u2014 reported for transparency, no action needed.</span></div>`;
+  }
+  return "";
+}
+function summarizeDom(s) {
+  const parts = [];
+  if (s.added > 0) parts.push(`${s.added} added`);
+  if (s.removed > 0) parts.push(`${s.removed} removed`);
+  if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute`);
+  if (s.textChanges) parts.push(`${s.textChanges} text`);
+  return parts.join(", ") || "structural difference";
+}
+function renderDomHint(snapshot2) {
+  if (!snapshot2.dom) return "";
+  const styleChanges = snapshot2.dom.styleCheck === "mismatch" ? snapshot2.dom.styleChanges : void 0;
+  const restyled = styleChanges ? `${styleChanges.elements.slice(0, 3).map((p) => `<code>${escapeHtml(p.split(" > ").slice(-1)[0])}</code>`).join(", ")}${styleChanges.count > 3 ? ", \u2026" : ""}` : "";
+  if (styleChanges && !snapshot2.dom.changed) {
+    const els = restyled;
+    const n = styleChanges.count;
+    return `
+      <div class="dom-hint style-changed" title="DOM structure is identical but computed styles differ \u2014 a stylesheet-level change, not render noise.">
+        <span class="label">Styles changed</span>
+        <span class="summary">\u2014 ${n} element${n === 1 ? "" : "s"} restyled with identical DOM: ${els}.</span>
+      </div>`;
+  }
+  if (snapshot2.dom.noiseHint) {
+    if (snapshot2.dom.styleCheck === "match") {
+      if (isRenderingDrift(snapshot2)) {
+        return `
+      <div class="dom-hint noise" title="DOM tree and computed styles are identical, and the environment the page was captured in changed since the baseline.">
+        <span class="label">DOM unchanged</span>
+        <span class="summary">\u2014 styles verified unchanged; the environment changed since the baseline, so the pixel diff is rendering drift.</span>
+      </div>`;
+      }
+      const shape = diffShape(snapshot2);
+      if (shape.kind === "concentrated") {
+        return `
+      <div class="dom-hint unexplained" title="DOM tree and computed styles are identical, but the pixel diff sits in one area, which render noise does not do.">
+        <span class="label">DOM and styles unchanged, diff in one area</span>
+        <span class="summary">\u2014 ${describeRegions(shape)}: a bad capture, or a change the style check does not cover. Compare the images.</span>
+      </div>`;
+      }
+      if (shape.kind === "large") {
+        return `
+      <div class="dom-hint unexplained" title="DOM tree and computed styles are identical, but more pixels differ than render noise usually changes.">
+        <span class="label">DOM and styles unchanged, large diff</span>
+        <span class="summary">\u2014 ${snapshot2.diffPercent.toFixed(2)}% of pixels differ, spread across the page. Compare the images.</span>
+      </div>`;
+      }
+      return `
+      <div class="dom-hint noise" title="DOM tree and computed styles are identical between baseline and candidate, and the diff is small and scattered; the pixel diff is likely render noise.">
+        <span class="label">DOM unchanged</span>
+        <span class="summary">\u2014 pixel diff is likely render noise (anti-aliasing, font hinting). Styles verified unchanged; the diff is small and scattered.</span>
+      </div>`;
+    }
+    return `
+      <div class="dom-hint unverified" title="DOM tree is identical between baseline and candidate, but computed styles were not compared, so a stylesheet-only change is not ruled out.">
+        <span class="label">DOM unchanged, styles not compared</span>
+        <span class="summary">\u2014 could be render noise or a stylesheet-only change (no comparable style digests on both sides). Compare the images before approving.</span>
+      </div>`;
+  }
+  const s = snapshot2.dom.summary;
+  if (!s) return "";
+  const parts = [];
+  if (s.added > 0) parts.push(`${s.added} added`);
+  if (s.removed > 0) parts.push(`${s.removed} removed`);
+  if (s.attributeChanges > 0) parts.push(`${s.attributeChanges} attribute change${s.attributeChanges === 1 ? "" : "s"}`);
+  if (s.textChanges) parts.push(`${s.textChanges} text change${s.textChanges === 1 ? "" : "s"}`);
+  const alsoRestyled = styleChanges ? ` Computed styles also changed on ${styleChanges.count} element${styleChanges.count === 1 ? "" : "s"}: ${restyled}.` : "";
+  return `
+    <div class="dom-hint changed" title="Structural DOM changes detected alongside the pixel diff.">
+      <span class="label">DOM changed</span>
+      <span class="summary">\u2014 ${escapeHtml(parts.join(", ") || "structural difference")}.${alsoRestyled}</span>
+    </div>`;
+}
+function renderEnvironment(snapshot2) {
+  const env = snapshot2.environment;
+  if (!env || env.delta.length === 0 || !env.baseline || !env.candidate) return "";
+  const context6 = env.delta.filter((f) => !env.renderingDelta.includes(f));
+  const parts = [];
+  if (env.renderingDelta.length > 0) parts.push(describeEnvironmentChange(env.baseline, env.candidate, env.renderingDelta));
+  if (context6.length > 0) parts.push(`context: ${describeEnvironmentChange(env.baseline, env.candidate, context6)}`);
+  return `
+      <div class="env-hint">Environment changed since the baseline \u2014 ${escapeHtml(parts.join(" \xB7 "))}</div>`;
+}
+function renderRegions(snapshot2) {
+  const regions = snapshot2.regions ?? [];
+  if (regions.length === 0 || snapshot2.status === "new") return "";
+  const describe = (r) => {
+    const el = r.elements?.[0];
+    if (!el) return `${r.width}\xD7${r.height} @ (${r.x}, ${r.y})`;
+    const selector = escapeHtml(el.selector.split(" > ").slice(-1)[0]);
+    if (r.classification === "shift" && r.shift) {
+      const parts = [];
+      if (r.shift.dy !== 0) parts.push(`${r.shift.dy > 0 ? "+" : ""}${r.shift.dy}px vertically`);
+      if (r.shift.dx !== 0) parts.push(`${r.shift.dx > 0 ? "+" : ""}${r.shift.dx}px horizontally`);
+      return `${selector} shifted ${parts.join(", ")} \u2014 content unchanged`;
+    }
+    return `${selector} changed (${r.width}\xD7${r.height} @ ${r.x}, ${r.y})`;
+  };
+  const chips = regions.map(
+    (r, i) => `<li><a href="#" class="region-chip${r.classification === "shift" ? " region-shift" : ""}" data-diff="${escapeHtml(snapshot2.diffPath ?? "")}" title="${r.diffPixels} changed pixels${r.elements?.[0] ? " \u2014 " + escapeHtml(r.elements[0].selector) : ""}">#${i + 1} \xB7 ${describe(r)}</a></li>`
+  ).join("");
+  const shifted = regions.filter((r) => r.classification === "shift").length;
+  const title = shifted > 0 ? `${regions.length} changed region${regions.length === 1 ? "" : "s"} (${shifted} shifted)` : `${regions.length} changed region${regions.length === 1 ? "" : "s"}`;
+  const pageShift = snapshot2.pageShift ? `<div class="page-shift">\u2195 Everything below y=${snapshot2.pageShift.belowY} shifted ${snapshot2.pageShift.dy > 0 ? "+" : ""}${snapshot2.pageShift.dy}px (${snapshot2.pageShift.count} elements moved together \u2014 typically an inserted banner or expanded section above).</div>` : "";
+  return `
+      <div class="regions">
+        <div class="regions-title">${title}</div>
+        <ul>${chips}</ul>
+        ${pageShift}
+      </div>`;
+}
+function renderMasks(snapshot2) {
+  const masks = snapshot2.masks ?? [];
+  const warnings = snapshot2.maskWarnings ?? [];
+  if (masks.length === 0 && warnings.length === 0) return "";
+  const describe = (m) => {
+    const src = m.source.type === "selector" ? `selector <code>${escapeHtml(String(m.source.spec))}</code>` : m.source.type === "edge" ? `edge <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>` : `region <code>${escapeHtml(JSON.stringify(m.source.spec))}</code>`;
+    return `${src} \u2192 ${m.width}\xD7${m.height} @ (${m.x}, ${m.y}) <em>(${escapeHtml(m.source.origin)})</em>`;
+  };
+  const maskBlock = masks.length > 0 ? `
+      <div class="masks" title="Masked areas are excluded from the pixel diff and hatched in the diff image.">
+        <span class="label">${masks.length} mask${masks.length === 1 ? "" : "s"} applied</span>
+        \u2014 ${masks.map(describe).join("; ")}
+      </div>` : "";
+  const warningBlock = warnings.length > 0 ? `
+      <div class="mask-warning">${warnings.map((w) => escapeHtml(w)).join("<br>")}</div>` : "";
+  return maskBlock + warningBlock;
+}
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+// ../packages/witness/src/config/local-config.ts
+var fs11 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
+
+// ../packages/witness/src/config/validate-config.ts
+var KNOWN_FIELDS = {
+  threshold: "number",
+  autoOpen: "boolean",
+  failOnDiff: "boolean",
+  failOnMissing: "boolean",
+  shiftTolerance: "number",
+  volatileAttributes: "array",
+  shareUploadCommand: "string",
+  baselinesDir: "string",
+  reportDir: "string",
+  ignoreSelectors: "array",
+  mask: "array",
+  diffRegions: "object",
+  maxDiffPercent: "number",
+  maxDiffPixels: "number",
+  noiseAutoPass: "boolean",
+  noiseMaxDiffPercent: "number",
+  stabilize: "boolean",
+  pages: "array",
+  maxPages: "number",
+  viewport: "object",
+  mcpApprovalPrompt: "boolean",
+  environmentPolicy: "string"
+};
+var ENUM_FIELDS = {
+  environmentPolicy: ENVIRONMENT_POLICIES
+};
+var RETIRED_FIELDS = {
+  mode: "the `mode` field is retired and ignored \u2014 TestivAI always runs locally. Remove it from .testivai/config.json."
+};
+function jsonType(value) {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value;
+}
+function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_2, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+function closestKnownKey(key) {
+  const budget = key.length <= 5 ? 1 : 2;
+  let best = null;
+  let bestDistance = budget + 1;
+  for (const candidate of Object.keys(KNOWN_FIELDS)) {
+    const distance = levenshtein(key.toLowerCase(), candidate.toLowerCase());
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return bestDistance <= budget ? best : null;
+}
+function validateLocalConfig(parsed) {
+  const warnings = [];
+  const invalidKeys = [];
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    warnings.push(`.testivai/config.json should be a JSON object, got ${jsonType(parsed)} \u2014 using defaults.`);
+    return { warnings, invalidKeys };
+  }
+  for (const [key, value] of Object.entries(parsed)) {
+    const retirement = RETIRED_FIELDS[key];
+    if (retirement) {
+      warnings.push(retirement);
+      continue;
+    }
+    const expected = KNOWN_FIELDS[key];
+    if (!expected) {
+      const suggestion = closestKnownKey(key);
+      warnings.push(
+        suggestion ? `unknown config key "${key}" \u2014 did you mean "${suggestion}"? It is being ignored.` : `unknown config key "${key}" \u2014 it is being ignored. Known keys: ${Object.keys(KNOWN_FIELDS).join(", ")}.`
+      );
+      continue;
+    }
+    const allowed = ENUM_FIELDS[key];
+    if (allowed && !allowed.includes(value)) {
+      warnings.push(
+        `config key "${key}" should be one of ${allowed.map((v) => `"${v}"`).join(", ")}, got ${JSON.stringify(value)} \u2014 using the default ("${allowed[0]}") instead.`
+      );
+      invalidKeys.push(key);
+      continue;
+    }
+    const actual = jsonType(value);
+    if (actual !== expected) {
+      warnings.push(
+        `config key "${key}" should be a ${expected}, got ${actual} (${JSON.stringify(value)}) \u2014 using the default instead.`
+      );
+      invalidKeys.push(key);
+    }
+  }
+  return { warnings, invalidKeys };
+}
+
+// ../packages/witness/src/config/local-config.ts
+var DEFAULT_CONFIG = {
+  threshold: 0.1,
+  autoOpen: true,
+  failOnDiff: false,
+  failOnMissing: true,
+  maxDiffPercent: 0,
+  noiseAutoPass: false,
+  noiseMaxDiffPercent: 1,
+  stabilize: true,
+  environmentPolicy: "warn"
+};
+var CONFIG_FILENAME = "config.json";
+var CONFIG_DIR = ".testivai";
+var warnedPaths = /* @__PURE__ */ new Set();
+function loadLocalConfig(projectRoot) {
+  const configPath = getConfigPath(projectRoot);
+  if (!fs11.existsSync(configPath)) {
+    return { ...DEFAULT_CONFIG };
+  }
+  try {
+    const raw = fs11.readFileSync(configPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    const { warnings, invalidKeys } = validateLocalConfig(parsed);
+    if (warnings.length > 0 && !warnedPaths.has(configPath)) {
+      warnedPaths.add(configPath);
+      for (const warning2 of warnings) {
+        console.warn(`[testivai] config warning: ${warning2}`);
+      }
+    }
+    if (parsed !== null && typeof parsed === "object") {
+      for (const key of invalidKeys) {
+        delete parsed[key];
+      }
+    }
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed
+    };
+  } catch (err) {
+    if (!warnedPaths.has(configPath)) {
+      warnedPaths.add(configPath);
+      const detail = err instanceof Error ? err.message : String(err);
+      console.warn(`[testivai] config warning: ${configPath} is not valid JSON (${detail}) \u2014 using defaults.`);
+    }
+    return { ...DEFAULT_CONFIG };
+  }
+}
+function getConfigPath(projectRoot) {
+  return path12.join(projectRoot, CONFIG_DIR, CONFIG_FILENAME);
+}
+
+// ../packages/witness/src/report/generator.ts
+var RESULTS_SCHEMA_VERSION = "2.8.0";
+function generateReport(options) {
+  const {
+    projectRoot,
+    reportDir: reportDirRelative = "visual-report",
+    threshold = 0.1,
+    autoOpen = true,
+    version: version3 = RESULTS_SCHEMA_VERSION
+  } = options;
+  const reportDir = path13.isAbsolute(reportDirRelative) ? reportDirRelative : path13.join(projectRoot, reportDirRelative);
+  fs12.mkdirSync(reportDir, { recursive: true });
+  const localConfig = loadLocalConfig(projectRoot);
+  const passCriteria = options.passCriteria ?? {
+    maxDiffPercent: localConfig.maxDiffPercent,
+    maxDiffPixels: localConfig.maxDiffPixels,
+    noiseAutoPass: localConfig.noiseAutoPass,
+    noiseMaxDiffPercent: localConfig.noiseMaxDiffPercent,
+    shiftTolerance: localConfig.shiftTolerance
+  };
+  const compareOptions = {
+    projectRoot,
+    reportDir,
+    threshold,
+    passCriteria,
+    mask: localConfig.mask,
+    diffRegions: localConfig.diffRegions,
+    volatileAttributes: localConfig.volatileAttributes,
+    environmentPolicy: localConfig.environmentPolicy
+  };
+  const snapshots = compareAll(compareOptions);
+  const store = new BaselineStore(projectRoot);
+  const capturedNames = store.listTemp();
+  const captured = new Set(capturedNames);
+  const variantKey = (v) => `${v.browser}__${v.platform}`;
+  const capturedVariants = new Set(
+    capturedNames.map(parseEnvironmentVariant).filter((v) => v !== null).map(variantKey)
+  );
+  const missingBaselines = store.list().filter((n) => {
+    if (captured.has(n)) return false;
+    if (localConfig.environmentPolicy !== "separate") return true;
+    const variant = parseEnvironmentVariant(n);
+    return variant === null || capturedVariants.has(variantKey(variant));
+  });
+  const environment = commonEnvironment(
+    capturedNames.map((n) => readEnvironment(store.readTempMetadata(n)?.environment)).filter((e) => e !== null)
+  );
+  const reportData = buildReportData(snapshots, version3, missingBaselines, environment);
+  const resultsPath = path13.join(reportDir, "results.json");
+  fs12.writeFileSync(resultsPath, JSON.stringify(reportData, null, 2));
+  const html = renderHtml(reportData);
+  const htmlPath = path13.join(reportDir, "index.html");
+  fs12.writeFileSync(htmlPath, html);
+  if (autoOpen) {
+    openInBrowser(htmlPath);
+  }
+  return reportData;
+}
+function buildReportData(snapshots, version3, missingBaselines = [], environment = null) {
+  const summary2 = {
+    total: snapshots.length,
+    passed: snapshots.filter((s) => s.status === "passed").length,
+    changed: snapshots.filter((s) => s.status === "changed").length,
+    newSnapshots: snapshots.filter((s) => s.status === "new").length,
+    missing: missingBaselines.length
+  };
+  return {
+    version: version3,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    summary: summary2,
+    snapshots,
+    missingBaselines,
+    ...environment ? { environment } : {}
+  };
+}
+function openInBrowser(filePath) {
+  const url2 = `file://${filePath}`;
+  const platform2 = process.platform;
+  let cmd;
+  if (platform2 === "darwin") {
+    cmd = `open "${url2}"`;
+  } else if (platform2 === "win32") {
+    cmd = `start "" "${url2}"`;
+  } else {
+    cmd = `xdg-open "${url2}"`;
+  }
+  (0, import_child_process.exec)(cmd, (err) => {
+    if (err) {
+    }
+  });
+}
+
+// ../packages/witness/src/capture/shard.ts
+var SHARD_MANIFEST = "testivai-shard.json";
+var MERGE_RECORD = "testivai-merge.json";
+
+// src/missing-report.ts
+function findCaptures(tempDir) {
+  let names = [];
+  try {
+    names = fs13.readdirSync(tempDir, { withFileTypes: true }).filter((e) => e.isDirectory() && fs13.existsSync(path14.join(tempDir, e.name, "screenshot.png"))).map((e) => e.name).sort();
+  } catch {
+    names = [];
+  }
+  return { names, shard: readShard(tempDir), merge: readMerge(tempDir) };
+}
+var shardNumbers = (value) => Array.isArray(value) && value.every((n) => Number.isInteger(n) && n >= 1) ? value : null;
+function readMerge(tempDir) {
+  try {
+    const raw = JSON.parse(fs13.readFileSync(path14.join(tempDir, MERGE_RECORD), "utf-8"));
+    const total = raw?.shardTotal;
+    const seen = shardNumbers(raw?.shardsSeen);
+    const missing = shardNumbers(raw?.shardsMissing);
+    if (!Number.isInteger(total) || total < 1 || !seen || !missing) return null;
+    return { total, seen, missing };
+  } catch {
+    return null;
+  }
+}
+function readShard(tempDir) {
+  try {
+    const raw = JSON.parse(fs13.readFileSync(path14.join(tempDir, SHARD_MANIFEST), "utf-8"));
+    const current = raw?.shard?.current;
+    const total = raw?.shard?.total;
+    if (!Number.isInteger(current) || !Number.isInteger(total) || total < 1 || current < 1 || current > total) return null;
+    return { current, total };
+  } catch {
+    return null;
+  }
+}
+function cannotCompare(found) {
+  if (found.names.length === 0) return { kind: "no-captures" };
+  if (found.shard && found.shard.total > 1) return { kind: "shard", captures: found.names.length, shard: found.shard };
+  if (found.merge && found.merge.missing.length > 0) {
+    return { kind: "incomplete-merge", captures: found.names.length, ...found.merge };
+  }
+  return null;
+}
+function compareCaptures(projectRoot, reportDir) {
+  const config = loadLocalConfig(projectRoot);
+  const report = generateReport({ projectRoot, reportDir, threshold: config.threshold, autoOpen: false });
+  return report;
+}
+function comparedByActionNotice(captures) {
+  return `> **Compared by the TestivAI action.** This run wrote no \`results.json\` (its compare step most likely did not run because a test failed), so the action compared the ${plural3(captures, "capture")} in \`.testivai/temp/\` against the committed baselines, with \`.testivai/config.json\`. To compare in your own step, run it with \`if: \${{ !cancelled() }}\`.
+
+`;
+}
+function code(text2) {
+  let t = text2.replace(new RegExp("\\p{Cc}+", "gu"), " ").replace(/\s+/g, " ").trim().replace(/`/g, "'");
+  if (!t) t = "unknown error";
+  if (t.length > 500) t = `${t.slice(0, 499)}\u2026`;
+  return `\`${t}\``;
+}
+function plural3(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+function whatIsMissing(reason, resultsPath) {
+  const notFound = `${code(resultsPath)} was not found`;
+  switch (reason.kind) {
+    case "no-captures":
+      return `${notFound}, and there were no captures in \`.testivai/temp/\` to compare.`;
+    case "shard":
+      return `${notFound}, and the ${plural3(reason.captures, "capture")} in \`.testivai/temp/\` are shard ${reason.shard.current} of ${reason.shard.total} only. Comparing one shard's slice would report every other shard's baseline as missing, so the action did not compare them.`;
+    case "incomplete-merge":
+      return `${notFound}, and the ${plural3(reason.captures, "capture")} in \`.testivai/temp/\` were merged from ${reason.seen.length} of ${reason.total} shards (${missingShards(reason)}). Comparing part of the suite would report every missing shard's baseline as missing, so the action did not compare them.`;
+    case "compare-failed":
+      return `${notFound}, and the action could not compare the ${plural3(reason.captures, "capture")} in \`.testivai/temp/\`: ${code(reason.error)}`;
+  }
+}
+function missingShards(reason) {
+  return `missing: ${reason.missing.join(", ")}`;
+}
+function likelyCauses(reason) {
+  switch (reason.kind) {
+    case "no-captures":
+      return [
+        "The tests failed or crashed before taking any capture: see the test step's log.",
+        "The test step was skipped, or ran without the TestivAI reporter or `witness()` calls.",
+        "The compare step wrote the report somewhere else: `report-dir` must name the folder that holds `results.json`."
+      ];
+    case "shard":
+      return [
+        "This action runs in a shard job, or the job that merges every shard's captures did not run its compare step (a failing test in any shard skips a job that `needs` the shards)."
+      ];
+    case "incomplete-merge":
+      return [
+        "A shard crashed, was cancelled, or did not upload its captures: a shard's upload step runs only on success by default, so a failing test there skips it."
+      ];
+    case "compare-failed":
+      return [
+        "The compare step did not run (a CI step runs only on success by default, so a failing test skips it), and the captures it left could not be read.",
+        "A capture was cut short, for example by a browser that crashed mid-screenshot."
+      ];
+  }
+}
+function whatToDo(reason) {
+  const always = "Run the compare step and this action with `if: ${{ !cancelled() }}`, so they run after a failing test too.";
+  switch (reason.kind) {
+    case "no-captures":
+      return ["Fix what stopped the tests, then push again or re-run the job.", always];
+    case "shard":
+      return [
+        "Merge every shard's captures with `npx testivai merge-captures <dirs...>`, then run `npx testivai report`, in one job that `needs` the shards and has `if: ${{ !cancelled() }}`; run this action there."
+      ];
+    case "incomplete-merge":
+      return [
+        "Upload each shard's captures with `if: ${{ !cancelled() }}`, so a shard with a failing test still uploads them.",
+        "Re-run the missing shards, or pass `--allow-incomplete` to `merge-captures` to compare part of the suite on purpose."
+      ];
+    case "compare-failed":
+      return ["Re-run the job; if it happens again, run `npx testivai report` locally on the same captures to see the error.", always];
+  }
+}
+function buildNoReportComment(reason, options) {
+  const commit = options.sha ? ` for commit \`${options.sha.slice(0, 7)}\`` : "";
+  return `${options.marker}${runMarkerLine(options.runKey)}
+
+### TestivAI Visual Report
+
+> **No visual report for this run**${commit}. ${whatIsMissing(reason, options.resultsPath)} Any earlier result this comment showed is out of date.
+
+**Likely causes**
+
+${likelyCauses(reason).map((line) => `- ${line}`).join("\n")}
+
+**What to do**
+
+${whatToDo(reason).map((line) => `- ${line}`).join("\n")}
+
+---
+*Generated by [TestivAI](https://github.com/testivai/testivai-oss)*
+`;
+}
+function noReportStatus(reason, resultsPath) {
+  const description = (() => {
+    switch (reason.kind) {
+      case "no-captures":
+        return "No visual report: results.json not found and no captures";
+      case "shard":
+        return `No visual report: shard ${reason.shard.current}/${reason.shard.total} captures only, not compared`;
+      case "incomplete-merge":
+        return `No visual report: ${reason.seen.length} of ${reason.total} shards merged, not compared`;
+      case "compare-failed":
+        return "No visual report: could not compare the captures";
+    }
+  })();
+  return {
+    state: "error",
+    conclusion: "failure",
+    description,
+    title: "No visual report for this run",
+    summary: `${whatIsMissing(reason, resultsPath)}
+
+${whatToDo(reason).map((line) => `- ${line}`).join("\n")}`
+  };
+}
+function noReportFailure(reason, resultsPath) {
+  switch (reason.kind) {
+    case "no-captures":
+      return `No visual report for this run: ${resultsPath} not found, and no captures in .testivai/temp/ to compare. Did the tests run?`;
+    case "shard":
+      return `No visual report for this run: ${resultsPath} not found, and .testivai/temp/ holds shard ${reason.shard.current} of ${reason.shard.total} only. Merge every shard's captures, then run testivai report.`;
+    case "incomplete-merge":
+      return `No visual report for this run: ${resultsPath} not found, and .testivai/temp/ holds captures merged from ${reason.seen.length} of ${reason.total} shards (${missingShards(reason)}).`;
+    case "compare-failed":
+      return `No visual report for this run: ${resultsPath} not found, and the action could not compare the captures in .testivai/temp/: ${reason.error}`;
+  }
+}
+
 // src/index.ts
 function collectFilesRecursively(dir) {
-  return fs9.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const fullPath = path10.join(dir, entry.name);
+  return fs14.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path15.join(dir, entry.name);
     return entry.isDirectory() ? collectFilesRecursively(fullPath) : [fullPath];
   });
 }
@@ -117600,6 +122869,92 @@ async function uploadReportArtifact(reportDir, artifactName, retentionDays) {
   }
   return void 0;
 }
+async function upsertComment(octokit, upsertMarker, body2) {
+  const context6 = github.context;
+  if (!(context6.eventName === "pull_request" && context6.payload.pull_request)) {
+    info("Not a PR event, skipping comment");
+    return;
+  }
+  const prNumber = context6.payload.pull_request.number;
+  const { data: comments } = await octokit.rest.issues.listComments({
+    owner: context6.repo.owner,
+    repo: context6.repo.repo,
+    issue_number: prNumber
+  });
+  const existingComment = comments.find(
+    (c) => c.body?.includes(upsertMarker)
+  );
+  if (existingComment) {
+    await octokit.rest.issues.updateComment({
+      owner: context6.repo.owner,
+      repo: context6.repo.repo,
+      comment_id: existingComment.id,
+      body: body2
+    });
+    info("Updated existing PR comment");
+  } else {
+    await octokit.rest.issues.createComment({
+      owner: context6.repo.owner,
+      repo: context6.repo.repo,
+      issue_number: prNumber,
+      body: body2
+    });
+    info("Created new PR comment");
+  }
+}
+function headSha() {
+  const context6 = github.context;
+  return context6.payload.pull_request?.head.sha || context6.sha;
+}
+async function postStatus(octokit, statusContext, status) {
+  const context6 = github.context;
+  const sha = headSha();
+  let checkRunPosted = false;
+  try {
+    await octokit.rest.checks.create({
+      owner: context6.repo.owner,
+      repo: context6.repo.repo,
+      name: statusContext,
+      head_sha: sha,
+      status: "completed",
+      conclusion: status.conclusion,
+      output: { title: status.title, summary: status.summary }
+    });
+    checkRunPosted = true;
+    info(`Check run: ${status.conclusion} - ${status.title}`);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    warning(
+      `Could not create a check run (${reason}). Add \`checks: write\` to the workflow's permissions for a non-blocking "neutral" result; falling back to the commit status.`
+    );
+  }
+  try {
+    await octokit.rest.repos.createCommitStatus({
+      owner: context6.repo.owner,
+      repo: context6.repo.repo,
+      sha,
+      state: status.state,
+      context: statusContext,
+      description: status.description
+    });
+    info(`Commit status: ${status.state} - ${status.description}`);
+  } catch (err) {
+    if (!checkRunPosted) throw err;
+    warning(`Could not set the commit status: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+async function reportNoVisualReport(octokit, reason, resultsPath, statusContext, upsertMarker) {
+  const body2 = buildNoReportComment(reason, {
+    resultsPath,
+    sha: headSha(),
+    marker: upsertMarker,
+    runKey: runKeyFromEnv(process.env)
+  });
+  await writeJobSummary(core_exports, summaryFromComment(body2));
+  await upsertComment(octokit, upsertMarker, body2);
+  await postStatus(octokit, statusContext, noReportStatus(reason, resultsPath));
+  setFailed(noReportFailure(reason, resultsPath));
+}
 async function run() {
   let uploadError;
   let artifactName = "testivai-visual-report";
@@ -117614,22 +122969,37 @@ async function run() {
     const statusContext = resolveStatusContext(getInput("status-context"));
     const upsertMarker = resolveUpsertMarker(statusContext);
     info(`Reading results from ${reportDir}...`);
-    const resultsPath = path10.join(reportDir, "results.json");
-    if (!fs9.existsSync(resultsPath)) {
-      setFailed(`results.json not found at ${resultsPath}. Did the tests run?`);
-      return;
+    const octokit = github.getOctokit(token);
+    const resultsPath = path15.join(reportDir, "results.json");
+    let notice2;
+    if (!fs14.existsSync(resultsPath)) {
+      const found = findCaptures(path15.join(process.cwd(), ".testivai", "temp"));
+      let reason = cannotCompare(found);
+      if (!reason) {
+        info(`${resultsPath} not found; comparing the ${found.names.length} capture(s) in .testivai/temp/ against the baselines.`);
+        try {
+          compareCaptures(process.cwd(), reportDir);
+        } catch (err) {
+          reason = { kind: "compare-failed", captures: found.names.length, error: err instanceof Error ? err.message : String(err) };
+        }
+      }
+      if (reason) {
+        await reportNoVisualReport(octokit, reason, resultsPath, statusContext, upsertMarker);
+        return;
+      }
+      notice2 = comparedByActionNotice(found.names.length);
     }
-    const results = JSON.parse(fs9.readFileSync(resultsPath, "utf-8"));
-    const tempDir = path10.join(process.cwd(), ".testivai", "temp");
-    if (fs9.existsSync(tempDir)) {
-      const pendingDir = path10.join(reportDir, "pending-baselines");
-      fs9.mkdirSync(pendingDir, { recursive: true });
+    const results = JSON.parse(fs14.readFileSync(resultsPath, "utf-8"));
+    const tempDir = path15.join(process.cwd(), ".testivai", "temp");
+    if (fs14.existsSync(tempDir)) {
+      const pendingDir = path15.join(reportDir, "pending-baselines");
+      fs14.mkdirSync(pendingDir, { recursive: true });
       let copied = 0;
-      for (const name of fs9.readdirSync(tempDir)) {
-        const src = path10.join(tempDir, name);
-        const dst = path10.join(pendingDir, name);
-        if (fs9.statSync(src).isDirectory()) {
-          fs9.cpSync(src, dst, { recursive: true });
+      for (const name of fs14.readdirSync(tempDir)) {
+        const src = path15.join(tempDir, name);
+        const dst = path15.join(pendingDir, name);
+        if (fs14.statSync(src).isDirectory()) {
+          fs14.cpSync(src, dst, { recursive: true });
           copied++;
         }
       }
@@ -117644,76 +123014,12 @@ async function run() {
         info(`Could not upload the visual report artifact '${artifactName}' (${uploadError}); posting the results without it.`);
       }
     }
-    const octokit = github.getOctokit(token);
-    const context6 = github.context;
     const links = { runKey: runKeyFromEnv(process.env) };
-    const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker, links, uploadError) : buildComment(results, artifactUrl, upsertMarker, links, uploadError);
+    const commentBody = results.snapshots.length === 0 ? buildEmptyComment(artifactUrl, upsertMarker, links, uploadError, notice2) : buildComment(results, artifactUrl, upsertMarker, links, uploadError, notice2);
     await writeJobSummary(core_exports, summaryFromComment(commentBody));
-    if (context6.eventName === "pull_request" && context6.payload.pull_request) {
-      const prNumber = context6.payload.pull_request.number;
-      const { data: comments } = await octokit.rest.issues.listComments({
-        owner: context6.repo.owner,
-        repo: context6.repo.repo,
-        issue_number: prNumber
-      });
-      const existingComment = comments.find(
-        (c) => c.body?.includes(upsertMarker)
-      );
-      if (existingComment) {
-        await octokit.rest.issues.updateComment({
-          owner: context6.repo.owner,
-          repo: context6.repo.repo,
-          comment_id: existingComment.id,
-          body: commentBody
-        });
-        info("Updated existing PR comment");
-      } else {
-        await octokit.rest.issues.createComment({
-          owner: context6.repo.owner,
-          repo: context6.repo.repo,
-          issue_number: prNumber,
-          body: commentBody
-        });
-        info("Created new PR comment");
-      }
-    } else {
-      info("Not a PR event, skipping comment");
-    }
+    await upsertComment(octokit, upsertMarker, commentBody);
     const status = determineStatus(results, { failOnDiff, failOnMissing });
-    const sha = context6.payload.pull_request?.head.sha || context6.sha;
-    let checkRunPosted = false;
-    try {
-      await octokit.rest.checks.create({
-        owner: context6.repo.owner,
-        repo: context6.repo.repo,
-        name: statusContext,
-        head_sha: sha,
-        status: "completed",
-        conclusion: status.conclusion,
-        output: { title: status.title, summary: status.summary }
-      });
-      checkRunPosted = true;
-      info(`Check run: ${status.conclusion} - ${status.title}`);
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      warning(
-        `Could not create a check run (${reason}). Add \`checks: write\` to the workflow's permissions for a non-blocking "neutral" result; falling back to the commit status.`
-      );
-    }
-    try {
-      await octokit.rest.repos.createCommitStatus({
-        owner: context6.repo.owner,
-        repo: context6.repo.repo,
-        sha,
-        state: status.state,
-        context: statusContext,
-        description: status.description
-      });
-      info(`Commit status: ${status.state} - ${status.description}`);
-    } catch (err) {
-      if (!checkRunPosted) throw err;
-      warning(`Could not set the commit status: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    await postStatus(octokit, statusContext, status);
     if (status.conclusion === "failure") {
       setFailed(status.description);
     } else if (status.conclusion === "neutral") {

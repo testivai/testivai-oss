@@ -219,9 +219,10 @@ jobs:
       - run: npm run build
       - run: npm run test:oss          # runs playwright.oss.config.ts
 
+      # Runs after a failing test too: the report covers every capture taken.
       - name: Post results + upload report
         uses: testivai/testivai-oss@v1
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report   # where @testivai/witness writes results.json

@@ -84,6 +84,10 @@ export class TestivAIPlaywrightReporter implements Reporter {
         console.log(`\n  TestivAI: ${where} — captured to .testivai/temp/, comparison skipped.`);
         console.log('  Collect every shard\'s .testivai/temp/, then compare once:');
         console.log('    npx testivai merge-captures <dirs...> && npx testivai report --fail-on-diff');
+        // A CI step runs only on success by default, so one failing test would
+        // skip the comparison and leave the pull request without a report.
+        console.log('  Run that step even when a test fails: in GitHub Actions, `if: ${{ !cancelled() }}`');
+        console.log('  (and on a job that `needs` the shards, too).');
         return;
       }
 

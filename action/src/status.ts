@@ -35,8 +35,11 @@ export interface StatusConfig {
 export type CheckConclusion = 'success' | 'neutral' | 'failure';
 
 export interface VisualStatus {
-  /** Legacy commit status; has no `neutral`, so review maps to `success`. */
-  state: 'success' | 'failure' | 'pending';
+  /**
+   * Legacy commit status; has no `neutral`, so review maps to `success`.
+   * `error` is a run with no visual report (missing-report.ts).
+   */
+  state: 'success' | 'failure' | 'error' | 'pending';
   /** Check-run conclusion — the honest one. */
   conclusion: CheckConclusion;
   description: string;

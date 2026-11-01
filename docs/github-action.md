@@ -26,10 +26,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
 
-      # Post results to the PR. `if: always()` so a failed test still
-      # produces a report comment.
+      # Post results to the PR. `if: ${{ !cancelled() }}` so a failed
+      # test still produces a report comment.
       - uses: testivai/testivai-oss@v1
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report
@@ -57,6 +57,7 @@ When a repo runs more than one visual workflow (say, a TypeScript Playwright lan
 
 ```yaml
 - uses: testivai/testivai-oss@v1
+  if: ${{ !cancelled() }}
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     report-dir: visual-report
@@ -163,6 +164,41 @@ A status under the context `TestivAI / visual` (configurable via `status-context
 ### Workflow artifact
 
 Whole `report-dir/` (HTML report, `results.json`, all diff images and DOM captures) uploaded as a workflow artifact named `testivai-visual-report`. Useful for downloading and inspecting the rendered report from a failed run.
+
+## When a run has no `results.json`
+
+A CI step runs only on success by default, so one failing test, even a
+non-visual one, can skip the step that compares the captures (`testivai report`,
+or `merge-captures` then `report` in a sharded run). Run that step and this
+action with `if: ${{ !cancelled() }}`, as every example here does. When the
+action still finds no `results.json` in `report-dir`, it never leaves the pull
+request showing an earlier run's result:
+
+- **Captures in `.testivai/temp/`**: the action compares them itself, against
+  the committed baselines and with `.testivai/config.json` (the same comparison
+  `testivai report` runs, bundled in the action), and posts the full report,
+  with a **Compared by the TestivAI action** line under the summary. A test that
+  failed before its capture shows as a baseline that received no capture.
+- **Nothing it can compare**: no captures; one shard's captures (`.testivai/temp/`
+  holds the manifest of shard *i* of *N*, *N* > 1); captures merged from only
+  some of the shards (`merge-captures` records which ones are missing); or
+  captures it cannot read. The comment, the job summary, the check run and the
+  commit status say **No visual report for this run**, what is missing, the
+  likely causes and what to do, replacing the lane's earlier comment.
+
+| Case | Comment | Check run | Commit status | Step |
+|---|---|---|---|---|
+| `results.json` present, whatever the tests did | the report | as [above](#check-run--visible-without-blocking) | as [below](#commit-status) | passes unless the result is `failure` |
+| Tests failed, the visuals passed | the report | `success` | `success` | passes (the test step fails the job) |
+| No `results.json`, captures compared by the action | the report, with "Compared by the TestivAI action" | from the result: `success`, `neutral` or `failure` | from the result | passes unless the result is `failure` |
+| No `results.json`, nothing to compare | "No visual report for this run" | `failure` | `error` | exits 1 |
+
+A run with nothing to compare fails its check rather than going `neutral`:
+nothing was verified, and a `neutral` check would satisfy a required check.
+The comparison runs from the code bundled in the action, so a project pinned
+to an older `@testivai/witness` gets this action's version of it for that run.
+The action reads `.testivai/` from the working directory, as it does for the
+captures it bundles for `/testivai approve`.
 
 ## Approving changes from PR feedback
 
