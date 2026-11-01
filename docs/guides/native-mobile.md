@@ -27,7 +27,9 @@ may change before this leaves experimental.
 You need a WebdriverIO project that already drives your app through Appium
 (Appium 3 with UiAutomator2 for Android, or XCUITest for iOS), and the
 [WebdriverIO setup](../frameworks/webdriverio.md) for TestivAI: the package,
-`.testivai/config.json` and the service in `wdio.conf.ts`.
+`.testivai/config.json` and the service in `wdio.conf.ts`. Native mode is in
+`@testivai/witness-webdriverio` 0.5.0 and later (with `@testivai/witness`
+2.6.0); older versions capture a native screen slowly, with no mask or device.
 
 ```ts
 // wdio.conf.ts (the parts that matter here)
