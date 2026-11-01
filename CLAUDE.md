@@ -152,12 +152,13 @@ The approve action (`approve/action.yml`) is a composite action; its reply step 
                                          volatileAttributes, ignoreSelectors, mask,
                                          diffRegions, failOnDiff, failOnMissing,
                                          shareUploadCommand, mcpApprovalPrompt,
-                                         environmentPolicy
+                                         environmentPolicy, elementIdAttributes
   baselines/
     <snapshot-name>/
       screenshot.png                   — committed reference screenshot
       dom.html                         — committed DOM snapshot
-      metadata.json                    — { name, createdAt, updatedAt, environment, health, ... }
+      metadata.json                    — { name, createdAt, updatedAt, environment, health,
+                                         elementIdAttributes?, ... }
                                          (environment: capture provenance; health: what failed
                                          to load; both frozen on approve)
   temp/

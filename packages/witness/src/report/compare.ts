@@ -20,6 +20,7 @@ import {
 import type { RegionOptions } from '../diff/types';
 import { type EnvironmentPolicy, readEnvironment } from '../capture/environment';
 import { parseHealth } from '../capture/health';
+import { normalizeElementIdAttributes } from '../capture/element-map';
 import { diffEnvironments } from './environment';
 import { healthAllowsTolerances, isUnhealthyCapture, snapshotCaptureHealth } from './health';
 import { type RgbaImage, renderThumbnail, thumbnailArea } from './thumbnail';
@@ -60,6 +61,17 @@ export interface CompareOptions {
    * say; 'warn' (default) and 'separate' never change a status here.
    */
   environmentPolicy?: EnvironmentPolicy;
+}
+
+/**
+ * Whether two captures built their element paths the same way: the same
+ * `elementIdAttributes` (order included, it is the precedence), absent
+ * meaning unset.
+ */
+export function sameElementIdAttributes(a: unknown, b: unknown): boolean {
+  const x = normalizeElementIdAttributes(a);
+  const y = normalizeElementIdAttributes(b);
+  return x.length === y.length && x.every((name, i) => name === y[i]);
 }
 
 /** The mask-related slice of a capture's metadata.json (all optional). */
@@ -251,7 +263,13 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
       // stylesheet-only change is not ruled out: the report labels that
       // case "styles not compared" and noiseAutoPass never passes it.
       if (domSignal) {
-        const styleComparison = compareStyleHashes(baselineElements, candidateElements);
+        // Paths built with different elementIdAttributes only meet on the
+        // elements no anchor covers: comparing those would be a verdict on
+        // part of the page. Not compared until the baseline is re-approved.
+        const samePaths = sameElementIdAttributes(baselineMeta?.elementIdAttributes, candidateMeta?.elementIdAttributes);
+        const styleComparison = samePaths
+          ? compareStyleHashes(baselineElements, candidateElements)
+          : { status: 'unavailable' as const, changed: [] };
         domSignal.styleCheck = styleComparison.status;
         if (styleComparison.status === 'mismatch') {
           domSignal.styleChanges = {

@@ -13,6 +13,7 @@ import {
   BaselineStore,
   CAPTURE_METHODS,
   loadLocalConfig,
+  normalizeElementIdAttributes,
   parseRenderProbe,
   RENDER_PROBE_EXPRESSION,
 } from '@testivai/witness';
@@ -96,7 +97,8 @@ export async function snapshot(
   // recorded as capture provenance, and its user agent names the engine for
   // environmentPolicy "separate" when the project does not.
   const renderProbe: unknown = await page.evaluate(RENDER_PROBE_EXPRESSION).catch(() => null);
-  const environmentPolicy = loadLocalConfig(process.cwd()).environmentPolicy;
+  const localConfig = loadLocalConfig(process.cwd());
+  const environmentPolicy = localConfig.environmentPolicy;
   const snapshotName = applyEnvironmentPolicyToName(
     effectiveSnapshotName(name || getSnapshotNameFromUrl(page.url()), testInfo),
     { browser: { name: playwrightBrowserName(testInfo ?? {}, parseRenderProbe(renderProbe)?.userAgent) }, os: { platform: process.platform } },
@@ -523,9 +525,16 @@ export async function snapshot(
     // side. Best-effort — the screenshot path never depends on it.
     try {
       const mapIgnores = collectIgnoreSelectors(process.cwd(), projectConfig, effectiveConfig);
-      const elementMap = await page.evaluate(buildElementMapExpression(undefined, mapIgnores));
+      // Opt-in: paths anchored on attributes such as data-testid. Recorded
+      // with the capture only when set, so the compare can tell paths built
+      // another way; unset, nothing written changes.
+      const idAttributes = normalizeElementIdAttributes(localConfig.elementIdAttributes);
+      const elementMap = await page.evaluate(buildElementMapExpression(undefined, mapIgnores, idAttributes));
       if (Array.isArray(elementMap) && elementMap.length > 0) {
         await fs.writeJson(path.join(localSnapshotDir, 'elements.json'), elementMap);
+        if (idAttributes.length > 0) {
+          new BaselineStore(process.cwd()).writeTempMetadata(snapshotName, { elementIdAttributes: idAttributes });
+        }
       }
     } catch {
       // missing elements.json only disables attribution for this capture

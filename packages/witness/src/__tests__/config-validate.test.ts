@@ -143,3 +143,34 @@ describe('loadLocalConfig integration', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('not valid JSON'));
   });
 });
+
+describe('elementIdAttributes', () => {
+  it('accepts a list of attribute names', () => {
+    expect(validateLocalConfig({ elementIdAttributes: ['data-testid', 'data-test', 'id'] })).toEqual({ warnings: [], invalidKeys: [] });
+  });
+
+  it('flags a non-array value so the default (off) applies', () => {
+    const result = validateLocalConfig({ elementIdAttributes: 'data-testid' });
+    expect(result.invalidKeys).toEqual(['elementIdAttributes']);
+    expect(result.warnings[0]).toContain('"elementIdAttributes" should be a array');
+  });
+
+  it('warns about each entry that is not a plain attribute name (it is ignored, the others still apply)', () => {
+    const result = validateLocalConfig({ elementIdAttributes: ['data-testid', 'data test', 'ns:id', 7, ''] });
+    expect(result.invalidKeys).toEqual([]);
+    expect(result.warnings).toHaveLength(4);
+    expect(result.warnings[0]).toBe(
+      'elementIdAttributes entry "data test" is not a plain attribute name (letters, digits, "-" and "_") — it is being ignored.',
+    );
+    expect(result.warnings[2]).toContain('entry 7 ');
+  });
+
+  it('is not in the defaults: unset, nothing about element paths changes', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-ids-'));
+    try {
+      expect('elementIdAttributes' in loadLocalConfig(dir)).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

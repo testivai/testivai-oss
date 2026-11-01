@@ -12,6 +12,7 @@
  */
 
 import { ENVIRONMENT_POLICIES } from '../capture/environment';
+import { ID_ATTRIBUTE_NAME } from '../capture/element-map';
 
 /** Expected JSON type for every known LocalConfig field. */
 const KNOWN_FIELDS: Record<string, 'number' | 'boolean' | 'string' | 'array' | 'object'> = {
@@ -37,6 +38,7 @@ const KNOWN_FIELDS: Record<string, 'number' | 'boolean' | 'string' | 'array' | '
   viewport: 'object',
   mcpApprovalPrompt: 'boolean',
   environmentPolicy: 'string',
+  elementIdAttributes: 'array',
 };
 
 /** String fields that only take one of a fixed set of values; the first is the default. */
@@ -154,6 +156,17 @@ export function validateLocalConfig(parsed: unknown): ConfigValidation {
         `config key "${key}" should be a ${expected}, got ${actual} (${JSON.stringify(value)}) — using the default instead.`,
       );
       invalidKeys.push(key);
+      continue;
+    }
+
+    if (key === 'elementIdAttributes') {
+      for (const name of value as unknown[]) {
+        if (typeof name !== 'string' || !ID_ATTRIBUTE_NAME.test(name)) {
+          warnings.push(
+            `elementIdAttributes entry ${JSON.stringify(name)} is not a plain attribute name (letters, digits, "-" and "_") — it is being ignored.`,
+          );
+        }
+      }
     }
   }
 

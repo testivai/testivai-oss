@@ -25,6 +25,8 @@ export interface ElementLike {
   parentElement: ElementLike | null;
   getBoundingClientRect(): { x: number; y: number; width: number; height: number };
   matches?(selector: string): boolean;
+  /** Read only when `idAttributes` is non-empty. */
+  getAttribute?(name: string): string | null;
 }
 
 export interface DocumentLike {
@@ -53,6 +55,16 @@ export interface CollectedElement {
  *
  * - `path` is deterministic: tag + first class + :nth-of-type when the
  *   element has same-tag element siblings.
+ * - With `idAttributes` (opt-in, config `elementIdAttributes`), the path
+ *   starts at the nearest ancestor-or-self carrying one of those attributes
+ *   with a non-empty value no other element in the document shares:
+ *   `div[data-testid="board"] > div.css-146c3p1`. The first listed
+ *   attribute that qualifies wins; a duplicated value is not an anchor, so
+ *   the walk goes on upward (paths stay unique). Values are escaped as CSS
+ *   strings, `>` included, so ' > ' only ever separates segments. Content
+ *   inserted above an anchor no longer renumbers what is inside it, which
+ *   is what lets a moved element read as a shift. Empty or absent: the
+ *   attributes are never read and the paths are exactly as before.
  * - Elements smaller than 4×4 px and invisible elements are skipped.
  * - The walk is depth-first and capped at `maxElements`.
  * - `styleHash` digests a fixed, documented list of computed properties
@@ -63,6 +75,7 @@ export function collectElementMap(
   win: WindowLike,
   maxElements: number,
   ignoreSelectors: string[] = [],
+  idAttributes: string[] = [],
 ): CollectedElement[] {
   var STYLE_PROPS = [
     'color', 'background-color', 'background-image',
@@ -105,10 +118,59 @@ export function collectElementMap(
     return sameTag > 1 ? tag + cls + ':nth-of-type(' + index + ')' : tag + cls;
   }
 
+  // Anchors (opt-in). Plain attribute names only: anything else could not
+  // be written into a selector unescaped.
+  var anchorAttrs: string[] = [];
+  if (idAttributes && idAttributes.length > 0) {
+    for (var a = 0; a < idAttributes.length; a++) {
+      var attrName = idAttributes[a];
+      if (typeof attrName === 'string' && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(attrName) && anchorAttrs.indexOf(attrName) < 0) {
+        anchorAttrs.push(attrName);
+      }
+    }
+  }
+  var anchorCounts: Record<string, number> = Object.create(null);
+
+  function anchorValue(el: ElementLike, name: string): string | null {
+    if (typeof el.getAttribute !== 'function') return null;
+    var v = el.getAttribute(name);
+    // Empty identifies nothing; NUL cannot be matched by any selector.
+    return typeof v === 'string' && v !== '' && v.indexOf('\u0000') < 0 ? v : null;
+  }
+
+  function cssString(v: string): string {
+    var out = '';
+    for (var i = 0; i < v.length; i++) {
+      var ch = v.charAt(i);
+      var code = v.charCodeAt(i);
+      if (code < 0x20 || code === 0x7f) out += '\\' + code.toString(16) + ' ';
+      else if (ch === '\\' || ch === '"' || ch === '>') out += '\\' + ch;
+      else out += ch;
+    }
+    return out;
+  }
+
+  function anchorOf(el: ElementLike): string | null {
+    for (var i = 0; i < anchorAttrs.length; i++) {
+      var v = anchorValue(el, anchorAttrs[i]);
+      if (v !== null && anchorCounts[anchorAttrs[i] + '=' + v] === 1) {
+        return el.tagName.toLowerCase() + '[' + anchorAttrs[i] + '="' + cssString(v) + '"]';
+      }
+    }
+    return null;
+  }
+
   function pathOf(el: ElementLike, stopAt: ElementLike): string {
     var parts: string[] = [];
     var node: ElementLike | null = el;
     while (node && node !== stopAt.parentElement) {
+      if (anchorAttrs.length > 0) {
+        var anchor = anchorOf(node);
+        if (anchor !== null) {
+          parts.unshift(anchor);
+          break;
+        }
+      }
       parts.unshift(segment(node));
       node = node.parentElement;
     }
@@ -121,6 +183,24 @@ export function collectElementMap(
   var out: CollectedElement[] = [];
   var body = doc.body;
   if (!body) return out;
+
+  // Count every value over the whole document (skipped and ignored
+  // elements included), so whether a value is unique never depends on
+  // which elements the walk below keeps.
+  if (anchorAttrs.length > 0) {
+    var all: ElementLike[] = [body];
+    while (all.length > 0) {
+      var counted = all.pop() as ElementLike;
+      for (var n = 0; n < anchorAttrs.length; n++) {
+        var idValue = anchorValue(counted, anchorAttrs[n]);
+        if (idValue !== null) {
+          var key = anchorAttrs[n] + '=' + idValue;
+          anchorCounts[key] = (anchorCounts[key] || 0) + 1;
+        }
+      }
+      for (var k = 0; k < counted.children.length; k++) all.push(counted.children[k]);
+    }
+  }
 
   var stack: ElementLike[] = [body];
   while (stack.length > 0 && out.length < maxElements) {
@@ -188,6 +268,27 @@ export const DEFAULT_MAX_ELEMENTS = 3000;
 export function buildElementMapExpression(
   maxElements: number = DEFAULT_MAX_ELEMENTS,
   ignoreSelectors: string[] = [],
+  idAttributes: string[] = [],
 ): string {
-  return `(${collectElementMap.toString()})(document, window, ${maxElements}, ${JSON.stringify(ignoreSelectors)})`;
+  const ids = normalizeElementIdAttributes(idAttributes);
+  const extra = ids.length > 0 ? `, ${JSON.stringify(ids)}` : '';
+  return `(${collectElementMap.toString()})(document, window, ${maxElements}, ${JSON.stringify(ignoreSelectors)}${extra})`;
+}
+
+/** A plain attribute name: safe to write into a selector unescaped. */
+export const ID_ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/**
+ * The `elementIdAttributes` list an adapter uses: plain attribute names,
+ * in order (the order is the precedence), each once. Anything else (not an
+ * array, not a string, `ns:attr`, spaces, quotes) is dropped; the config
+ * validation warns about it.
+ */
+export function normalizeElementIdAttributes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const name of value) {
+    if (typeof name === 'string' && ID_ATTRIBUTE_NAME.test(name) && !out.includes(name)) out.push(name);
+  }
+  return out;
 }

@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Element paths: values that need escaping</title>
+<style>
+  html, body { margin: 0; }
+  div { width: 200px; height: 20px; margin: 2px; background: #eee; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+  // Values a parser would mangle are set from script.
+  var values = [
+    'say "hi"',
+    'back\\slash',
+    'line\nbreak',
+    'carriage\r\treturn',
+    'a > b',
+    'del\u007fchar',
+    "it's ✓ [1] #x .y",
+    'trailing space ',
+    '\\"',
+    'x\\a y',
+  ];
+  var host = document.getElementById('host');
+  host.style.height = 'auto';
+  host.style.width = 'auto';
+  for (var i = 0; i < values.length; i++) {
+    var d = document.createElement('div');
+    d.setAttribute('data-testid', values[i]);
+    host.appendChild(d);
+  }
+</script>
+</body>
+</html>

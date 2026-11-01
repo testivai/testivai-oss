@@ -66,6 +66,19 @@ Frameworks supported by the `init` wizard: Cypress, Puppeteer, Robot Framework, 
 
 Element maps (`elements.json`) come from the Playwright JS/TS, WebdriverIO, Selenium (JS / Python / Java) and Ruby adapters. playwright-python, playwright-java and the `testivai witness <url>` crawler capture the screenshot and the DOM without one, so computed styles are not compared for them (`styleCheck: "unavailable"`).
 
+### Element paths
+
+Each element in the map is named by a path: tag, first class, and `:nth-of-type(n)` when it has siblings with the same tag, from `body` down (`body > main > div.card:nth-of-type(2)`). Baselines and captures are matched by that exact path. Two things follow: on pages whose classes say nothing (react-native-web's `css-g5y9jx`, CSS modules) the paths are hard to read, and content inserted above an element renumbers its `:nth-of-type` and every path below it, so an element that only moved looks like a different element and the region reads "change", not "shift".
+
+`elementIdAttributes` (opt-in, in `config.json`, for example `["data-testid"]`) anchors the paths on attributes your tests already set. An element's path then starts at its nearest ancestor-or-self that carries one of them: `div[data-testid="board"]`, `div[data-testid="tile-r0-c1"] > div.css-146c3p1`. The rules:
+
+- The first listed attribute that qualifies wins, so the list order is the precedence.
+- A value only anchors when no other element in the page has it, and when it is not empty. A repeated value (`data-testid="row"` on every row) is skipped and the path goes on up to the next anchor, or to `body`, so paths stay unique.
+- Values are written as CSS strings: quotes, backslashes, control characters such as newlines, and `>` are escaped, so each path is a working selector.
+- Attribute names must be plain (letters, digits, `-`, `_`); other entries are ignored with a config warning.
+
+Unset, the attributes are never read and every path is exactly as before. The Playwright JS/TS, Selenium (JS) and WebdriverIO adapters read it; the Python, Java and Ruby adapters do not yet, and keep the default paths. A capture records the setting in its `metadata.json` (only when set) and approving freezes it into the baseline's. Styles are only compared when both sides used the same setting: after turning it on, changing it, or mixing adapters that differ, `dom.styleCheck` is `"unavailable"` until the baselines are re-approved.
+
 ### What a capture records about where it came from
 
 The Playwright JS/TS, WebdriverIO and Selenium (JS) adapters and the `testivai witness <url>` crawler also write `temp/<name>/metadata.json` with an `environment` block: the OS (and the Linux distro), the browser and its version, the test framework, the adapter and how it took the screenshot (`full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `viewport:webdriver`), what the page was rendered with (viewport, device scale, color scheme, reduced motion, locale, time zone, measured in the page), the CI provider and runner image, a container, and `TESTIVAI_ENV_LABEL`. Approving a capture freezes its block into the baseline's `metadata.json`. The Python, Ruby and Java adapters do not record it yet; their captures compare as before. `npx testivai env` prints this machine's part of the block (`--fonts` adds a fingerprint of the installed fonts). The full field list is in the [Extension API](./extension-api.md#capture-provenance-environment-in-metadatajson).

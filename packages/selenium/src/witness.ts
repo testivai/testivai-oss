@@ -24,6 +24,7 @@ import {
   BaselineStore,
   loadLocalConfig,
   buildElementMapExpression,
+  normalizeElementIdAttributes,
   DEFAULT_MAX_ELEMENTS,
   parseShardEnv,
   writeShardManifest,
@@ -304,12 +305,16 @@ export async function witness(
   //    side. The injected function is the SAME one the Playwright adapter
   //    uses (`@testivai/witness`), so both lanes produce identical maps.
   //    Selenium's executeScript needs an explicit `return`.
+  // Opt-in: paths anchored on attributes such as data-testid (config
+  // `elementIdAttributes`), recorded with the capture only when set.
+  const idAttributes = normalizeElementIdAttributes(localConfig.elementIdAttributes);
   let elementMap: unknown;
   if (!options.skipElementMap && typeof driver.executeScript === 'function') {
     try {
       const expr = buildElementMapExpression(
         options.maxElements ?? DEFAULT_MAX_ELEMENTS,
         ignoreSelectors,
+        idAttributes,
       );
       const result = await driver.executeScript<unknown>(`return ${expr}`);
       if (Array.isArray(result) && result.length > 0) {
@@ -354,6 +359,7 @@ export async function witness(
         path.join(tempDir, 'elements.json'),
         JSON.stringify(elementMap),
       );
+      if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
     } catch {
       // A map we cannot persist is not worth failing a capture over.
     }

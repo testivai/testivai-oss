@@ -28,6 +28,7 @@ import {
   DEFAULT_MAX_ELEMENTS,
   installedPackageVersion,
   loadLocalConfig,
+  normalizeElementIdAttributes,
   RENDER_PROBE_EXPRESSION,
   webDriverEnvironment,
   type CollectedElement,
@@ -215,11 +216,14 @@ export async function witness(
   //    It powers the style check, region attribution and page-shift
   //    detection on the compare side. The screenshot is the viewport, so the
   //    map keeps only the elements inside it, in screenshot coordinates.
+  // Opt-in: paths anchored on attributes such as data-testid (config
+  // `elementIdAttributes`), recorded with the capture only when set.
+  const idAttributes = normalizeElementIdAttributes(localConfig.elementIdAttributes);
   let elementMap: CollectedElement[] | undefined;
   if (!options.skipElementMap && typeof browser.execute === 'function') {
     try {
       const result = await browser.execute<unknown>(
-        elementMapScript(options.maxElements ?? DEFAULT_MAX_ELEMENTS, ignoreSelectors),
+        elementMapScript(options.maxElements ?? DEFAULT_MAX_ELEMENTS, ignoreSelectors, idAttributes),
       );
       if (isPageElementMap(result)) {
         const inView = toViewportElementMap(result);
@@ -246,6 +250,7 @@ export async function witness(
       const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
       fs.mkdirSync(tempDir, { recursive: true });
       fs.writeFileSync(path.join(tempDir, 'elements.json'), JSON.stringify(elementMap));
+      if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
     } catch {
       // A map we cannot persist is not worth failing a capture over.
     }

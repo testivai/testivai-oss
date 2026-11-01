@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type CaptureEnvironment, readEnvironment } from '../capture/environment';
 import { type CaptureHealth, parseHealth } from '../capture/health';
+import { normalizeElementIdAttributes } from '../capture/element-map';
 
 /**
  * Resolve the baselines directory: explicit override → config.json
@@ -69,6 +70,12 @@ export interface BaselineMetadata {
    * capture recorded none (not checked).
    */
   health?: CaptureHealth;
+  /**
+   * The `elementIdAttributes` the approved capture's element paths were
+   * built with, frozen from the capture's temp metadata.json on approve.
+   * Absent when it was unset (paths built the default way).
+   */
+  elementIdAttributes?: string[];
 }
 
 export class BaselineStore {
@@ -207,7 +214,8 @@ export class BaselineStore {
       fs.rmSync(currentElements);
     }
 
-    // Update metadata. The capture's environment and health are frozen into
+    // Update metadata. The capture's environment, health and element-path
+    // setting (elementIdAttributes) are frozen into
     // the baseline; a capture without one leaves the baseline without one (the
     // previous baseline's would describe a screenshot it did not take).
     const now = new Date().toISOString();
@@ -215,6 +223,7 @@ export class BaselineStore {
     const tempMeta = this.readTempMetadata(name);
     const environment = readEnvironment(tempMeta?.environment);
     const health = parseHealth(tempMeta?.health);
+    const elementIdAttributes = normalizeElementIdAttributes(tempMeta?.elementIdAttributes);
     const meta: BaselineMetadata = {
       name,
       createdAt: existingMeta?.createdAt ?? now,
@@ -222,6 +231,7 @@ export class BaselineStore {
       approvedBy: 'local',
       ...(environment ? { environment } : {}),
       ...(health ? { health } : {}),
+      ...(elementIdAttributes.length > 0 ? { elementIdAttributes } : {}),
     };
     fs.writeFileSync(currentMetadata, JSON.stringify(meta, null, 2));
   }
