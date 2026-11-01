@@ -16,7 +16,7 @@
  * Call form (each adapter wraps it the same way):
  *   return (<this function>)(document, window, <maxElements>, <ignoreSelectors>);
  */
-function collectElementMap(doc, win, maxElements, ignoreSelectors = []) {
+function collectElementMap(doc, win, maxElements, ignoreSelectors = [], idAttributes = []) {
     var STYLE_PROPS = [
         'color', 'background-color', 'background-image',
         'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
@@ -57,10 +57,59 @@ function collectElementMap(doc, win, maxElements, ignoreSelectors = []) {
         }
         return sameTag > 1 ? tag + cls + ':nth-of-type(' + index + ')' : tag + cls;
     }
+    // Anchors (opt-in). Plain attribute names only: anything else could not
+    // be written into a selector unescaped.
+    var anchorAttrs = [];
+    if (idAttributes && idAttributes.length > 0) {
+        for (var a = 0; a < idAttributes.length; a++) {
+            var attrName = idAttributes[a];
+            if (typeof attrName === 'string' && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(attrName) && anchorAttrs.indexOf(attrName) < 0) {
+                anchorAttrs.push(attrName);
+            }
+        }
+    }
+    var anchorCounts = Object.create(null);
+    function anchorValue(el, name) {
+        if (typeof el.getAttribute !== 'function')
+            return null;
+        var v = el.getAttribute(name);
+        // Empty identifies nothing; NUL cannot be matched by any selector.
+        return typeof v === 'string' && v !== '' && v.indexOf('\u0000') < 0 ? v : null;
+    }
+    function cssString(v) {
+        var out = '';
+        for (var i = 0; i < v.length; i++) {
+            var ch = v.charAt(i);
+            var code = v.charCodeAt(i);
+            if (code < 0x20 || code === 0x7f)
+                out += '\\' + code.toString(16) + ' ';
+            else if (ch === '\\' || ch === '"' || ch === '>')
+                out += '\\' + ch;
+            else
+                out += ch;
+        }
+        return out;
+    }
+    function anchorOf(el) {
+        for (var i = 0; i < anchorAttrs.length; i++) {
+            var v = anchorValue(el, anchorAttrs[i]);
+            if (v !== null && anchorCounts[anchorAttrs[i] + '=' + v] === 1) {
+                return el.tagName.toLowerCase() + '[' + anchorAttrs[i] + '="' + cssString(v) + '"]';
+            }
+        }
+        return null;
+    }
     function pathOf(el, stopAt) {
         var parts = [];
         var node = el;
         while (node && node !== stopAt.parentElement) {
+            if (anchorAttrs.length > 0) {
+                var anchor = anchorOf(node);
+                if (anchor !== null) {
+                    parts.unshift(anchor);
+                    break;
+                }
+            }
             parts.unshift(segment(node));
             node = node.parentElement;
         }
@@ -73,6 +122,24 @@ function collectElementMap(doc, win, maxElements, ignoreSelectors = []) {
     var body = doc.body;
     if (!body)
         return out;
+    // Count every value over the whole document (skipped and ignored
+    // elements included), so whether a value is unique never depends on
+    // which elements the walk below keeps.
+    if (anchorAttrs.length > 0) {
+        var all = [body];
+        while (all.length > 0) {
+            var counted = all.pop();
+            for (var n = 0; n < anchorAttrs.length; n++) {
+                var idValue = anchorValue(counted, anchorAttrs[n]);
+                if (idValue !== null) {
+                    var key = anchorAttrs[n] + '=' + idValue;
+                    anchorCounts[key] = (anchorCounts[key] || 0) + 1;
+                }
+            }
+            for (var k = 0; k < counted.children.length; k++)
+                all.push(counted.children[k]);
+        }
+    }
     var stack = [body];
     while (stack.length > 0 && out.length < maxElements) {
         var el = stack.pop();

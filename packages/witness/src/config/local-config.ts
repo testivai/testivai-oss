@@ -148,6 +148,19 @@ export interface LocalConfig {
    *     changed, whatever its pixels say (exit 1 with --fail-on-diff).
    */
   environmentPolicy?: EnvironmentPolicy;
+  /**
+   * Opt-in: attribute names (e.g. ["data-testid"]) that anchor element
+   * paths in the element map. An element's path then starts at its nearest
+   * ancestor-or-self carrying one of them with a value unique in the page:
+   * `div[data-testid="board"] > div.css-146c3p1` instead of a
+   * `div.css-…:nth-of-type(4)` chain from body. Content inserted above an
+   * anchored element no longer renames it, so a moved element reads as a
+   * shift. Listed order is the precedence; a value used twice is not an
+   * anchor. Unset (the default): paths are unchanged. Changing it changes
+   * the paths, so styles are not compared against baselines captured with
+   * another setting until they are re-approved.
+   */
+  elementIdAttributes?: string[];
 }
 
 const DEFAULT_CONFIG: LocalConfig = {

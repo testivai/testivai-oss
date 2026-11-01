@@ -23,7 +23,12 @@ export * from './diff';
 
 // Export baselines
 // Element-map capture — the page-side collector shared by every adapter.
-export { collectElementMap, buildElementMapExpression, DEFAULT_MAX_ELEMENTS } from './capture/element-map';
+export {
+  collectElementMap,
+  buildElementMapExpression,
+  DEFAULT_MAX_ELEMENTS,
+  normalizeElementIdAttributes,
+} from './capture/element-map';
 export type { CollectedElement } from './capture/element-map';
 
 // Shard participation — the env-var contract every adapter honours.
