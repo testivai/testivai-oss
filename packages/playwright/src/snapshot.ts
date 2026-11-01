@@ -314,6 +314,11 @@ export async function snapshot(
       await page.evaluate(`window.scrollTo(0, ${scrollableInfo.scrollTop})`);
     }
   }
+  } else if (!hasCdp(page)) {
+    // WebKit and Firefox have no CDP: Playwright's own full-page screenshot
+    // is the capture there, not a fallback from a failure.
+    captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
+    await page.screenshot({ path: screenshotPath, fullPage: true });
   } else {
     // Use browser capture approach (default)
     if (process.env.TESTIVAI_DEBUG === 'true') {
@@ -371,7 +376,11 @@ export async function snapshot(
       await client.detach();
       
     } catch (error: any) {
-      console.error('[TestivAI] Browser screenshot failed:', error.message);
+      // An engine we could not name (a persistent context has no browser())
+      // answers that CDP is Chromium-only: the expected path, not a failure.
+      if (!/only available in Chromium/i.test(String(error?.message))) {
+        console.error('[TestivAI] Browser screenshot failed:', error.message);
+      }
       // Fallback to regular screenshot
       captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
       await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -542,6 +551,20 @@ export async function snapshot(
   }
 }
 
+
+/**
+ * Whether the page's engine can have a CDP session. False only when the
+ * browser names an engine other than Chromium; unknown (no browser(), as in a
+ * persistent context) is tried, and its answer handled where it fails.
+ */
+function hasCdp(page: Page): boolean {
+  try {
+    const name = page.context().browser()?.browserType().name();
+    return name === undefined || name === 'chromium';
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Read the global `mask` list from .testivai/config.json (selector strings
