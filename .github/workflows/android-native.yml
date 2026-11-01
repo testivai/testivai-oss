@@ -1,0 +1,89 @@
+# Mobile plan, Track 1 Level 0: today's WebdriverIO adapter, unmodified,
+# against a real Android emulator (Appium 3 + UiAutomator2, Android's own
+# Settings app). It checks the plan's simulation against the real thing:
+# what is captured, what is written, how the page-script calls fail, and what
+# a clock change, a status-bar mask and dark mode read as. What it checks and
+# records: e2e/src/android-native.ts. The summary, the visual report and the
+# Appium log are uploaded as the `android-native-level0` artifact.
+#
+# GitHub's Linux runners support KVM; the emulator does not run without it.
+
+name: Android native (Level 0)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/webdriverio/**'
+      - 'packages/witness/src/**'
+      - 'e2e/src/android-native.ts'
+      - 'e2e/scripts/android-native.sh'
+      - '.github/workflows/android-native.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: WebdriverIO adapter on an Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install and build the workspace
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # Appium and its driver are global tools, installed outside the
+      # workspace (the driver installer itself uses npm).
+      - name: Install Appium 3 and the UiAutomator2 driver
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm install -g appium@3.9.0
+          appium driver install uiautomator2@8.7.3
+          appium --version
+          appium driver list --installed
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the check on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          TESTIVAI_ANDROID_OUT: ${{ runner.temp }}/android-native
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/scripts/android-native.sh
+
+      - name: Upload the summary, report and Appium log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-level0
+          path: ${{ runner.temp }}/android-native
+          if-no-files-found: ignore
