@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.expo/
+.testivai/temp/
+visual-report/
+test-results/
+playwright-report/
