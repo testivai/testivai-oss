@@ -222,7 +222,7 @@ Version constant: `RESULTS_SCHEMA_VERSION` in `packages/witness/src/report/gener
 
 ```json
 {
-  "version": "2.8.0",
+  "version": "2.9.0",
   "timestamp": "<ISO>",
   "summary": { "total": 5, "passed": 1, "changed": 4, "newSnapshots": 0, "missing": 1 },
   "missingBaselines": ["pricing"],
@@ -330,6 +330,19 @@ status; `"strict"` makes a rendering change `changed` whatever the pixels say
 (`environment.policy: "strict"`); `"separate"` has the adapters key snapshots
 `<name>__<browser>__<platform>`. The run-level `environment` is the fields every capture
 of the run agrees on.
+
+Native app captures (schema 2.9.0, experimental; `@testivai/witness-webdriverio` in an
+Appium session on Android or iOS that names no browser, in the `NATIVE_APP` context)
+record `browser.name: "native-app"`, `adapter.captureMethod: "screen:appium"` and a
+`device` section (`platform`, `osVersion`, `model`, `name`, `automation`, `screen`,
+`density`, from the Appium capabilities; `packages/witness/src/capture/native-app.ts`).
+A native screen has no page: no DOM, element map, styles or health, so `dom` is `null`,
+the capture is pixel-only and it is never worded as render noise or rendering drift. The
+adapter masks the status bar per capture (`masks: [{ "top": <px> }]` in the capture's
+`metadata.json`, from `mobile: viewportRect`) and keys the snapshot
+`<name>__<platform>-<device>-<osMajor>` unless the call gives a `variant`. The device's
+`platform`, `osVersion`, `model`, `screen` and `density` can change rendering; when both
+sides are native, `os` (the machine running the tests) is context.
 
 `captureHealth` (schema 2.7.0) is capture health: the Playwright JS/TS adapter and
 `testivai witness <url>` record what failed to load (`health` in the capture's

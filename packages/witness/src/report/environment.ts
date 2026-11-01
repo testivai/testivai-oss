@@ -64,7 +64,15 @@ const RENDERING_FIELDS = new Set([
   'adapter.captureMethod',
   'container',
   'label',
+  'device.platform',
+  'device.osVersion',
+  'device.model',
+  'device.screen',
+  'device.density',
 ]);
+
+/** A native app capture: the device draws the screen, not the machine running the tests. */
+const isNativeApp = (env: CaptureEnvironment) => env.browser?.name === 'native-app';
 
 /** Platforms whose os.release is the OS version (and so the text renderer). */
 const RELEASE_IS_OS_VERSION = new Set(['darwin', 'win32']);
@@ -95,6 +103,7 @@ function flatten(env: CaptureEnvironment): Flat {
 /** Whether one differing field can change how the page renders. */
 function isRenderingField(field: string, baseline: CaptureEnvironment, candidate: CaptureEnvironment): boolean {
   if (field.startsWith('render.')) return true;
+  if (field.startsWith('os.') && isNativeApp(baseline) && isNativeApp(candidate)) return false;
   if (field === 'os.release') {
     return baseline.os.platform === candidate.os.platform && RELEASE_IS_OS_VERSION.has(candidate.os.platform);
   }
@@ -133,13 +142,16 @@ const MECHANISMS: Record<string, string> = {
   stitched: 'scroll and stitch',
   firefox: 'Firefox',
   webdriver: 'WebDriver',
+  appium: 'Appium',
 };
+
+const EXTENTS: Record<string, string> = { 'full-page': 'full page', viewport: 'viewport', screen: 'full screen' };
 
 /** "full-page:cdp" → "full page (CDP)"; an unknown method passes through. */
 export function describeCaptureMethod(method: string): string {
-  const m = /^(full-page|viewport):([a-z0-9-]+)$/.exec(method);
+  const m = /^(full-page|viewport|screen):([a-z0-9-]+)$/.exec(method);
   if (!m) return method;
-  return `${m[1] === 'full-page' ? 'full page' : 'viewport'} (${MECHANISMS[m[2]] ?? m[2]})`;
+  return `${EXTENTS[m[1]]} (${MECHANISMS[m[2]] ?? m[2]})`;
 }
 
 /** The order changes are listed in: what renders first, context last. */
@@ -147,6 +159,11 @@ const ORDER = [
   'browser',
   'browser.channel',
   'browser.headless',
+  'device.platform',
+  'device.model',
+  'device.osVersion',
+  'device.screen',
+  'device.density',
   'os.platform',
   'os.distro',
   'os.release',
@@ -174,6 +191,13 @@ const LABELS: Record<string, string> = {
   'render.reducedMotion': 'reduced motion',
   'render.locale': 'locale',
   'render.timezone': 'time zone',
+  'device.platform': 'device platform',
+  'device.model': 'device',
+  'device.osVersion': 'device OS',
+  'device.screen': 'screen',
+  'device.density': 'density',
+  'device.name': 'device name',
+  'device.automation': 'Appium driver',
   'ci.provider': 'CI',
   'ci.runnerImage': 'runner image',
   project: 'project',

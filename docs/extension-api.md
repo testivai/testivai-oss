@@ -104,15 +104,16 @@ Every JS adapter (Playwright, WebdriverIO, Selenium) and `testivai witness <url>
 | `browser.channel`, `browser.headless` | the runner's configuration | a branded build (`chrome`, `msedge`); headless or not |
 | `framework` | the test framework | `name`, `version`, `language`, `runner`; absent for `testivai witness <url>` |
 | `adapter.name`, `adapter.version` | the adapter package | |
-| `adapter.captureMethod` | what took the screenshot | required. `<extent>:<mechanism>`: `full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `full-page:firefox`, `viewport:webdriver` |
+| `adapter.captureMethod` | what took the screenshot | required. `<extent>:<mechanism>`: `full-page:cdp`, `full-page:playwright`, `full-page:stitched`, `full-page:firefox`, `viewport:webdriver`, `screen:appium` (a native app's whole screen, status bar included) |
 | `driver` | the WebDriver binary | `name`, `version`; when the adapter talks to one |
 | `render.viewport`, `render.deviceScaleFactor`, `render.colorScheme`, `render.reducedMotion`, `render.locale`, `render.timezone` | measured in the page (`RENDER_PROBE_EXPRESSION` in `packages/witness/src/capture/environment.ts`) | `innerWidth`/`innerHeight`, `devicePixelRatio`, the two media queries, `navigator.language`, the `Intl` time zone |
 | `ci.provider`, `ci.runnerImage` | CI environment variables | `github-actions` (with `ImageOS/ImageVersion`), `gitlab`, `circleci`, `buildkite`, `jenkins`, `azure-pipelines`, or `ci`; absent outside CI |
 | `container` | `/.dockerenv` or `/run/.containerenv` | present (`true`) only inside a container |
 | `label` | `TESTIVAI_ENV_LABEL` | a name the team gives the environment, e.g. its image tag |
 | `project` | the runner's project or variant | e.g. the Playwright project |
+| `device.platform`, `device.osVersion`, `device.model`, `device.name`, `device.automation`, `device.screen`, `device.density` | the Appium capabilities (`platformName` lowercased, `platformVersion`, `deviceModel`, the `deviceName` the session asked for, `automationName`, `deviceScreenSize`, `deviceScreenDensity`) | native app captures only (schema 2.9.0, experimental), with `browser.name: "native-app"` and `adapter.captureMethod: "screen:appium"`; `render.deviceScaleFactor` is Appium's `pixelRatio`. `os` stays the machine the tests ran on. See [Native mobile apps](./guides/native-mobile.md) |
 
-The compare reads the baseline's and the capture's blocks side by side (`snapshots[].environment` in results.json). A field recorded on one side only is unknown, not a change; `container`, `label` and `ci.provider` are always decided by the collector, so their absence means "no". Only some fields can change rendering (`renderingDelta`): the browser, `os.platform`, `os.arch`, `os.distro` (and `os.release` on macOS and Windows), every `render` field, `adapter.captureMethod`, `container` and `label`. Framework, adapter and driver versions, the CI runner image and the project are context. `testivai env` prints this machine's part of the block.
+The compare reads the baseline's and the capture's blocks side by side (`snapshots[].environment` in results.json). A field recorded on one side only is unknown, not a change; `container`, `label` and `ci.provider` are always decided by the collector, so their absence means "no". Only some fields can change rendering (`renderingDelta`): the browser, `os.platform`, `os.arch`, `os.distro` (and `os.release` on macOS and Windows), every `render` field, `adapter.captureMethod`, `container` and `label`, and for native app captures `device.platform`, `device.osVersion`, `device.model`, `device.screen` and `device.density`. Framework, adapter and driver versions, the CI runner image and the project are context, and so are the device name, the Appium driver and, when both sides are native app captures, the `os` fields (the device draws the screen, not the machine running the tests). `testivai env` prints this machine's part of the block.
 
 ### Capture health: `health` in metadata.json
 
@@ -179,7 +180,7 @@ Written by `generateReport()` to `<reportDir>/results.json`. Consumed by the Git
 
 ```jsonc
 {
-  "version": "2.8.0",         // results.json SCHEMA version
+  "version": "2.9.0",         // results.json SCHEMA version
   "timestamp": "2026-05-08T12:34:56.789Z",
   "summary": {
     "total": 7,

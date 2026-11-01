@@ -168,6 +168,10 @@ All options are optional; defaults come from `.testivai/config.json`.
 
 ---
 
+## Native apps (experimental)
+
+In an Appium session on a native Android or iOS app, `witness()` switches to native mode by itself: it takes the whole screen, runs no page script (a native screen has no DOM), masks the status bar, records the device, and keys the snapshot `<name>__<platform>-<device>-<osMajor>`. Pixel diff only. See [Native mobile apps](../guides/native-mobile.md).
+
 ## Local-only by design
 
 The WDIO adapter is local-only: captures, diffs, and the report are all produced on disk. The legacy `mode` config field is retired and ignored when present.

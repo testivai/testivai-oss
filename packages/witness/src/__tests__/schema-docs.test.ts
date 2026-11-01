@@ -53,6 +53,15 @@ describe('results.json schema documents', () => {
     }
   });
 
+  it('native app captures (schema 2.9.0) are documented in all three: the capture method and the device section', () => {
+    expect(claude).toMatch(/Native app captures \(schema 2\.9\.0, experimental/);
+    for (const doc of [claude, extensionApi]) {
+      expect(doc).toContain('screen:appium');
+      expect(doc).toContain('"native-app"');
+    }
+    expect(extensionApi).toMatch(/\| `device\.platform`, `device\.osVersion`, `device\.model`, `device\.name`, `device\.automation`, `device\.screen`, `device\.density` \|/);
+  });
+
   it('the capture-health fields (schema 2.7.0) are documented in all three', () => {
     for (const doc of [claude, extensionApi]) {
       expect(doc).toContain('"captureHealth"');

@@ -21,8 +21,9 @@ crawler notes are traced to the source rather than measured. Read
 :::note Scope: mobile **web**
 This is browser rendering under Playwright's device emulation — a mobile
 viewport plus the matching engine (WebKit for the iPhone profiles, Chromium
-for the Android ones). It is not native iOS/Android app testing, and it is not
-a real-device farm. Emulation is what CI can run on every push; it catches
+for the Android ones). It is not native iOS/Android app testing (for that, see
+[Native mobile apps](./native-mobile.md), experimental), and it is not a
+real-device farm. Emulation is what CI can run on every push; it catches
 layout and CSS regressions, not device-specific browser quirks.
 :::
 
