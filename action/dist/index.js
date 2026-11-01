@@ -120830,6 +120830,17 @@ function parseHealth(raw) {
   }
 }
 
+// ../packages/witness/src/capture/element-map.ts
+var ID_ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+function normalizeElementIdAttributes(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const name of value) {
+    if (typeof name === "string" && ID_ATTRIBUTE_NAME.test(name) && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
 // ../packages/witness/src/baselines/store.ts
 function resolveBaselinesDir(projectRoot, override) {
   let dir = override;
@@ -120964,13 +120975,15 @@ var BaselineStore = class {
     const tempMeta = this.readTempMetadata(name);
     const environment = readEnvironment(tempMeta?.environment);
     const health = parseHealth(tempMeta?.health);
+    const elementIdAttributes = normalizeElementIdAttributes(tempMeta?.elementIdAttributes);
     const meta = {
       name,
       createdAt: existingMeta?.createdAt ?? now,
       updatedAt: now,
       approvedBy: "local",
       ...environment ? { environment } : {},
-      ...health ? { health } : {}
+      ...health ? { health } : {},
+      ...elementIdAttributes.length > 0 ? { elementIdAttributes } : {}
     };
     fs9.writeFileSync(currentMetadata, JSON.stringify(meta, null, 2));
   }
@@ -121369,6 +121382,11 @@ function detectPageShift(baselineMap, candidateMap, minElements = 3) {
 }
 
 // ../packages/witness/src/report/compare.ts
+function sameElementIdAttributes(a, b) {
+  const x = normalizeElementIdAttributes(a);
+  const y = normalizeElementIdAttributes(b);
+  return x.length === y.length && x.every((name, i) => name === y[i]);
+}
 function readElementMap(projectRoot, kind, name) {
   const p = kind === "baselines" ? path11.join(resolveBaselinesDir(projectRoot), name, "elements.json") : path11.join(projectRoot, ".testivai", "temp", name, "elements.json");
   try {
@@ -121456,7 +121474,8 @@ function compareAll(options) {
       const baselineElements = readElementMap(projectRoot, "baselines", name);
       const candidateElements = readElementMap(projectRoot, "temp", name);
       if (domSignal) {
-        const styleComparison = compareStyleHashes(baselineElements, candidateElements);
+        const samePaths = sameElementIdAttributes(baselineMeta?.elementIdAttributes, candidateMeta?.elementIdAttributes);
+        const styleComparison = samePaths ? compareStyleHashes(baselineElements, candidateElements) : { status: "unavailable", changed: [] };
         domSignal.styleCheck = styleComparison.status;
         if (styleComparison.status === "mismatch") {
           domSignal.styleChanges = {
@@ -122427,7 +122446,8 @@ var KNOWN_FIELDS = {
   maxPages: "number",
   viewport: "object",
   mcpApprovalPrompt: "boolean",
-  environmentPolicy: "string"
+  environmentPolicy: "string",
+  elementIdAttributes: "array"
 };
 var ENUM_FIELDS = {
   environmentPolicy: ENVIRONMENT_POLICIES
@@ -122504,6 +122524,16 @@ function validateLocalConfig(parsed) {
         `config key "${key}" should be a ${expected}, got ${actual} (${JSON.stringify(value)}) \u2014 using the default instead.`
       );
       invalidKeys.push(key);
+      continue;
+    }
+    if (key === "elementIdAttributes") {
+      for (const name of value) {
+        if (typeof name !== "string" || !ID_ATTRIBUTE_NAME.test(name)) {
+          warnings.push(
+            `elementIdAttributes entry ${JSON.stringify(name)} is not a plain attribute name (letters, digits, "-" and "_") \u2014 it is being ignored.`
+          );
+        }
+      }
     }
   }
   return { warnings, invalidKeys };
