@@ -36,7 +36,7 @@ its own baseline.
 {
   "autoOpen": false,
   "elementIdAttributes": ["data-testid"],
-  "volatileAttributes": ["class", "src"]
+  "volatileAttributes": ["class"]
 }
 ```
 
@@ -51,12 +51,12 @@ its own baseline.
   atomic class on the element. Without this, the DOM diff counts it as an
   attribute change and the snapshot does not read as style-only; the style
   check still names the element either way.
-- **`"src"` in `volatileAttributes`.** Expo names its JavaScript bundle by
-  content hash (`/_expo/static/js/web/index-<hash>.js`), so any code change
-  changes that `<script src>` and counts as a DOM change. The trade-off: an
-  `<img>` whose `src` changes is no longer a DOM change either (its pixels
-  still are). react-native-web's `Image` draws with a `background-image`
-  style, which the style check does cover.
+- **No `"src"`.** Expo names its JavaScript bundle by content hash
+  (`/_expo/static/js/web/index-<hash>.js`), so every code change changes a
+  `<script src>`. The DOM diff never compares a `<script>`'s attribute
+  values, from the release after `@testivai/witness` 2.5.0; with 2.5.0 or
+  older, add `"src"` here, or a `StyleSheet` change will not read
+  style-only.
 
 `reducedMotion: 'reduce'` in `playwright.config.ts` asks the app to skip
 JS-driven animations: TestivAI's stabilization freezes CSS animations, not

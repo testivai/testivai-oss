@@ -108,6 +108,15 @@ report can say "`div.card` shifted +10px vertically — content unchanged"
 instead of flagging a wall of changed pixels. Anything resized, restyled,
 or with different content classifies as a real `change`.
 
+The content is checked, not assumed: a move counts as a shift only when the
+element's pixels match at its new position (at most 1% of them differ, at
+the same colour threshold as the diff, masks excluded). Content inserted
+above an element renumbers its `:nth-of-type` path, which can pair it with a
+look-alike neighbour (same size and styles, different text); that pair reads
+as a `change`, never as a shift by a wrong distance. Stable paths
+(`elementIdAttributes`, see [How it works](./how-it-works.md#element-paths))
+let the true move be found.
+
 The whole-page variant catches the classic injected-banner case: when
 elements below a line all moved by one uniform offset, the snapshot gains
 

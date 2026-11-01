@@ -270,10 +270,22 @@ The captured PNGs from the run above:
 
 The WebKit capture is 3× the CSS viewport; the Chromium one is 1×, with the
 device scale factor discarded. This traces to the capture path in
-`packages/playwright/src/snapshot.ts`: the default full-page route opens a CDP
-session and calls `Page.captureScreenshot` with `clip: { …, scale: 1 }`. CDP
-is Chromium-only, so on WebKit that call fails and the code falls back to
-`page.screenshot({ fullPage: true })`, which honours the device scale factor.
+`packages/playwright/src/snapshot.ts`: on Chromium the default full-page
+route opens a CDP session and calls `Page.captureScreenshot` with
+`captureBeyondViewport` and `clip: { …, scale: 1 }`, and Chrome renders that
+capture at a pixel ratio of 1 (desktop profiles with a `deviceScaleFactor`
+of 2 included). CDP is Chromium-only, so WebKit and Firefox are captured
+with `page.screenshot({ fullPage: true })`, which honours the device scale
+factor.
+
+`metadata.json` records the scale each image was rendered at: 1 for these
+Chromium captures. (Up to `@testivai/witness-playwright` 2.0.10 it recorded
+the profile's value, 2.625 on Pixel 7; a baseline approved then reads as an
+environment change in `render.deviceScaleFactor`, a status change only with
+`environmentPolicy: "strict"`, until it is re-approved.) The capture also
+used to leave the page without its device emulation for the rest of the
+test (pixel ratio 1, touch off); `witness()` now restores it, so later steps
+run under the profile again.
 
 **Consequence.** This is a fidelity gap, not a correctness bug. Baselines are
 keyed per project, so each variant only ever compares against a baseline

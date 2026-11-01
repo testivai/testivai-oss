@@ -462,4 +462,4 @@ If your app rewrites `src`/`srcset`/`href` per run (CDN hashes, signed URLs), th
 }
 ```
 
-The attribute's *presence* still counts (removing an image is a real change); only its value churn is ignored. `blob:` object URLs are always normalized — they are per-session by construction — while `data:` URIs stay significant because they encode content.
+The attribute's *presence* still counts (removing an image is a real change); only its value churn is ignored. A `<script>`'s attribute values are never compared, with no configuration: scripts do not render, and a bundle renamed by content hash (`index-<hash>.js`), its `integrity` and a per-request `nonce` change without the page changing. A script added or removed still counts. `blob:` object URLs are always normalized — they are per-session by construction — while `data:` URIs stay significant because they encode content.

@@ -37,11 +37,13 @@ readings table says which phone each row was measured on. See
 - **Give the elements you care about a `testID`.** react-native-web renders
   it as `data-testid`, and TestivAI can name changes by it (below). Make
   repeated items unique, e.g. ``testID={`order-${order.id}`}``.
-- **`elementIdAttributes` is not in a published release yet.** It is merged
-  in this repository and ships with the next minor release of
-  `@testivai/witness` and the adapters. With
+- **Part of this is not in a published release yet.** `elementIdAttributes`,
+  the shift check, `<script>` attributes left out of the DOM diff and the
+  emulation fixes below are merged in this repository and ship with the next
+  minor release of `@testivai/witness` and the adapters. With
   `@testivai/witness-playwright` 2.0.10 or older, everything here works
-  except testID-based paths: the setting is ignored, with a config warning.
+  except testID-based paths (the setting is ignored, with a config warning),
+  and the [Limits](#limits) marked "up to 2.0.10" apply.
 
 ---
 
@@ -64,7 +66,7 @@ npx playwright install chromium webkit --with-deps
 {
   "autoOpen": false,
   "elementIdAttributes": ["data-testid"],
-  "volatileAttributes": ["class", "src"]
+  "volatileAttributes": ["class"]
 }
 ```
 
@@ -74,7 +76,6 @@ Each line is there for a reason:
 |---|---|
 | `elementIdAttributes: ["data-testid"]` | Names changed elements by `testID` (`div[data-testid="track-order"]` instead of `body > div > div.css-g5y9jx > … :nth-of-type(4)`), and keeps their names stable when content is inserted above them, so a moved element reads as a **shift**. |
 | `"class"` in `volatileAttributes` | A `StyleSheet` change makes react-native-web swap an atomic class (`r-1jtin5c` → `r-vq2l11`). Without this, the DOM diff counts it as an attribute change and the snapshot does not read as style-only. The style check names the element either way. |
-| `"src"` in `volatileAttributes` | Expo names its JavaScript bundle by content hash (`/_expo/static/js/web/index-<hash>.js`), so any code change changes a `<script src>` and counts as a DOM change. The trade-off: an `<img>` whose `src` changes is no longer a DOM change either (its pixels still are). react-native-web's `Image` draws with a `background-image` style, which the style check covers. Leave `"src"` out if your app is not built by Expo. |
 
 **3. `playwright.config.ts`:** serve the web build, and one project per
 phone:
@@ -146,7 +147,7 @@ the button colour row on iPhone 13 as well:
 | The same, without `"class"` in `volatileAttributes` | changed | 1 attribute change in the DOM diff (the swapped atomic class), and the same style mismatch on the button |
 | Title text | changed | 1 text change, 0 attribute changes; the region is on `div[data-testid="header"] > div` |
 | A banner inserted at the top | changed | 5 of 5 regions read **shift** by the banner's height, and the page shift is found |
-| The same banner, **without** `elementIdAttributes` | changed | The move is never found: some regions read "change", and look-alike cards read as a **shift by a wrong distance** (see [Limits](#limits)) |
+| The same banner, **without** `elementIdAttributes` | changed | The move is not found: every region reads "change", and no shift or page shift is claimed (see [Limits](#limits)) |
 
 A `StyleSheet` change, a text change and a moved block each get their own
 reading, as they do on hand-written HTML.
@@ -162,10 +163,10 @@ reading, as they do on hand-written HTML.
 | **Native-only modules** | Maps, camera and some animation libraries may not render on the web, or not build. | Mock them in the web build, or mask their area (`mask` in `.testivai/config.json`). |
 | **Bare React Native apps** | Often do not build for the web without extra setup. | Expo apps usually do. Verified here on one Expo app and one react-native-web fixture, no bare React Native app. |
 | **JS-driven animations** | TestivAI's stabilization freezes CSS animations and transitions, not animations driven from JavaScript. | `reducedMotion: 'reduce'` asks the app to skip them; whether a library honours it is up to that library (Reanimated was **not** tested here). Wait for the settled state before `witness()`. |
-| **Element paths without `testID`** | Paths are unreadable (`div.css-g5y9jx:nth-of-type(4)`), and content inserted above an element renumbers it. Look-alike siblings then pair with their neighbours: in the banner case above, two regions read as a **shift of −16 px** while the content moved **+64 px**, and a wrong page shift was reported. | Turn on `elementIdAttributes` and give elements unique `testID`s. A value used twice is skipped, and the path continues to the next unique one above it. |
+| **Element paths without `testID`** | Paths are unreadable (`div.css-g5y9jx:nth-of-type(4)`), and content inserted above an element renumbers it, so a moved element reads as a "change", not a shift. Renumbered paths pair look-alike siblings with their neighbours; every claimed move is checked against the pixels, so that pairing is not reported as a shift. Up to 2.0.10 it was: in the banner case above, two regions read as a **shift of −16 px** while the content moved **+64 px**, with a wrong page shift. | Turn on `elementIdAttributes` and give elements unique `testID`s. A value used twice is skipped, and the path continues to the next unique one above it. |
 | **Turning `elementIdAttributes` on** | Paths change for every anchored element, so the style check reads "styles not compared" against baselines captured before. | Re-approve the baselines once after turning it on. |
-| **Chromium captures at 1×** | On Pixel 7 the PNG is 412 px wide (CSS pixels), not 2.625×; WebKit captures at the device scale factor. After the capture the page stays at device pixel ratio 1 for the rest of that test, and `metadata.json` records the profile's 2.625. | Compare each phone only with its own baseline (keyed per project, as above). If later steps in the same test depend on the pixel ratio, capture last. See [Mobile web](./mobile-web.md#devicescalefactor-is-applied-on-webkit-and-dropped-on-chromium). |
-| **WebKit log line** | Every WebKit capture prints `[TestivAI] Browser screenshot failed: … CDP session is only available in Chromium`. | Nothing: the capture falls back to Playwright's own screenshot, as intended. The message is misleading, not a failure. |
+| **Chromium captures at 1×** | On Pixel 7 the PNG is 412 px wide (CSS pixels), not 2.625×; WebKit captures at the device scale factor. `metadata.json` records 1, the scale the image was rendered at, and the page's emulation (pixel ratio, touch) is restored after the capture. Up to 2.0.10 the page stayed at pixel ratio 1 with touch off for the rest of the test, and `metadata.json` recorded the profile's 2.625. | Compare each phone only with its own baseline (keyed per project, as above). After upgrading, a baseline approved with 2.0.10 or older reads as an environment change in `render.deviceScaleFactor` (a status change only with `environmentPolicy: "strict"`) until it is re-approved. See [Mobile web](./mobile-web.md#devicescalefactor-is-applied-on-webkit-and-dropped-on-chromium). |
+| **Expo's hashed bundle name** | Expo names its JavaScript bundle by content hash (`/_expo/static/js/web/index-<hash>.js`), so every code change changes a `<script src>`. The DOM diff never compares a `<script>`'s attribute values, so it is not a DOM change. Up to 2.0.10 it was, and a `StyleSheet`-only change did not read style-only. | Nothing on current versions. On 2.0.10 or older, add `"src"` to `volatileAttributes` (an `<img>` whose `src` changes is then no longer a DOM change either; its pixels still are). |
 | **Other adapters** | `elementIdAttributes` is read by the Playwright, Selenium (JS) and WebdriverIO adapters. The Python, Java and Ruby adapters keep default paths. | Use the Playwright adapter for this. A baseline directory shared with an adapter that does not read it gets "styles not compared", never a wrong style verdict. |
 
 ---
@@ -182,6 +183,10 @@ reading, as they do on hand-written HTML.
   approves, passes an unchanged run, then recolours the button and requires
   the gate to fail with a style-only change on
   `div[data-testid="track-order"]` on both phones.
+- **`e2e/src/capture-emulation.test.ts`** (every pull request): on Pixel 7,
+  Desktop Chrome HiDPI and Desktop Chrome, the page's pixel ratio, touch
+  points and `pointer: coarse` are unchanged after two captures, and
+  `metadata.json` and the element map are on the image's scale.
 - **Not verified:** real devices, apps other than these fixtures, bare React
   Native apps, Reanimated or other JS animation libraries, and Windows or
   macOS runners.
