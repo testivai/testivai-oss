@@ -127,6 +127,13 @@ CI guards this with a step that fails any PR where `action/dist/` is out of sync
 
 Tag a clean semver release and the [Release Action workflow](../.github/workflows/release-action.yml) automatically rolls the matching major-version tag (e.g. tagging `v1.2.3` updates the `v1` tag to point at the same SHA). Pre-release tags (`v1.0.0-rc.1`) are skipped — they don't move the stable major pointer.
 
+GitHub refuses to move a tag onto a commit whose workflow files (`.github/workflows/`) changed since the tag's old commit unless the token has the `workflows` permission, and the workflow's built-in `GITHUB_TOKEN` cannot be given it. So the workflow pushes with the `RELEASE_TAG_TOKEN` repository secret when it is set:
+
+1. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with access to this repository only, and the repository permissions **Contents: Read and write** and **Workflows: Read and write**. Its owner needs write access to the repository; give it an expiry and renew it.
+2. Save it as the repository secret `RELEASE_TAG_TOKEN` (Settings → Secrets and variables → Actions).
+
+Without the secret, the workflow uses the built-in token, which works only when no workflow file changed since the last release. When the push is refused, the job fails saying so, with the commands to move the major tag by hand; after adding or fixing the secret, re-run the job (or run the workflow by hand with the release tag).
+
 ## License
 
 MIT
