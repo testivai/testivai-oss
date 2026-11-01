@@ -81,8 +81,11 @@ describe('the roll step, run against a local remote', () => {
 
   /** Make the remote refuse every ref update the way GitHub refuses one without `workflows` permission. */
   function refuseLikeGitHub() {
-    const hook = path.join(remote, 'hooks', 'pre-receive');
-    fs.writeFileSync(hook, `#!/bin/sh\necho "${REFUSAL.replace(/`/g, '\\`')}" >&2\nexit 1\n`);
+    // The message is a file the hook prints as is: nothing is put into the shell script.
+    const hooks = path.join(remote, 'hooks');
+    fs.writeFileSync(path.join(hooks, 'refusal.txt'), `${REFUSAL}\n`);
+    const hook = path.join(hooks, 'pre-receive');
+    fs.writeFileSync(hook, '#!/bin/sh\ncat "$(dirname "$0")/refusal.txt" >&2\nexit 1\n');
     fs.chmodSync(hook, 0o755);
   }
 
@@ -122,6 +125,7 @@ describe('the roll step, run against a local remote', () => {
 
     expect(code).toBe(1);
     expect(remoteV1()).toBe(before);
+    expect(output).toContain(REFUSAL);
     expect(output).toContain('::error::');
     expect(output).toContain('RELEASE_TAG_TOKEN');
     expect(output).toMatch(/Workflows/);
