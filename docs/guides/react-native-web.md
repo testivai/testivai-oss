@@ -48,7 +48,7 @@ readings table says which phone each row was measured on. See
 ## Set it up
 
 A complete, runnable project is in
-[`examples/expo-web`](../../examples/expo-web/README.md). The pieces:
+[`examples/expo-web`](https://github.com/testivai/testivai-oss/tree/main/examples/expo-web). The pieces:
 
 **1. Install the adapter and both engines.** The iPhone profiles run on
 WebKit:
@@ -177,7 +177,7 @@ reading, as they do on hand-written HTML.
   0.21.4, captured on the Pixel 7 profile in Chrome. It checks every row of
   [What each change reads as](#what-each-change-reads-as) except iPhone 13.
 - **The `Expo example (react-native-web)` CI job** (every pull request):
-  installs [`examples/expo-web`](../../examples/expo-web/README.md) with the
+  installs [`examples/expo-web`](https://github.com/testivai/testivai-oss/tree/main/examples/expo-web) with the
   packages built from the same commit, runs it on Pixel 7 and iPhone 13,
   approves, passes an unchanged run, then recolours the button and requires
   the gate to fail with a style-only change on
