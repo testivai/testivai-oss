@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mobile plan, Track 1 Level 0 (see e2e/src/android-native.ts): start Appium,
+# The Android native-mode check (e2e/src/android-native.ts): start Appium,
 # run the check against the booted emulator, stop Appium. Run by
 # .github/workflows/android-native.yml inside android-emulator-runner, with
 # appium and its UiAutomator2 driver installed globally.

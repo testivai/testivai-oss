@@ -22,14 +22,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  appiumEnvironment,
   applyEnvironmentPolicyToName,
   BaselineStore,
   CAPTURE_METHODS,
   DEFAULT_MAX_ELEMENTS,
   installedPackageVersion,
+  isNativeAppCapabilities,
   loadLocalConfig,
+  mobilePlatform,
+  namesBrowser,
+  nativeAppDevice,
+  nativeAppVariant,
   normalizeElementIdAttributes,
   RENDER_PROBE_EXPRESSION,
+  statusBarFromCapabilities,
+  statusBarFromViewportRect,
   webDriverEnvironment,
   type CollectedElement,
 } from '@testivai/witness';
@@ -106,6 +114,81 @@ async function waitForFonts(browser: WitnessBrowser): Promise<void> {
   }
 }
 
+/** A variant as it goes into a snapshot name. */
+const variantSegment = (variant: string) => variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase();
+
+/**
+ * Whether this capture is of a native app screen (experimental native mode).
+ * Only a mobile session that names no browser is asked for its context, so a
+ * browser session makes no extra call. NATIVE_APP is native; a web view
+ * (WEBVIEW_…, CHROMIUM) is a page. When the context cannot be read, the
+ * capabilities decide: started on an app (app, appPackage, bundleId).
+ */
+async function isNativeCapture(browser: WitnessBrowser, forced: boolean | undefined): Promise<boolean> {
+  if (forced !== undefined) return forced;
+  const caps = browser.capabilities;
+  if (!mobilePlatform(caps) || namesBrowser(caps)) return false;
+  if (typeof browser.getContext === 'function') {
+    try {
+      const context = await browser.getContext();
+      const id = typeof context === 'string' ? context : (context as { id?: unknown } | null)?.id;
+      if (typeof id === 'string' && id.length > 0) return id === 'NATIVE_APP';
+    } catch {
+      // the capabilities decide
+    }
+  }
+  return isNativeAppCapabilities(caps);
+}
+
+/**
+ * Native mode: a native screen has no page, so no page script runs (Appium
+ * rejects them all there, and WebdriverIO resends each failed one three
+ * times: ~1.5 s each, measured on an Android 14 emulator). The capture is the
+ * screenshot alone, with the status bar masked (its height from
+ * `mobile: viewportRect` at capture time, else the capabilities), the
+ * environment from the capabilities, and the name keyed by device unless the
+ * call gives a variant.
+ */
+async function witnessNative(browser: WitnessBrowser, name: string, options: WitnessOptions): Promise<void> {
+  const localConfig = loadLocalConfig(process.cwd());
+  const variant = options.variant ? variantSegment(options.variant) : nativeAppVariant(nativeAppDevice(browser.capabilities));
+  if (variant) name = `${name}__${variant}`;
+
+  const environment = appiumEnvironment({
+    capabilities: browser.capabilities,
+    adapter: { name: '@testivai/witness-webdriverio', version: ADAPTER_VERSION, captureMethod: CAPTURE_METHODS.APPIUM_SCREEN },
+    framework: { name: 'webdriverio', version: installedPackageVersion('webdriverio') },
+  });
+  name = applyEnvironmentPolicyToName(
+    name,
+    { browser: { name: environment.browser.name }, os: { platform: process.platform } },
+    localConfig.environmentPolicy,
+  );
+
+  let statusBar: number | null = null;
+  if (options.maskStatusBar !== false) {
+    try {
+      statusBar = statusBarFromViewportRect(await browser.execute<unknown>('mobile: viewportRect'));
+    } catch {
+      // older drivers: the capabilities' reading from the session start
+    }
+    statusBar ??= statusBarFromCapabilities(browser.capabilities);
+  }
+
+  const base64 = await browser.takeScreenshot();
+  if (typeof base64 !== 'string' || base64.length === 0) {
+    throw new Error(`testivai.witness("${name}"): browser.takeScreenshot() returned an empty value`);
+  }
+
+  const store = new BaselineStore(process.cwd());
+  // Nothing from an earlier capture of this name: no DOM, element map or metadata.
+  for (const leftover of [store.getTempDomPath(name), store.getTempMetadataPath(name), path.join(store.getTempDir(), name, 'elements.json')]) {
+    fs.rmSync(leftover, { force: true });
+  }
+  store.writeTemp(name, Buffer.from(base64, 'base64'));
+  store.writeTempMetadata(name, { name, environment, ...(statusBar ? { masks: [{ top: statusBar }] } : {}) });
+}
+
 /**
  * Capture a screenshot + DOM and write them as a temp snapshot.
  *
@@ -127,11 +210,15 @@ export async function witness(
     throw new Error('testivai.witness: browser argument must expose takeScreenshot()');
   }
 
+  if (await isNativeCapture(browser, options.native)) {
+    return witnessNative(browser, name, options);
+  }
+
   // Multi-capability runs: fold the variant into the name so capabilities
   // don't overwrite each other's baselines (same mechanism as the Playwright
   // adapter's multi-project handling).
   if (options.variant) {
-    name = `${name}__${options.variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase()}`;
+    name = `${name}__${variantSegment(options.variant)}`;
   }
 
   const localConfig = loadLocalConfig(process.cwd());

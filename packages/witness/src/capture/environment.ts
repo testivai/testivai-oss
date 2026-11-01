@@ -68,6 +68,30 @@ export interface CaptureEnvironment {
   label?: string;
   /** Playwright project (or another runner's variant) the capture ran under. */
   project?: string;
+  /**
+   * Native app captures only (`browser.name: "native-app"`): the device that
+   * drew the screen, from the Appium capabilities (capture/native-app.ts).
+   * `os` stays the machine the tests ran on.
+   */
+  device?: DeviceEnvironment;
+}
+
+/** The phone, tablet, emulator or simulator a native app capture came from. */
+export interface DeviceEnvironment {
+  /** android / ios (Appium's platformName, lowercased). */
+  platform: string;
+  /** The device OS version (platformVersion): "14", "17.5". */
+  osVersion?: string;
+  /** The hardware model the device reports (Android deviceModel): "Pixel 7", "sdk_gphone64_x86_64". */
+  model?: string;
+  /** The device name the session asked for (deviceName): "iPhone 15". */
+  name?: string;
+  /** The Appium driver (automationName): UiAutomator2, XCUITest. */
+  automation?: string;
+  /** Screen size in physical pixels (Android deviceScreenSize): "1080x2400". */
+  screen?: string;
+  /** Screen density in dpi (Android deviceScreenDensity). */
+  density?: number;
 }
 
 /** The machine-level part of the block: the same for every capture of a run. */
@@ -89,6 +113,8 @@ export const CAPTURE_METHODS = {
   FIREFOX_FULL_PAGE: 'full-page:firefox',
   /** WebDriver takeScreenshot: the viewport only. */
   WEBDRIVER_VIEWPORT: 'viewport:webdriver',
+  /** Appium takeScreenshot in a native app: the whole device screen, status bar included. */
+  APPIUM_SCREEN: 'screen:appium',
 } as const;
 
 /** The `environmentPolicy` values in .testivai/config.json. */
@@ -320,6 +346,7 @@ export interface CaptureEnvironmentParts {
   driver?: CaptureEnvironment['driver'];
   render?: RenderEnvironment;
   project?: string;
+  device?: DeviceEnvironment;
 }
 
 /** Assemble the block from what one adapter observed. */
@@ -341,6 +368,7 @@ export function buildCaptureEnvironment(parts: CaptureEnvironmentParts): Capture
   if (host.container) env.container = true;
   if (host.label) env.label = host.label;
   if (parts.project) env.project = parts.project;
+  if (parts.device) env.device = compact({ ...parts.device });
   return env;
 }
 

@@ -131,6 +131,10 @@ Captures a viewport screenshot, the DOM and the element map, and writes them as 
 | `options.maxElements` | number | Cap on elements collected for the element map. Default: 3000. |
 | `options.ignoreSelectors` | string[] | Elements hidden (`visibility: hidden`) for this capture; merged with the global `ignoreSelectors` from `.testivai/config.json`. |
 | `options.stabilize` | boolean | Override capture stabilization (animations frozen, caret hidden, fonts awaited). Default: `true` (or the global `stabilize` setting). |
+| `options.native` | boolean | Native app mode (experimental): detected by default in an Appium session on a native Android or iOS screen. `true` forces it, `false` keeps the web path. |
+| `options.maskStatusBar` | boolean | Native mode only: mask the status bar (from `mobile: viewportRect` at capture time). Default: `true`. |
+
+In an Appium session on a native app screen, `witness()` runs no page script (a native screen has no DOM): it takes the whole screen, masks the status bar, records the device, and keys the snapshot `<name>__<platform>-<device>-<osMajor>`. Pixel diff only. See [Native mobile apps](https://github.com/testivai/testivai-oss/blob/main/docs/guides/native-mobile.md).
 
 ### `TestivaiService`
 
@@ -147,6 +151,7 @@ Class registered as a WDIO service. Implements `onComplete`.
 ## Status
 
 - **Local mode**: stable
+- **Native app mode**: experimental (verified on an Android 14 emulator; iOS not verified)
 
 ## Links
 

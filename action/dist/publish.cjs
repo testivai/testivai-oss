@@ -183,17 +183,24 @@ var MECHANISMS = {
   playwright: "Playwright",
   stitched: "scroll and stitch",
   firefox: "Firefox",
-  webdriver: "WebDriver"
+  webdriver: "WebDriver",
+  appium: "Appium"
 };
+var EXTENTS = { "full-page": "full page", viewport: "viewport", screen: "full screen" };
 function describeCaptureMethod(method) {
-  const m = /^(full-page|viewport):([a-z0-9-]+)$/.exec(method);
+  const m = /^(full-page|viewport|screen):([a-z0-9-]+)$/.exec(method);
   if (!m) return method;
-  return `${m[1] === "full-page" ? "full page" : "viewport"} (${MECHANISMS[m[2]] ?? m[2]})`;
+  return `${EXTENTS[m[1]]} (${MECHANISMS[m[2]] ?? m[2]})`;
 }
 var ORDER = [
   "browser",
   "browser.channel",
   "browser.headless",
+  "device.platform",
+  "device.model",
+  "device.osVersion",
+  "device.screen",
+  "device.density",
   "os.platform",
   "os.distro",
   "os.release",
@@ -220,6 +227,13 @@ var LABELS = {
   "render.reducedMotion": "reduced motion",
   "render.locale": "locale",
   "render.timezone": "time zone",
+  "device.platform": "device platform",
+  "device.model": "device",
+  "device.osVersion": "device OS",
+  "device.screen": "screen",
+  "device.density": "density",
+  "device.name": "device name",
+  "device.automation": "Appium driver",
   "ci.provider": "CI",
   "ci.runnerImage": "runner image",
   project: "project"

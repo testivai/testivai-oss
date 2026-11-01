@@ -119012,8 +119012,14 @@ var RENDERING_FIELDS = /* @__PURE__ */ new Set([
   "render.timezone",
   "adapter.captureMethod",
   "container",
-  "label"
+  "label",
+  "device.platform",
+  "device.osVersion",
+  "device.model",
+  "device.screen",
+  "device.density"
 ]);
+var isNativeApp = (env) => env.browser?.name === "native-app";
 var RELEASE_IS_OS_VERSION = /* @__PURE__ */ new Set(["darwin", "win32"]);
 function flatten(env) {
   const flat = /* @__PURE__ */ new Map();
@@ -119039,6 +119045,7 @@ function flatten(env) {
 }
 function isRenderingField(field, baseline, candidate) {
   if (field.startsWith("render.")) return true;
+  if (field.startsWith("os.") && isNativeApp(baseline) && isNativeApp(candidate)) return false;
   if (field === "os.release") {
     return baseline.os.platform === candidate.os.platform && RELEASE_IS_OS_VERSION.has(candidate.os.platform);
   }
@@ -119064,17 +119071,24 @@ var MECHANISMS = {
   playwright: "Playwright",
   stitched: "scroll and stitch",
   firefox: "Firefox",
-  webdriver: "WebDriver"
+  webdriver: "WebDriver",
+  appium: "Appium"
 };
+var EXTENTS = { "full-page": "full page", viewport: "viewport", screen: "full screen" };
 function describeCaptureMethod(method) {
-  const m = /^(full-page|viewport):([a-z0-9-]+)$/.exec(method);
+  const m = /^(full-page|viewport|screen):([a-z0-9-]+)$/.exec(method);
   if (!m) return method;
-  return `${m[1] === "full-page" ? "full page" : "viewport"} (${MECHANISMS[m[2]] ?? m[2]})`;
+  return `${EXTENTS[m[1]]} (${MECHANISMS[m[2]] ?? m[2]})`;
 }
 var ORDER = [
   "browser",
   "browser.channel",
   "browser.headless",
+  "device.platform",
+  "device.model",
+  "device.osVersion",
+  "device.screen",
+  "device.density",
   "os.platform",
   "os.distro",
   "os.release",
@@ -119101,6 +119115,13 @@ var LABELS = {
   "render.reducedMotion": "reduced motion",
   "render.locale": "locale",
   "render.timezone": "time zone",
+  "device.platform": "device platform",
+  "device.model": "device",
+  "device.osVersion": "device OS",
+  "device.screen": "screen",
+  "device.density": "density",
+  "device.name": "device name",
+  "device.automation": "Appium driver",
   "ci.provider": "CI",
   "ci.runnerImage": "runner image",
   project: "project"
@@ -122662,7 +122683,7 @@ function getConfigPath(projectRoot) {
 }
 
 // ../packages/witness/src/report/generator.ts
-var RESULTS_SCHEMA_VERSION = "2.8.0";
+var RESULTS_SCHEMA_VERSION = "2.9.0";
 function generateReport(options) {
   const {
     projectRoot,

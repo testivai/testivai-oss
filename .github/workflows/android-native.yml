@@ -1,14 +1,13 @@
-# Mobile plan, Track 1 Level 0: today's WebdriverIO adapter, unmodified,
-# against a real Android emulator (Appium 3 + UiAutomator2, Android's own
-# Settings app). It checks the plan's simulation against the real thing:
-# what is captured, what is written, how the page-script calls fail, and what
-# a clock change, a status-bar mask and dark mode read as. What it checks and
-# records: e2e/src/android-native.ts. The summary, the visual report and the
-# Appium log are uploaded as the `android-native-level0` artifact.
+# The WebdriverIO adapter's native mode (experimental) on a real Android
+# emulator (Appium 3 + UiAutomator2, Android's own Settings app): no page
+# script runs, the status bar is masked, the device is recorded and keys the
+# snapshot, a clock change passes, dark mode fails the gate. What it checks:
+# e2e/src/android-native.ts. The summary, the step screenshots, the visual
+# report and the Appium log are uploaded as the `android-native` artifact.
 #
 # GitHub's Linux runners support KVM; the emulator does not run without it.
 
-name: Android native (Level 0)
+name: Android native
 
 on:
   workflow_dispatch:
@@ -30,7 +29,7 @@ concurrency:
 
 jobs:
   android:
-    name: WebdriverIO adapter on an Android emulator
+    name: WebdriverIO native mode on an Android emulator
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -84,6 +83,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-native-level0
+          name: android-native
           path: ${{ runner.temp }}/android-native
           if-no-files-found: ignore

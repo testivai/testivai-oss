@@ -27,6 +27,13 @@ export interface WitnessBrowser {
    * recorded as capture provenance in the capture's metadata.json.
    */
   capabilities?: Record<string, unknown>;
+
+  /**
+   * Appium's current context (`NATIVE_APP`, `WEBVIEW_…`): WebdriverIO's
+   * `browser.getContext()`. Asked only in a mobile session that names no
+   * browser, to tell a native screen from a hybrid app's web view.
+   */
+  getContext?(): Promise<unknown>;
 }
 
 /**
@@ -68,6 +75,21 @@ export interface WitnessOptions {
    * via `stabilize` in `.testivai/config.json`; this per-call value wins).
    */
   stabilize?: boolean;
+  /**
+   * Native app mode (experimental). By default it is detected: an Appium
+   * session on Android or iOS that names no browser, in the `NATIVE_APP`
+   * context (or, when the context cannot be read, started with `app`,
+   * `appPackage` or `bundleId`). A native screen has no page, so no page
+   * script runs: the capture is the screenshot alone (pixel diff only), the
+   * status bar is masked, the environment comes from the capabilities, and
+   * the snapshot is keyed by device. `true` forces it, `false` turns it off.
+   */
+  native?: boolean;
+  /**
+   * Native mode only: mask the status bar (its height from Appium's
+   * `mobile: viewportRect`, measured at capture time). Default: true.
+   */
+  maskStatusBar?: boolean;
 }
 
 /**

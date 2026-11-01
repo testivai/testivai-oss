@@ -47,6 +47,7 @@ Pick the framework you use:
 - **[Java (playwright-java)](./frameworks/java.md)**
 - **[Mobile web](./guides/mobile-web.md)** — one Playwright project per device profile
 - **[React Native via react-native-web](./guides/react-native-web.md)** — Expo web builds on phone profiles, with `testID`-based element paths and a limits table
+- **[Native mobile apps (experimental)](./guides/native-mobile.md)** — Android and iOS app screens through WebdriverIO + Appium: pixel diff, status bar masked, keyed by device
 - **[AI agents & code assistants](./guides/ai-agents.md)**
 - **[Vibe-coded apps (Lovable, Bolt, v0)](./guides/vibe-coded-apps.md)**
 - **[CI/CD](./guides/ci-cd.md)**

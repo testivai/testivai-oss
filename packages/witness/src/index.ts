@@ -67,12 +67,25 @@ export {
 export type {
   CaptureEnvironment,
   CaptureEnvironmentParts,
+  DeviceEnvironment,
   EnvironmentPolicy,
   HostEnvironment,
   HostSources,
   RenderEnvironment,
   WebDriverEnvironmentInput,
 } from './capture/environment';
+// Native app captures (experimental) — the device from an Appium session's capabilities.
+export {
+  appiumEnvironment,
+  isNativeAppCapabilities,
+  mobilePlatform,
+  namesBrowser,
+  nativeAppDevice,
+  nativeAppVariant,
+  statusBarFromCapabilities,
+  statusBarFromViewportRect,
+} from './capture/native-app';
+export type { AppiumEnvironmentInput } from './capture/native-app';
 // Capture health — what failed to load, recorded by the adapters that run the probe.
 export {
   HEALTH_LIMITS,
