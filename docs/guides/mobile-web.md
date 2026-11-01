@@ -357,6 +357,9 @@ already works.
 
 ## Next steps
 
+- **[React Native via react-native-web](./react-native-web.md)** — the same
+  phone profiles for a React Native app's web build (Expo), with
+  `testID`-based element paths
 - **[Playwright](../frameworks/playwright.md)** — reporter options, per-call
   overrides, masking, and cross-browser projects
 - **[CI/CD Integration](./ci-cd.md)** — the gate, exit codes, and sharding
