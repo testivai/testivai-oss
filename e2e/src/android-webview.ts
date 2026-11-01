@@ -40,7 +40,7 @@ import { remote } from 'webdriverio';
 import { BaselineStore, generateReport } from '@testivai/witness';
 import { witness } from '@testivai/witness-webdriverio';
 
-import { appInFront, checklist, prepareDevice, restoreDevice, sleep } from './android-helpers';
+import { adb, appInFront, checklist, prepareDevice, restoreDevice, sleep } from './android-helpers';
 
 const OUT = process.env.TESTIVAI_WEBVIEW_OUT ?? fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-webview-out-'));
 const APK = process.env.TESTIVAI_WEBVIEW_APK;
@@ -91,13 +91,35 @@ async function main(): Promise<void> {
     console.log(`[webview] contexts: ${JSON.stringify(contexts)}`);
     assert.ok(contexts.includes(WEBVIEW), `fixture: no ${WEBVIEW} context (WebView debugging off, or no chromedriver): ${JSON.stringify(contexts)}`);
 
-    const toWebView = async () => {
+    const intoWebView = async () => {
       await session.switchContext(WEBVIEW);
       for (let i = 0; i < 20; i++) {
         if (await session.execute('return document.readyState === "complete" && !!document.getElementById("title")')) return;
         await sleep(500);
       }
       throw new Error('fixture: the page did not load in the WebView');
+    };
+    // The emulator once lost the app while Appium started chromedriver (the
+    // WebView context vanished). Recover once, by relaunching the app, and
+    // record it: a second failure fails the run.
+    const recoveries: string[] = [];
+    summary.recoveries = recoveries;
+    const toWebView = async () => {
+      try {
+        await intoWebView();
+      } catch (err) {
+        let pid = '';
+        try {
+          pid = adb('shell', 'pidof', APP_PACKAGE);
+        } catch {
+          // pidof exits 1 when there is no such process
+        }
+        recoveries.push(`switching into the web view failed (${String((err as Error).message).split('\n')[0].slice(0, 160)}); app process ${pid ? `alive (${pid})` : 'gone'}; relaunched`);
+        await session.switchContext('NATIVE_APP').catch(() => undefined);
+        await appInFront(session, APP_PACKAGE, COMPONENT, 'recovery');
+        for (let i = 0; i < 30 && !((await session.getContexts()) as string[]).includes(WEBVIEW); i++) await sleep(1000);
+        await intoWebView();
+      }
     };
     // The page as the app ships it: what every step starts from. Checked,
     // never assumed (a location.reload() in the WebView did not reset it).

@@ -30,4 +30,6 @@ pnpm --filter @testivai-oss/e2e run test:android || status=1
 if [ -n "${TESTIVAI_WEBVIEW_APK:-}" ]; then
   TESTIVAI_WEBVIEW_OUT="$OUT/webview" pnpm --filter @testivai-oss/e2e run test:android-webview || status=1
 fi
+# The device log, for anything the checks cannot see (a crash, a killed app).
+adb logcat -d -v threadtime > "$OUT/logcat.txt" 2>/dev/null || true
 exit "$status"
