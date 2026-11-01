@@ -99,12 +99,29 @@ async function main(): Promise<void> {
       }
       throw new Error('fixture: the page did not load in the WebView');
     };
-    const reload = async () => {
-      await session.execute('location.reload()');
-      await sleep(1000);
+    // The page as the app ships it: what every step starts from. Checked,
+    // never assumed (a location.reload() in the WebView did not reset it).
+    const PRISTINE =
+      'return document.getElementById("title").textContent === "Your orders" && !document.getElementById("banner") && document.styleSheets[0].cssRules.length === arguments[0]';
+    const UNDO =
+      'var t = document.getElementById("title"); t.textContent = "Your orders"; var b = document.getElementById("banner"); if (b) b.remove(); var sheet = document.styleSheets[0]; while (sheet.cssRules.length > arguments[0]) sheet.deleteRule(sheet.cssRules.length - 1);';
+    const resets: string[] = [];
+    summary.resets = resets;
+    let ruleCount = 0;
+    const reset = async (before: string) => {
+      await session.url('file:///android_asset/index.html');
       await toWebView();
+      if (await session.execute(PRISTINE, ruleCount)) {
+        resets.push(`${before}: reloaded`);
+        return;
+      }
+      await session.execute(UNDO, ruleCount);
+      if (!(await session.execute(PRISTINE, ruleCount))) throw new Error(`fixture: the page could not be reset before ${before}`);
+      resets.push(`${before}: undone by script (navigation did not reset it)`);
     };
     await toWebView();
+    ruleCount = (await session.execute('return document.styleSheets[0].cssRules.length')) as number;
+    assert.ok(await session.execute(PRISTINE, ruleCount), 'fixture: the page does not start as shipped');
     const dpr = (await session.execute('return window.devicePixelRatio')) as number;
     summary.devicePixelRatio = dpr;
 
@@ -172,7 +189,7 @@ async function main(): Promise<void> {
     expect(colour.status === 'changed' && colour.dom?.changed === false, `3. a CSS-only change: changed, DOM unchanged — ${colour.status}, dom.changed ${colour.dom?.changed}`);
     expect(colour.dom?.styleCheck === 'mismatch' && styled.some((e) => /button|cta/.test(e)), `3. style check names the button — ${colour.dom?.styleCheck} ${JSON.stringify(styled)}`);
     store.clearTemp();
-    await reload();
+    await reset('4');
 
     // 4. The title text.
     await session.execute('document.getElementById("title").textContent = "Your recent orders"');
@@ -181,11 +198,11 @@ async function main(): Promise<void> {
     const s4 = title.dom?.summary;
     expect(title.status === 'changed' && s4?.textChanges === 1 && s4?.added === 0 && s4?.removed === 0, `4. one text change in the DOM diff — ${title.status}, ${JSON.stringify(s4)}`);
     store.clearTemp();
-    await reload();
+    await reset('5');
 
     // 5. A banner at the top pushes the cards down.
     await session.execute(
-      'var b = document.createElement("div"); b.textContent = "Free shipping this week"; b.style.cssText = "height:60px;background:#ffe082;padding:0 16px;line-height:60px"; document.body.insertBefore(b, document.body.firstChild)',
+      'var b = document.createElement("div"); b.id = "banner"; b.textContent = "Free shipping this week"; b.style.cssText = "height:60px;background:#ffe082;padding:0 16px;line-height:60px"; document.body.insertBefore(b, document.body.firstChild)',
     );
     await capture('5. banner', 'orders');
     const banner = report('orders');
@@ -193,7 +210,7 @@ async function main(): Promise<void> {
     summary.banner = { expectedDy: Math.round(60 * dpr), shifts: shifts.map((r) => r.shift), pageShift: banner.pageShift };
     expect(banner.status === 'changed' && shifts.length > 0, `5. the cards below the banner read as a shift — ${shifts.length} shift regions ${JSON.stringify(shifts.map((r) => r.shift))}, 60 CSS px = ${Math.round(60 * dpr)} px`);
     store.clearTemp();
-    await reload();
+    await reset('6');
 
     // 6. The same screen from the native context: a native capture (Level 1).
     await session.switchContext('NATIVE_APP');
