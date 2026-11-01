@@ -210,6 +210,67 @@ export async function witness(
     throw new Error('testivai.witness: browser argument must expose takeScreenshot()');
   }
 
+  if (options.context !== undefined) {
+    return inContext(browser, options.context, (native) => capture(browser, name, { ...options, native: options.native ?? native }));
+  }
+  return capture(browser, name, options);
+}
+
+/** A context as Appium names it: a string, or WebdriverIO's detailed `{ id }`. */
+const contextName = (c: unknown): string =>
+  typeof c === 'string' ? c : typeof (c as { id?: unknown } | null)?.id === 'string' ? (c as { id: string }).id : '';
+
+/**
+ * Run a capture in another Appium context and switch back afterwards, also
+ * when it fails. `'webview'` is the web view named after the app (Android
+ * names it WEBVIEW_<package>), else the first one (iOS numbers them).
+ * Native mode follows the context: NATIVE_APP is native, any other is a page.
+ */
+async function inContext(
+  browser: WitnessBrowser,
+  wanted: string,
+  run: (native: boolean) => Promise<void>,
+): Promise<void> {
+  if (typeof browser.getContext !== 'function' || typeof browser.getContexts !== 'function' || typeof browser.switchContext !== 'function') {
+    throw new Error('testivai.witness: options.context needs an Appium session: browser.getContext(), getContexts() and switchContext()');
+  }
+  const contexts = (await browser.getContexts()).map(contextName).filter((c) => c.length > 0);
+  const current = contextName(await browser.getContext());
+
+  let target: string | undefined;
+  if (wanted === 'webview') {
+    const views = contexts.filter((c) => c.startsWith('WEBVIEW'));
+    const caps = (browser.capabilities ?? {}) as Record<string, unknown>;
+    const app = caps.appPackage ?? caps['appium:appPackage'] ?? caps.bundleId ?? caps['appium:bundleId'];
+    target = views.find((c) => typeof app === 'string' && c === `WEBVIEW_${app}`) ?? views[0];
+    if (!target) {
+      throw new Error(
+        `testivai.witness: options.context 'webview': no web view context in this session (contexts: ${contexts.join(', ') || 'none'}). ` +
+          "The app's build needs WebView debugging enabled (Android WebView.setWebContentsDebuggingEnabled, iOS isInspectable), and the web view must be on screen.",
+      );
+    }
+  } else {
+    target = wanted;
+    if (!contexts.includes(target)) {
+      throw new Error(`testivai.witness: options.context: no context "${wanted}" in this session (contexts: ${contexts.join(', ') || 'none'})`);
+    }
+  }
+
+  const switched = target !== current && current.length > 0;
+  if (target !== current) await browser.switchContext(target);
+  try {
+    await run(target === 'NATIVE_APP');
+  } catch (err) {
+    // Back where the test was; the capture error is the one that matters.
+    if (switched) await browser.switchContext(current).catch(() => undefined);
+    throw err;
+  }
+  // A failed switch back leaves the session elsewhere: let it surface.
+  if (switched) await browser.switchContext(current);
+}
+
+/** One capture in the session's current context: native mode or a page. */
+async function capture(browser: WitnessBrowser, name: string, options: WitnessOptions): Promise<void> {
   if (await isNativeCapture(browser, options.native)) {
     return witnessNative(browser, name, options);
   }

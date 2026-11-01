@@ -33,7 +33,7 @@
  */
 
 import * as assert from 'assert';
-import { execFileSync, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -43,66 +43,14 @@ import { remote } from 'webdriverio';
 import { BaselineStore, generateReport } from '@testivai/witness';
 import { witness } from '@testivai/witness-webdriverio';
 
+import { adb, appInFront, checklist, demo, differingPixels, meanLuma, prepareDevice, restoreDevice, sleep } from './android-helpers';
+
 const OUT = process.env.TESTIVAI_ANDROID_OUT ?? fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-android-out-'));
 const CLI = path.join(path.dirname(require.resolve('@testivai/witness')), 'bin', 'testivai.js');
 
 const summary: Record<string, unknown> = { steps: [] as unknown[] };
 const steps = summary.steps as unknown[];
-const failures: string[] = [];
-
-function adb(...args: string[]): string {
-  return execFileSync('adb', args, { encoding: 'utf-8' }).trim();
-}
-
-function demo(command: string, ...extras: string[]): void {
-  adb('shell', 'am', 'broadcast', '-a', 'com.android.systemui.demo', '-e', 'command', command, ...extras);
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * The focused window now. `dumpsys window displays`, not the full dump: that
- * one starts with the window state frozen at the last ANR (a slow boot leaves
- * the launcher's), so its first mCurrentFocus can be stale.
- */
-function focusedWindow(): string {
-  const line = adb('shell', 'dumpsys', 'window', 'displays')
-    .split('\n')
-    .find((l) => l.includes('mCurrentFocus='));
-  return (line ?? '').trim();
-}
-
-/** Mean luma (0–255) of a capture below the status bar. */
-function meanLuma(png: PNG, top: number): number {
-  let sum = 0;
-  let n = 0;
-  for (let y = top; y < png.height; y += 4) {
-    for (let x = 0; x < png.width; x += 4) {
-      const i = (y * png.width + x) * 4;
-      sum += 0.299 * png.data[i] + 0.587 * png.data[i + 1] + 0.114 * png.data[i + 2];
-      n++;
-    }
-  }
-  return n ? sum / n : 0;
-}
-
-/** Pixels that differ between two same-size captures, above and below a row. */
-function differingPixels(a: PNG, b: PNG, splitY: number): { above: number; below: number } {
-  const out = { above: 0, below: 0 };
-  if (a.width !== b.width || a.height !== b.height) return { above: -1, below: -1 };
-  for (let i = 0; i < a.data.length; i += 4) {
-    if (a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1] || a.data[i + 2] !== b.data[i + 2]) {
-      if (Math.floor(i / 4 / a.width) < splitY) out.above++;
-      else out.below++;
-    }
-  }
-  return out;
-}
-
-function expect(condition: boolean, what: string): void {
-  if (!condition) failures.push(what);
-  console.log(`[android] ${condition ? '✓' : '✗'} ${what}`);
-}
+const { expect, failures } = checklist('android');
 
 async function main(): Promise<void> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-android-'));
@@ -110,17 +58,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(root, '.testivai', 'config.json'), JSON.stringify({ autoOpen: false }));
   process.chdir(root);
 
-  // No new crash or "not responding" dialogs over the app (a slow CI boot
-  // leaves the launcher not responding), then freeze the status bar with
-  // demo mode, clock at 12:00.
-  adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
-  adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
-  demo('enter');
-  demo('clock', '-e', 'hhmm', '1200');
-  demo('notifications', '-e', 'visible', 'false');
-  demo('battery', '-e', 'level', '100', '-e', 'plugged', 'false');
-  demo('network', '-e', 'wifi', 'show', '-e', 'level', '4');
-  adb('shell', 'cmd', 'uimode', 'night', 'no');
+  prepareDevice();
 
   const session = await remote({
     hostname: '127.0.0.1',
@@ -172,38 +110,13 @@ async function main(): Promise<void> {
       },
     };
 
-    // Settings in front, or the run says nothing: dismiss a "not
-    // responding" dialog (its Wait button), else open Settings again.
-    const settingsInFront = async (step: string) => {
-      const actions: string[] = [];
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const focus = focusedWindow();
-        if (focus.includes('com.android.settings/')) return { focus, actions };
-        if (/Not Responding/i.test(focus)) {
-          try {
-            const wait = await session.findElement('-android uiautomator', 'new UiSelector().text("Wait")');
-            await session.elementClick(Object.values(wait as Record<string, string>)[0]);
-            actions.push(`tapped Wait on: ${focus}`);
-          } catch {
-            adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
-            actions.push(`pressed Back on: ${focus}`);
-          }
-        } else {
-          adb('shell', 'am', 'start', '-W', '-n', 'com.android.settings/.Settings');
-          actions.push(`opened Settings over: ${focus}`);
-        }
-        await sleep(2000);
-      }
-      throw new Error(`fixture: ${step}: Settings is not the focused window (${focusedWindow()}); actions: ${actions.join('; ')}`);
-    };
-
     const store = new BaselineStore(root);
     const tempDir = path.join(root, '.testivai', 'temp', NAME);
     fs.mkdirSync(path.join(OUT, 'steps'), { recursive: true });
     const pngs: Record<string, PNG> = {};
     const capture = async (step: string) => {
       await sleep(2000);
-      const front = await settingsInFront(step);
+      const front = await appInFront(session, 'com.android.settings', 'com.android.settings/.Settings', step);
       scripts.length = 0;
       const retriesBefore = retries;
       const started = Date.now();
@@ -283,12 +196,7 @@ async function main(): Promise<void> {
 
     fs.cpSync(path.join(root, 'visual-report'), path.join(OUT, 'visual-report'), { recursive: true });
   } finally {
-    try {
-      adb('shell', 'cmd', 'uimode', 'night', 'no');
-      demo('exit');
-    } catch {
-      // the emulator is thrown away anyway
-    }
+    restoreDevice();
     await session.deleteSession().catch(() => {});
     summary.failures = failures;
     fs.mkdirSync(OUT, { recursive: true });

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A hybrid app in its smallest form: one native screen (the system action bar)
+  around a WebView that shows assets/index.html. Built in CI by
+  e2e/scripts/build-webview-apk.sh; used by e2e/src/android-webview.ts.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ai.testiv.webviewfixture">
+    <application android:label="TestivAI WebView fixture">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

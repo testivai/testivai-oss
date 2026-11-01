@@ -34,6 +34,12 @@ export interface WitnessBrowser {
    * browser, to tell a native screen from a hybrid app's web view.
    */
   getContext?(): Promise<unknown>;
+
+  /** Appium's contexts (WebdriverIO's `browser.getContexts()`), for `options.context`. */
+  getContexts?(): Promise<unknown[]>;
+
+  /** Switch Appium's context (WebdriverIO's `browser.switchContext()`), for `options.context`. */
+  switchContext?(context: string): Promise<unknown>;
 }
 
 /**
@@ -90,6 +96,16 @@ export interface WitnessOptions {
    * `mobile: viewportRect`, measured at capture time). Default: true.
    */
   maskStatusBar?: boolean;
+  /**
+   * Capture in another Appium context for this call, then switch back (also
+   * when the capture fails). `'webview'` is the app's web view: the one
+   * named after the app's package, else the first `WEBVIEW_…` context. Any
+   * other value is an exact context name (`'WEBVIEW_com.example.app'`,
+   * `'NATIVE_APP'`). For a hybrid app driven in the native context, this
+   * captures its web view as a page, with every layer. Needs WebView
+   * debugging enabled in the app's build.
+   */
+  context?: 'webview' | (string & {});
 }
 
 /**

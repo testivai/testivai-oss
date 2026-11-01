@@ -88,6 +88,7 @@ bar is not masked.
 | `native` | detected | `true` forces native mode, `false` keeps the web path |
 | `maskStatusBar` | `true` | `false` leaves the status bar in the comparison |
 | `variant` | the device key | replaces `<platform>-<device>-<osMajor>` in the name |
+| `context` | the current context | `'webview'` or an exact context name: capture there for this call, then switch back ([Hybrid apps](#hybrid-apps-web-views)) |
 
 ```ts
 await witness(browser, 'login', { variant: 'pixel-7-api-34' });
@@ -150,6 +151,59 @@ draws the screen.
 
 ---
 
+## Hybrid apps: web views
+
+A hybrid app (Capacitor, Ionic, or a native app with an embedded web screen)
+shows pages in a WebView. In the WebView's context, `witness()` captures a
+page, with every layer: DOM diff, style check, attribution and shift
+detection. Switch to it yourself, or let `witness()` do it for one call:
+
+```ts
+// Switch yourself: witness() sees a web view and takes the web path.
+await browser.switchContext('WEBVIEW_com.example.app');
+await witness(browser, 'checkout');
+
+// Or stay in the native context: witness() switches in, captures, switches back.
+await witness(browser, 'checkout', { context: 'webview' });
+```
+
+`context: 'webview'` takes the web view named after the app's package
+(`WEBVIEW_<package>` on Android), else the first one (iOS numbers them,
+`WEBVIEW_8410.1`); any other value is an exact context name. It switches back
+afterwards, also when the capture fails. Without it, a capture in the
+`NATIVE_APP` context is a native capture: pixel-only, keyed by device.
+
+The app's build must have WebView debugging on (Android
+`WebView.setWebContentsDebuggingEnabled(true)`, iOS `isInspectable`); without
+it Appium lists no web view, and `context: 'webview'` fails naming the
+contexts it found. On Android, Appium also needs a chromedriver that matches
+the WebView's Chrome version: start it with
+`--allow-insecure uiautomator2:chromedriver_autodownload`, or set
+`appium:chromedriverExecutable`.
+
+The capture is the web view only, in device pixels (1082×2056 for a 412×783
+viewport on a Pixel 7 profile): no status bar, no native toolbar. The
+snapshot is not keyed by device, so give a `variant` when you run several.
+
+Measured on an Android 14 emulator (WebView 113) with a one-screen fixture
+app, against an approved capture of the unchanged page:
+
+| Change | Reads as |
+|---|---|
+| Nothing | passed, 0 px |
+| A button colour changed through the stylesheet | changed; DOM unchanged; style check mismatch on the button |
+| The title text | changed; one text change in the DOM diff |
+| A 60 px banner inserted at the top | changed; the content below reads as a shift of 157–158 px (60 × 2.625), in 15–17 regions |
+| The same screen from `NATIVE_APP`, no option | a native capture, pixel-only, keyed by device |
+| `context: 'webview'` from `NATIVE_APP` | passed against the web view's baseline; the session is back in `NATIVE_APP` |
+
+Much of a Capacitor or Ionic app's UI can be tested with no device, on
+Playwright's phone profiles ([Mobile web](./mobile-web.md)). The device adds
+the real WebView engine, native plugins and screens reachable only inside the
+app.
+
+---
+
 ## Limits
 
 | Limit | What happens | What to do |
@@ -161,6 +215,8 @@ draws the screen.
 | **iOS** | Not verified. XCUITest offers `mobile: viewportRect`, so the code path is the Android one. | Report what you see in a GitHub issue. |
 | **Other languages** | Only the WebdriverIO adapter has native mode. The Java, Python and Ruby adapters capture web pages. | Use WebdriverIO for native screens. |
 | **Navigation bar, notches, rotation** | Only the top status bar is masked. The bar's height is measured at each capture, so rotation is followed. | Mask the bottom bar with a config mask if it changes. |
+| **Status bar height reported short (Android)** | In 1 of the first 5 emulator runs, Appium reported a 63 px status bar (the 24 dp default) where the bar drew 136 px tall (Pixel 7 profile, camera cutout). The mask then missed part of the clock, and a clock change read as changed. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
+| **WebView apps on Google APIs emulators** | Soon after boot, Android killed the WebView app when Google Play Services restarted ("depends on provider … FontsProvider in dying proc com.google.android.gms"), and the web view context vanished. | Let the emulator settle after boot, or relaunch the app and switch again. |
 
 ---
 
@@ -180,8 +236,14 @@ draws the screen.
   snapshot name, that the same screen passes, that a clock change passes with
   the automatic mask alone, and that dark mode is a change that fails
   `testivai report --fail-on-diff`.
-- **Not verified:** iOS, real devices, device farms, apps other than
-  Settings, Android versions other than 14.
+- **The WebView check** (`e2e/src/android-webview.ts`, the same CI job): a
+  fixture app built from `e2e/fixtures/android-webview` (the system action bar
+  around a WebView), every row of the hybrid table above. Soon after boot the
+  emulator lost the app in 2 of the first 4 runs (see Limits); the check
+  relaunches it once and records it.
+- **Not verified:** iOS (native screens and web views), real devices, device
+  farms, apps other than these two, Capacitor or Ionic apps, Android versions
+  other than 14.
 
 ---
 

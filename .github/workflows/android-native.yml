@@ -1,9 +1,14 @@
-# The WebdriverIO adapter's native mode (experimental) on a real Android
-# emulator (Appium 3 + UiAutomator2, Android's own Settings app): no page
-# script runs, the status bar is masked, the device is recorded and keys the
-# snapshot, a clock change passes, dark mode fails the gate. What it checks:
-# e2e/src/android-native.ts. The summary, the step screenshots, the visual
-# report and the Appium log are uploaded as the `android-native` artifact.
+# The WebdriverIO adapter on a real Android emulator (Appium 3 +
+# UiAutomator2), two checks in one emulator session:
+# - native mode (experimental), on Android's own Settings app: no page script
+#   runs, the status bar is masked, the device is recorded and keys the
+#   snapshot, a clock change passes, dark mode fails the gate
+#   (e2e/src/android-native.ts);
+# - a hybrid app's WebView, on a fixture app built here from
+#   e2e/fixtures/android-webview: every layer in the WebView context
+#   (e2e/src/android-webview.ts).
+# The summaries, the step screenshots, the visual reports and the Appium log
+# are uploaded as the `android-native` artifact.
 #
 # GitHub's Linux runners support KVM; the emulator does not run without it.
 
@@ -16,8 +21,10 @@ on:
     paths:
       - 'packages/webdriverio/**'
       - 'packages/witness/src/**'
-      - 'e2e/src/android-native.ts'
+      - 'e2e/src/android-*.ts'
       - 'e2e/scripts/android-native.sh'
+      - 'e2e/scripts/build-webview-apk.sh'
+      - 'e2e/fixtures/android-webview/**'
       - '.github/workflows/android-native.yml'
 
 permissions:
@@ -60,16 +67,20 @@ jobs:
           appium --version
           appium driver list --installed
 
+      - name: Build the WebView fixture app
+        run: bash e2e/scripts/build-webview-apk.sh "$RUNNER_TEMP/webview-fixture.apk"
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run the check on an Android 14 emulator
+      - name: Run the checks on an Android 14 emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
           TESTIVAI_ANDROID_OUT: ${{ runner.temp }}/android-native
+          TESTIVAI_WEBVIEW_APK: ${{ runner.temp }}/webview-fixture.apk
         with:
           api-level: 34
           target: google_apis
