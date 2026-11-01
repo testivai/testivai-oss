@@ -213,3 +213,40 @@ describe('compareStyleHashes', () => {
     expect(compareStyleHashes(map, [])).toEqual({ status: 'unavailable', changed: [] });
   });
 });
+
+describe('confirmShift: a claimed move must be the same content', () => {
+  const base = { path: 'body > div:nth-of-type(2)', x: 0, y: 100, width: 100, height: 40, styleHash: 'h' };
+  const cand = { ...base, y: 84 };
+  const region = { x: 0, y: 84, width: 100, height: 56, diffPixels: 500, diffPercent: 1 };
+
+  it('a pair the check rejects reads "changed", not "shifted"', () => {
+    const [r] = attributeRegions([region], [base], [cand], () => false);
+    expect(r.classification).toBe('change');
+    expect(r.shift).toBeUndefined();
+    expect(r.elements?.[0].role).toBe('changed');
+  });
+
+  it('a pair the check confirms is still a shift', () => {
+    const [r] = attributeRegions([region], [base], [cand], () => true);
+    expect(r.classification).toBe('shift');
+    expect(r.shift).toEqual({ dx: 0, dy: -16 });
+  });
+
+  it('the check sees the baseline and candidate rects', () => {
+    const seen: unknown[] = [];
+    attributeRegions([region], [base], [cand], (b, c) => {
+      seen.push([b.y, c.y]);
+      return true;
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    for (const call of seen) expect(call).toEqual([100, 84]);
+  });
+
+  it('detectPageShift counts only confirmed moves', () => {
+    const els = [0, 1, 2, 3].map((i) => ({ path: `body > div:nth-of-type(${i + 2})`, x: 0, y: 100 + i * 50, width: 100, height: 40, styleHash: 'h' }));
+    const moved = els.map((e) => ({ ...e, y: e.y - 16 }));
+    expect(detectPageShift(els, moved)).toMatchObject({ dy: -16, count: 4 });
+    expect(detectPageShift(els, moved, 3, () => false)).toBeNull();
+    expect(detectPageShift(els, moved, 3, () => true)).toMatchObject({ dy: -16, count: 4 });
+  });
+});

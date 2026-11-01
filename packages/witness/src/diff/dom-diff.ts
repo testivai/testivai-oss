@@ -364,10 +364,16 @@ function parseOpenTag(raw: string, volatile: Set<string> = new Set()): OpenEvent
   //     stay significant: they encode content, so a change is a change.
   //   - names in the configured volatileAttributes list keep their
   //     presence but drop their value.
+  //   - every attribute of a <script> keeps its presence and drops its
+  //     value: a script never renders (its body is already opaque), and
+  //     its src (a bundle renamed by content hash on every build, as
+  //     Expo's index-<hash>.js), integrity and nonce change without the
+  //     page changing. A script added or removed still counts.
   const keys = Object.keys(attrs).sort();
+  const allVolatile = tag === 'script';
   const attrSig = keys
     .map((k) => {
-      if (volatile.has(k)) return `${k}=*`;
+      if (allVolatile || volatile.has(k)) return `${k}=*`;
       const v = attrs[k];
       return v.startsWith('blob:') ? `${k}=blob:*` : `${k}=${v}`;
     })

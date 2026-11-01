@@ -112,6 +112,14 @@ function bbox(a: Rect, b: Rect): Rect {
   };
 }
 
+/**
+ * Confirms that a pair the maps call a pure move is the same content, moved
+ * (report/shift-check.ts checks the pixels). Paths renumbered by inserted
+ * content can pair an element with a look-alike neighbour: same size and
+ * styles, different content. Without a check the maps' claim stands.
+ */
+export type ShiftCheck = (baseline: Rect, candidate: Rect) => boolean;
+
 const MATCH_COVERAGE = 0.5;
 const MAX_ELEMENTS_PER_REGION = 3;
 
@@ -127,6 +135,7 @@ export function attributeRegions(
   regions: DiffRegion[],
   baselineMap: ElementMapEntry[],
   candidateMap: ElementMapEntry[],
+  confirmShift?: ShiftCheck,
 ): AttributedRegion[] {
   if (baselineMap.length === 0 || candidateMap.length === 0) {
     return regions as AttributedRegion[];
@@ -159,7 +168,8 @@ export function attributeRegions(
         b.width === m.el.width &&
         b.height === m.el.height &&
         b.styleHash === m.el.styleHash &&
-        (b.x !== m.el.x || b.y !== m.el.y)
+        (b.x !== m.el.x || b.y !== m.el.y) &&
+        (!confirmShift || confirmShift(b, m.el))
       ) {
         return { role: 'shifted', dx: m.el.x - b.x, dy: m.el.y - b.y };
       }
@@ -245,6 +255,7 @@ export function detectPageShift(
   baselineMap: ElementMapEntry[],
   candidateMap: ElementMapEntry[],
   minElements = 3,
+  confirmShift?: ShiftCheck,
 ): PageShift | null {
   if (baselineMap.length === 0 || candidateMap.length === 0) return null;
   const baselineByPath = new Map(baselineMap.map((e) => [e.path, e]));
@@ -257,7 +268,7 @@ export function detectPageShift(
     }
     const dx = el.x - b.x;
     const dy = el.y - b.y;
-    if (dx === 0 && dy !== 0) moved.push({ dy, baselineY: b.y });
+    if (dx === 0 && dy !== 0 && (!confirmShift || confirmShift(b, el))) moved.push({ dy, baselineY: b.y });
   }
   if (moved.length < minElements) return null;
 

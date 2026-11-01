@@ -20,6 +20,7 @@ import {
 import { playwrightBrowserName, playwrightEnvironment } from './capture/environment';
 import { probeCaptureHealth, recordCaptureHealth } from './capture/health';
 import { captureFullPageScreenshot } from './capture/full-page';
+import { readEmulation, restoreEmulation, withCapturedScale } from './capture/emulation';
 
 /**
  * Generates a safe filename from a URL.
@@ -97,6 +98,9 @@ export async function snapshot(
   // recorded as capture provenance, and its user agent names the engine for
   // environmentPolicy "separate" when the project does not.
   const renderProbe: unknown = await page.evaluate(RENDER_PROBE_EXPRESSION).catch(() => null);
+  // The device emulation before the capture, which the CDP capture drops
+  // (capture/emulation.ts); restored once everything is measured.
+  const emulationBefore = await readEmulation(page);
   const localConfig = loadLocalConfig(process.cwd());
   const environmentPolicy = localConfig.environmentPolicy;
   const snapshotName = applyEnvironmentPolicyToName(
@@ -314,6 +318,11 @@ export async function snapshot(
       await page.evaluate(`window.scrollTo(0, ${scrollableInfo.scrollTop})`);
     }
   }
+  } else if (!hasCdp(page)) {
+    // WebKit and Firefox have no CDP: Playwright's own full-page screenshot
+    // is the capture there, not a fallback from a failure.
+    captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
+    await page.screenshot({ path: screenshotPath, fullPage: true });
   } else {
     // Use browser capture approach (default)
     if (process.env.TESTIVAI_DEBUG === 'true') {
@@ -371,7 +380,11 @@ export async function snapshot(
       await client.detach();
       
     } catch (error: any) {
-      console.error('[TestivAI] Browser screenshot failed:', error.message);
+      // An engine we could not name (a persistent context has no browser())
+      // answers that CDP is Chromium-only: the expected path, not a failure.
+      if (!/only available in Chromium/i.test(String(error?.message))) {
+        console.error('[TestivAI] Browser screenshot failed:', error.message);
+      }
       // Fallback to regular screenshot
       captureMethod = CAPTURE_METHODS.PLAYWRIGHT_FULL_PAGE;
       await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -387,6 +400,9 @@ export async function snapshot(
   // fell back leaves the DOM and the declared styles the same, so only this
   // tells an unhealthy capture from render noise. Recorded with the metadata.
   const captureHealth = await probeCaptureHealth(page as unknown as { evaluate(expression: string): Promise<unknown> });
+  // The pixel ratio the image was rendered at (1 after a CDP capture,
+  // whatever the profile says): recorded with the capture's provenance.
+  const emulationAtCapture = await readEmulation(page);
 
   // Restore any elements hidden for ignoreSelectors
   if (ignoreStyleEl) {
@@ -510,7 +526,12 @@ export async function snapshot(
       } catch {
         // a persistent context has no browser(): the probe's user agent is the fallback
       }
-      const environment = playwrightEnvironment({ testInfo: testInfo ?? {}, browserVersion, probe: renderProbe, captureMethod });
+      const environment = playwrightEnvironment({
+        testInfo: testInfo ?? {},
+        browserVersion,
+        probe: withCapturedScale(renderProbe, emulationAtCapture),
+        captureMethod,
+      });
       new BaselineStore(process.cwd()).writeTempMetadata(snapshotName, { name: snapshotName, environment });
     } catch {
       // no environment only means the compare cannot tell drift from noise for this capture
@@ -540,8 +561,26 @@ export async function snapshot(
       // missing elements.json only disables attribution for this capture
     }
   }
+
+  // Last, after everything measured in the page at the capture's scale:
+  // put back the device emulation the CDP capture dropped.
+  await restoreEmulation(page, emulationBefore);
 }
 
+
+/**
+ * Whether the page's engine can have a CDP session. False only when the
+ * browser names an engine other than Chromium; unknown (no browser(), as in a
+ * persistent context) is tried, and its answer handled where it fails.
+ */
+function hasCdp(page: Page): boolean {
+  try {
+    const name = page.context().browser()?.browserType().name();
+    return name === undefined || name === 'chromium';
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Read the global `mask` list from .testivai/config.json (selector strings

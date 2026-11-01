@@ -24,6 +24,7 @@ import { normalizeElementIdAttributes } from '../capture/element-map';
 import { diffEnvironments } from './environment';
 import { healthAllowsTolerances, isUnhealthyCapture, snapshotCaptureHealth } from './health';
 import { type RgbaImage, renderThumbnail, thumbnailArea } from './thumbnail';
+import { makeShiftCheck } from './shift-check';
 import {
   attributeRegions,
   compareStyleHashes,
@@ -284,10 +285,13 @@ export function compareAll(options: CompareOptions): SnapshotResult[] {
         if (isUnhealthyCapture(result)) domSignal.noiseHint = false;
         result.dom = domSignal;
       }
+      // A claimed move must be the same content, moved: paths renumbered by
+      // inserted content can pair look-alike neighbours (shift-check.ts).
+      const confirmShift = pixels ? makeShiftCheck(pixels.baseline, pixels.current, threshold, result.masks ?? []) : undefined;
       if (result.regions && result.regions.length > 0) {
-        result.regions = attributeRegions(result.regions, baselineElements, candidateElements);
+        result.regions = attributeRegions(result.regions, baselineElements, candidateElements, confirmShift);
       }
-      const pageShift = detectPageShift(baselineElements, candidateElements);
+      const pageShift = detectPageShift(baselineElements, candidateElements, undefined, confirmShift);
       if (pageShift) {
         result.pageShift = pageShift;
       }
