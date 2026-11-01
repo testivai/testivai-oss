@@ -55,15 +55,19 @@ function findChrome(): string | null {
 }
 
 function serve(): Promise<{ server: http.Server; base: string }> {
+  // A fixed set of pages, read up front: no path is built from the request.
+  const pages = new Map(
+    ['mixed.html', 'rnw.html', 'escape.html'].map((name) => [`/${name}`, fs.readFileSync(path.join(FIXTURES, name))]),
+  );
   const server = http.createServer((req, res) => {
-    const file = (req.url ?? '').split('?')[0].replace(/^\//, '');
-    if (!/^[a-z-]+\.html$/.test(file) || !fs.existsSync(path.join(FIXTURES, file))) {
+    const body = pages.get((req.url ?? '').split('?')[0]);
+    if (!body) {
       res.writeHead(404);
       res.end();
       return;
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(fs.readFileSync(path.join(FIXTURES, file)));
+    res.end(body);
   });
   return new Promise((resolve) =>
     server.listen(0, '127.0.0.1', () => resolve({ server, base: `http://127.0.0.1:${(server.address() as AddressInfo).port}` })),
