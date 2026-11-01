@@ -13,7 +13,7 @@ import * as path from 'path';
 import type { Page, TestInfo } from '@playwright/test';
 import { BaselineStore, RENDER_PROBE_EXPRESSION } from '@testivai/witness';
 
-interface State { dpr: number; touch: number; calls: string[] }
+interface State { dpr: number; touch: number; coarse?: boolean; calls: string[] }
 const mockState: { current: State | null } = { current: null };
 
 jest.mock('../../capture/full-page', () => ({
@@ -24,6 +24,7 @@ jest.mock('../../capture/full-page', () => ({
       // What Chrome does to the page's emulation.
       s.dpr = 1;
       s.touch = 0;
+      s.coarse = false;
     }
     const mockSharp = jest.requireActual('sharp');
     return mockSharp({ create: { width: 100, height: 50, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
@@ -48,11 +49,14 @@ function fakePage(state: State): Page {
       lastSent = key;
       state.calls.push(`setViewportSize:${key}`);
       state.dpr = 2.625;
+      // As in the Chrome on CI: `pointer: coarse` is worked out when the
+      // device metrics are applied, from the touch emulation at that moment.
+      state.coarse = state.touch > 0;
     },
     addStyleTag: async () => ({ evaluate: async () => {} }),
     waitForTimeout: async () => {},
     evaluate: async (arg: unknown) => {
-      if (arg === EMULATION_PROBE) return { dpr: state.dpr, maxTouchPoints: state.touch };
+      if (arg === EMULATION_PROBE) return { dpr: state.dpr, maxTouchPoints: state.touch, coarsePointer: state.coarse ?? false };
       if (arg === RENDER_PROBE_EXPRESSION) return { viewport: { width: 412, height: 839 }, deviceScaleFactor: state.dpr };
       if (typeof arg === 'string' && arg.includes('function collectElementMap')) {
         state.calls.push(`elementMap@dpr${state.dpr}`);
@@ -99,12 +103,13 @@ describe('witness(): device emulation after a CDP capture', () => {
   });
 
   it('a phone profile: pixel ratio and touch restored after the element map; metadata records the 1× capture', async () => {
-    const state: State = { dpr: 2.625, touch: 1, calls: [] };
+    const state: State = { dpr: 2.625, touch: 1, coarse: true, calls: [] };
     mockState.current = state;
     await snapshot(fakePage(state), info, 'home');
 
     expect(state.dpr).toBe(2.625);
     expect(state.touch).toBe(1);
+    expect(state.coarse).toBe(true);
     const map = state.calls.indexOf('elementMap@dpr1');
     expect(map).toBeGreaterThan(-1);
     expect(state.calls.indexOf('setViewportSize:412x839')).toBeGreaterThan(map);
@@ -127,7 +132,7 @@ describe('witness(): device emulation after a CDP capture', () => {
   });
 
   it('two captures in one test: the second is taken under the restored emulation and records the same scale', async () => {
-    const state: State = { dpr: 2.625, touch: 1, calls: [] };
+    const state: State = { dpr: 2.625, touch: 1, coarse: true, calls: [] };
     mockState.current = state;
     const page = fakePage(state);
     await snapshot(page, info, 'first');
@@ -135,6 +140,7 @@ describe('witness(): device emulation after a CDP capture', () => {
     expect(state.calls.filter((c) => c === 'capture')).toHaveLength(2);
     expect(state.dpr).toBe(2.625);
     expect(state.touch).toBe(1);
+    expect(state.coarse).toBe(true);
     // One session restores touch for the page, reused by the second capture.
     expect(touchSessions(state.calls)).toHaveLength(1);
     const store = new BaselineStore(root);

@@ -20,17 +20,20 @@ import type { CDPSession, Page } from '@playwright/test';
 export interface EmulationState {
   dpr: number;
   maxTouchPoints: number;
+  /** `(pointer: coarse)`: what touch emulation means to the page's CSS. */
+  coarsePointer: boolean;
 }
 
 /** Evaluated in the page; a self-contained expression. */
-export const EMULATION_PROBE = '({ dpr: window.devicePixelRatio, maxTouchPoints: navigator.maxTouchPoints })';
+export const EMULATION_PROBE =
+  "({ dpr: window.devicePixelRatio, maxTouchPoints: navigator.maxTouchPoints, coarsePointer: window.matchMedia('(pointer: coarse)').matches })";
 
 /** The page's pixel ratio and touch points, or null when the page cannot say. */
 export async function readEmulation(page: Pick<Page, 'evaluate'>): Promise<EmulationState | null> {
   try {
     const raw = (await page.evaluate(EMULATION_PROBE)) as Partial<EmulationState> | null;
     if (raw && typeof raw.dpr === 'number' && typeof raw.maxTouchPoints === 'number') {
-      return { dpr: raw.dpr, maxTouchPoints: raw.maxTouchPoints };
+      return { dpr: raw.dpr, maxTouchPoints: raw.maxTouchPoints, coarsePointer: raw.coarsePointer === true };
     }
   } catch {
     // a page that cannot be evaluated has nothing to restore
@@ -56,16 +59,11 @@ export async function restoreEmulation(page: Page, before: EmulationState | null
   if (!before) return;
   const now = await readEmulation(page);
   if (!now) return;
+  if (now.dpr === before.dpr && now.maxTouchPoints === before.maxTouchPoints && now.coarsePointer === before.coarsePointer) return;
   try {
-    if (now.dpr !== before.dpr) {
-      // Playwright does not send a viewport equal to the last one it set, so
-      // re-applying the same size does nothing: step 1 px away and back.
-      const viewport = page.viewportSize();
-      if (viewport) {
-        await page.setViewportSize({ width: viewport.width, height: viewport.height + 1 });
-        await page.setViewportSize(viewport);
-      }
-    }
+    // Touch first: some Chrome versions work out `pointer: coarse` when the
+    // device metrics are applied, from the touch emulation at that moment
+    // (seen on CI's Chrome: touch back, `pointer: coarse` still false).
     if (before.maxTouchPoints > 0 && now.maxTouchPoints !== before.maxTouchPoints) {
       let session = touchSessions.get(page);
       if (!session) {
@@ -73,6 +71,14 @@ export async function restoreEmulation(page: Page, before: EmulationState | null
         touchSessions.set(page, session);
       }
       await session.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: before.maxTouchPoints });
+    }
+    // Then the device metrics. Playwright does not send a viewport equal to
+    // the last one it set, so re-applying the same size does nothing: step
+    // 1 px away and back.
+    const viewport = page.viewportSize();
+    if (viewport) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height + 1 });
+      await page.setViewportSize(viewport);
     }
   } catch {
     // the capture is written; a page we cannot restore stays as Chrome left it
