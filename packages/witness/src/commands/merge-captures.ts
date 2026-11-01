@@ -28,6 +28,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MERGE_RECORD, type MergeRecord } from '../capture/shard';
 
 /** A directory is a capture if it holds the file every capture must have. */
 function isCaptureDir(dir: string): boolean {
@@ -158,6 +159,16 @@ export function mergeCaptures(
     shardTotal === null
       ? []
       : Array.from({ length: shardTotal }, (_, i) => i + 1).filter((i) => !shardsSeen.includes(i));
+
+  // Say whether the merge is the whole suite, beside the captures (shard.ts).
+  const record: MergeRecord = {
+    shardTotal,
+    shardsSeen,
+    shardsMissing,
+    merged: seen.size,
+    timestamp: new Date().toISOString(),
+  };
+  fs.writeFileSync(path.join(destTemp, MERGE_RECORD), JSON.stringify(record, null, 2));
 
   return {
     merged: [...seen.keys()].sort(),

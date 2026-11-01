@@ -100,8 +100,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install chromium
       - run: npx playwright test
-      - uses: testivai/testivai-action@v1
-        if: always()
+      # After a failing test too: the reporter writes the report whatever
+      # the tests did, and the action posts it.
+      - uses: testivai/testivai-oss@v1
+        if: ${{ !cancelled() }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report

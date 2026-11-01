@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { mergeCaptures } from '../../commands/merge-captures';
+import { MERGE_RECORD } from '../../capture/shard';
 
 function writeManifest(dir: string, current: number, total: number): void {
   fs.mkdirSync(dir, { recursive: true });
@@ -211,6 +212,59 @@ describe('mergeCaptures', () => {
 
       expect(r.merged).toEqual(['home']);
       expect(r.shardTotal).toBeNull();
+    });
+  });
+
+  /**
+   * The merge record in the destination: whether every shard reported. When
+   * the merge fails, the comparison after it does not run, and the GitHub
+   * Action (run after a failure too) reads this to know the captures it finds
+   * in .testivai/temp/ are part of the suite, and not compare them.
+   */
+  describe('merge record', () => {
+    const readRecord = () => JSON.parse(fs.readFileSync(path.join(dest, MERGE_RECORD), 'utf-8'));
+
+    it('names the shards that never reported', () => {
+      const collected = path.join(root, 'collected');
+      for (const i of [1, 2, 3]) {
+        const d = path.join(collected, `captures-${i}`);
+        makeCapture(d, `page-${i}`);
+        writeManifest(d, i, 4);
+      }
+
+      mergeCaptures([collected], dest);
+
+      expect(readRecord()).toMatchObject({ shardTotal: 4, shardsSeen: [1, 2, 3], shardsMissing: [4], merged: 3 });
+    });
+
+    it('says every shard reported when they all did', () => {
+      const collected = path.join(root, 'collected');
+      for (const i of [1, 2]) {
+        const d = path.join(collected, `captures-${i}`);
+        makeCapture(d, `page-${i}`);
+        writeManifest(d, i, 2);
+      }
+
+      mergeCaptures([collected], dest);
+
+      expect(readRecord()).toMatchObject({ shardTotal: 2, shardsSeen: [1, 2], shardsMissing: [], merged: 2 });
+    });
+
+    it('records an unsharded merge with no shard total', () => {
+      makeCapture(path.join(root, 'collected', 'temp-shard-1'), 'home');
+
+      mergeCaptures([path.join(root, 'collected')], dest);
+
+      expect(readRecord()).toMatchObject({ shardTotal: null, shardsMissing: [], merged: 1 });
+    });
+
+    it('is a file beside the captures, never a capture itself', () => {
+      makeCapture(path.join(root, 'collected', 'temp-shard-1'), 'home');
+
+      mergeCaptures([path.join(root, 'collected')], dest);
+
+      expect(fs.statSync(path.join(dest, MERGE_RECORD)).isFile()).toBe(true);
+      expect(fs.readdirSync(dest, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)).toEqual(['home']);
     });
   });
 });

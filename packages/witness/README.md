@@ -295,6 +295,7 @@ jobs:
         run: testivai run "npm test"
 
       - name: Visual diff gate
+        if: ${{ !cancelled() }}   # after a failing test too
         run: npx testivai report --fail-on-diff
 ```
 
@@ -327,8 +328,14 @@ pipeline {
     stage('Visual Tests') {
       steps {
         sh 'testivai run "npm test"'
-        sh 'npx testivai report --fail-on-diff'
       }
+    }
+  }
+
+  post {
+    // After a failing test too; a changed snapshot fails the build here.
+    always {
+      sh 'npx testivai report --fail-on-diff'
     }
   }
 }

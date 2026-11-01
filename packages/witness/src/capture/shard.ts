@@ -23,6 +23,25 @@ export interface ShardInfo {
 
 export const SHARD_MANIFEST = 'testivai-shard.json';
 
+/**
+ * Written by `merge-captures` beside the captures it merged: whether every
+ * shard reported. When one did not, the merge fails and the comparison after
+ * it does not run; the GitHub Action, which runs after a failure too, reads
+ * this so it never compares part of the suite as if it were the whole.
+ */
+export const MERGE_RECORD = 'testivai-merge.json';
+
+export interface MergeRecord {
+  /** The shard total the manifests declare (or --expect); null for an unsharded merge. */
+  shardTotal: number | null;
+  shardsSeen: number[];
+  /** Shards that never reported: the merged captures are part of the suite. */
+  shardsMissing: number[];
+  /** How many captures were merged. */
+  merged: number;
+  timestamp: string;
+}
+
 /** Parse `TESTIVAI_SHARD` in either `3/8` or `3of8` form. Invalid → null. */
 export function parseShardEnv(value: string | undefined): ShardInfo | null {
   if (!value) return null;

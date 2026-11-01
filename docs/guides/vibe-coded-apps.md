@@ -89,7 +89,7 @@ jobs:
           npx testivai witness http://localhost:3000
       - name: Post results
         uses: testivai/testivai-oss@v1
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report

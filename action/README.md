@@ -23,7 +23,7 @@ jobs:
 
       # Post results to PR (always runs so a failed test still gets a report)
       - uses: testivai/testivai-oss@v1
-        if: always()
+        if: ${{ !cancelled() }}   # after a failing test too
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report

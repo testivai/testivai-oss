@@ -27,8 +27,8 @@ export { collectElementMap, buildElementMapExpression, DEFAULT_MAX_ELEMENTS } fr
 export type { CollectedElement } from './capture/element-map';
 
 // Shard participation — the env-var contract every adapter honours.
-export { parseShardEnv, resolveCaptureOnly, writeShardManifest, SHARD_MANIFEST } from './capture/shard';
-export type { ShardInfo, ShardManifest } from './capture/shard';
+export { parseShardEnv, resolveCaptureOnly, writeShardManifest, SHARD_MANIFEST, MERGE_RECORD } from './capture/shard';
+export type { ShardInfo, ShardManifest, MergeRecord } from './capture/shard';
 
 // Page-settled probe — shared by every adapter.
 export {

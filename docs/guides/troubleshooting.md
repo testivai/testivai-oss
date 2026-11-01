@@ -140,6 +140,7 @@ Lines are prefixed with `[TestivAI]`:
 | Error | Cause | Solution |
 |-------|-------|----------|
 | "results.json not found" | Tests didn't run before `testivai report` | Run your test suite first (captures land in `.testivai/temp/`) |
+| PR comment says "No visual report for this run" | The run left no `results.json` and nothing the action could compare: the tests failed before any capture, or a shard is missing | Run the compare step and the action with `if: ${{ !cancelled() }}`; see [When a run has no `results.json`](../github-action.md#when-a-run-has-no-resultsjson) |
 | "Browser connection failed" | Chrome not running | Start Chrome with --remote-debugging-port |
 | "Snapshot timeout" | Page loading too slow | Increase timeout or check page |
 
