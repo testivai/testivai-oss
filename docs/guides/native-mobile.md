@@ -215,7 +215,7 @@ app.
 | **iOS** | Not verified. XCUITest offers `mobile: viewportRect`, so the code path is the Android one. | Report what you see in a GitHub issue. |
 | **Other languages** | Only the WebdriverIO adapter has native mode. The Java, Python and Ruby adapters capture web pages. | Use WebdriverIO for native screens. |
 | **Navigation bar, notches, rotation** | Only the top status bar is masked. The bar's height is measured at each capture, so rotation is followed. | Mask the bottom bar with a config mask if it changes. |
-| **Status bar height reported short (Android)** | In 1 of 4 emulator runs, Appium reported a 63 px status bar (the 24 dp default) where the bar drew 136 px tall (Pixel 7 profile, camera cutout). The mask then missed part of the clock, and a clock change read as changed. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
+| **Status bar height reported short (Android)** | In 1 of the first 5 emulator runs, Appium reported a 63 px status bar (the 24 dp default) where the bar drew 136 px tall (Pixel 7 profile, camera cutout). The mask then missed part of the clock, and a clock change read as changed. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
 | **WebView apps on Google APIs emulators** | Soon after boot, Android killed the WebView app when Google Play Services restarted ("depends on provider … FontsProvider in dying proc com.google.android.gms"), and the web view context vanished. | Let the emulator settle after boot, or relaunch the app and switch again. |
 
 ---
@@ -239,8 +239,8 @@ app.
 - **The WebView check** (`e2e/src/android-webview.ts`, the same CI job): a
   fixture app built from `e2e/fixtures/android-webview` (the system action bar
   around a WebView), every row of the hybrid table above. Soon after boot the
-  emulator lost the app in 2 of 3 runs (see Limits); the check relaunches it
-  once and records it.
+  emulator lost the app in 2 of the first 4 runs (see Limits); the check
+  relaunches it once and records it.
 - **Not verified:** iOS (native screens and web views), real devices, device
   farms, apps other than these two, Capacitor or Ionic apps, Android versions
   other than 14.
