@@ -71,15 +71,27 @@ the context cannot be read, a session started with `app`, `appPackage` or
 
 | Part | Native mode | Why |
 |---|---|---|
-| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture; in native mode a capture there takes 0.5–1 s. |
+| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture; in native mode a capture there took 0.4–1.8 s, the status bar reading included. |
 | Screenshot | the whole screen, in physical pixels (1080×2400 on a Pixel 7 profile) | Appium's `takeScreenshot()` |
-| Status bar | masked, from `mobile: viewportRect` at capture time (136 px on that profile) | the clock, battery and signal change between runs |
+| Status bar | masked, measured at capture time: on Android the bar's frame in the window manager, `mobile: getSystemBars` (136 px on that profile, 74 px in landscape; the call took 45–460 ms); on iOS `mobile: viewportRect` | the clock, battery and signal change between runs |
 | Environment | the device from the capabilities: platform, OS version, model, the Appium driver, screen size, density, pixel ratio | so a device or OS change is listed when pixels differ |
 | Snapshot name | `<name>__<platform>-<device>-<osMajor>` | each device is compared only with its own baseline |
 
 The mask is a per-capture mask (`masks: [{ "top": 136 }]` in the capture's
 `metadata.json`), shown in the report like any other. The bottom navigation
 bar is not masked.
+
+On Android, UiAutomator2 has its own figure for the status bar
+(`mobile: viewportRect`, `statBarHeight`), but it reads it once, when the
+session starts, from a resource of its server app. On the emulator it came
+back 63 px (Android's 24 dp default) for a 136 px bar in 1 of the first 5 CI
+runs, so the mask missed part of the clock. Of the 3 runs whose device log was
+kept, the short one was the only run where the newly installed server app
+started before Android's "package modified" notice for it; three runs do not
+prove that is the cause. That figure also keeps its portrait height after a
+rotation: turned to landscape, it still said 136 px for a 74 px bar, which
+would have hidden 62 rows of the app. The adapter uses it only when
+`mobile: getSystemBars` fails or finds no visible bar.
 
 ### Options
 
@@ -212,10 +224,10 @@ app.
 | **Live values on screen** | Clocks, counters and storage figures inside the app change between runs. In Android's Settings, the storage line changed within minutes. | Mask them (`mask` in `.testivai/config.json`), or seed the app with fixed data. |
 | **Animations, keyboard, scroll** | Native animations are not frozen; an open keyboard or a scrolled list is in the screenshot. | Disable animations on the device (`adb shell settings put global animator_duration_scale 0`, and the window and transition scales), hide the keyboard, scroll to a fixed place before `witness()`. |
 | **Toolchain updates** | A new system image, Xcode or emulator GPU can change every image. The environment lists the device fields that changed. | Re-baseline after a toolchain update. Pin Appium and driver versions in CI. |
-| **iOS** | Not verified. XCUITest offers `mobile: viewportRect`, so the code path is the Android one. | Report what you see in a GitHub issue. |
+| **iOS** | Not verified. The status bar height comes from XCUITest's `mobile: viewportRect`; whether it follows a rotation is not known. | Report what you see in a GitHub issue. |
 | **Other languages** | Only the WebdriverIO adapter has native mode. The Java, Python and Ruby adapters capture web pages. | Use WebdriverIO for native screens. |
-| **Navigation bar, notches, rotation** | Only the top status bar is masked. The bar's height is measured at each capture, so rotation is followed. | Mask the bottom bar with a config mask if it changes. |
-| **Status bar height reported short (Android)** | In 1 of the first 5 emulator runs, Appium reported a 63 px status bar (the 24 dp default) where the bar drew 136 px tall (Pixel 7 profile, camera cutout). The mask then missed part of the clock, and a clock change read as changed. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
+| **Navigation bar, notches, rotation** | Only the top status bar is masked. On Android the bar is measured at each capture, so a rotation is followed (checked in landscape on the emulator: a 74 px bar). An app that hides the status bar (full screen) is not verified. | Mask the bottom bar with a config mask if it changes. |
+| **Status bar fallback (Android)** | When `mobile: getSystemBars` fails (an older driver) or finds no visible bar, the mask comes from UiAutomator2's reading from the session start, which can be short (above) and keeps the portrait height after a rotation. A failed call is not repeated in that session. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
 | **WebView apps on Google APIs emulators** | Soon after boot, Android killed the WebView app when Google Play Services restarted ("depends on provider … FontsProvider in dying proc com.google.android.gms"), and the web view context vanished. | Let the emulator settle after boot, or relaunch the app and switch again. |
 
 ---
@@ -225,17 +237,23 @@ app.
 - **Unit tests** (`packages/webdriverio/src/__tests__/native.test.ts`): fake
   Android and iOS Appium sessions. They check detection (and that browser
   sessions make no extra call), that no page script runs, the mask from
-  `mobile: viewportRect` and its fallbacks, the environment block, the
-  snapshot name, and that a status-bar-only change passes the compare while a
-  change below it does not.
+  `mobile: getSystemBars` on Android (over a short session-start reading, and
+  after a rotation), its fallbacks, `mobile: viewportRect` on iOS, the
+  environment block, the snapshot name, and that a status-bar-only change
+  passes the compare while a change below it does not.
 - **The `Android native` CI job** (`.github/workflows/android-native.yml`,
   on pull requests that touch the adapter or `@testivai/witness`): Android 14
   (API 34) emulator, Pixel 7 profile, Appium 3.9.0 with UiAutomator2 8.7.3,
   Android's Settings app, the clock frozen with demo mode. It checks that no
-  page script runs, the environment and mask in `metadata.json`, the
+  page script runs, the environment in `metadata.json`, that the mask is the
+  window manager's status bar from one `mobile: getSystemBars` call, the
   snapshot name, that the same screen passes, that a clock change passes with
-  the automatic mask alone, and that dark mode is a change that fails
-  `testivai report --fail-on-diff`.
+  the automatic mask alone (its changed rows end inside the bar), and that
+  dark mode is a change that fails `testivai report --fail-on-diff`. Then, in
+  landscape after the session started, that UiAutomator2's reading kept the
+  portrait height while the mask follows the landscape bar, and that a clock
+  change there passes too. Each run records both readings from the session
+  start.
 - **The WebView check** (`e2e/src/android-webview.ts`, the same CI job): a
   fixture app built from `e2e/fixtures/android-webview` (the system action bar
   around a WebView), every row of the hybrid table above. Soon after boot the

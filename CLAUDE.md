@@ -294,7 +294,9 @@ record `browser.name: "native-app"`, `adapter.captureMethod: "screen:appium"` an
 A native screen has no page: no DOM, element map, styles or health, so `dom` is `null`,
 the capture is pixel-only and it is never worded as render noise or rendering drift. The
 adapter masks the status bar per capture (`masks: [{ "top": <px> }]` in the capture's
-`metadata.json`, from `mobile: viewportRect`) and keys the snapshot
+`metadata.json`; Android: the window manager's bar frame at capture time,
+`mobile: getSystemBars`, as UiAutomator2's `mobile: viewportRect` is read once at the
+session start and can be short; iOS: `mobile: viewportRect`) and keys the snapshot
 `<name>__<platform>-<device>-<osMajor>` unless the call gives a `variant`. The device's
 `platform`, `osVersion`, `model`, `screen` and `density` can change rendering; when both
 sides are native, `os` (the machine running the tests) is context.

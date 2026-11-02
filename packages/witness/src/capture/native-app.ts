@@ -118,17 +118,40 @@ export function nativeAppVariant(device: DeviceEnvironment): string {
 /**
  * The status bar's height in screenshot pixels from the session's
  * capabilities (UiAutomator2 returns `viewportRect` and `statBarHeight`), or
- * null. The adapters prefer `mobile: viewportRect`, measured at capture time.
+ * null. UiAutomator2 reads it once, when the session starts, from a resource
+ * of its own server app, so it can be short (63 px for a 136 px bar on an
+ * Android 14 emulator) and does not follow a rotation: on Android the
+ * adapters prefer the window manager's frame (`statusBarFromSystemBars`).
  */
 export function statusBarFromCapabilities(capabilities: unknown): number | null {
   const caps = asRecord(capabilities) ?? {};
   return statusBarFromViewportRect(returned(caps, 'viewportRect')) ?? positive(returned(caps, 'statBarHeight')) ?? null;
 }
 
-/** The top of a viewport rectangle (`mobile: viewportRect`), or null. */
+/**
+ * The top of a viewport rectangle (`mobile: viewportRect`), or null. On
+ * UiAutomator2 its top is the session-start reading above; on XCUITest it is
+ * the iOS source.
+ */
 export function statusBarFromViewportRect(rect: unknown): number | null {
   const top = asRecord(rect)?.top;
   return typeof top === 'number' && Number.isFinite(top) && top > 0 ? Math.round(top) : null;
+}
+
+/**
+ * The bottom of the status bar's window frame in screenshot pixels, from
+ * Appium's Android `mobile: getSystemBars` (`{ statusBar: { visible, x, y,
+ * width, height }, navigationBar }`, read from the window manager when it is
+ * called), or null when the bar is not visible, the driver found none
+ * (it answers a zero frame), or the answer is not that shape.
+ */
+export function statusBarFromSystemBars(bars: unknown): number | null {
+  const bar = asRecord(asRecord(bars)?.statusBar);
+  if (!bar || bar.visible === false) return null;
+  const { y, height } = bar;
+  if (typeof y !== 'number' || typeof height !== 'number' || !Number.isFinite(y) || !Number.isFinite(height)) return null;
+  const bottom = Math.ceil(y + height);
+  return height > 0 && bottom > 0 ? bottom : null;
 }
 
 export interface AppiumEnvironmentInput {

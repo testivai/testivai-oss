@@ -6,9 +6,16 @@
  * failed command three times, so on a real Android 14 emulator each rejected
  * script cost ~1.5 s and one capture ~8 s (e2e/src/android-native.ts, Level 0).
  * Native mode is detected from the capabilities and the current context, and
- * then: no page scripts, the status bar masked from `mobile: viewportRect`,
- * an environment block from the capabilities, and the snapshot keyed by
- * device (`<name>__<platform>-<device>-<osMajor>`).
+ * then: no page scripts, the status bar masked, an environment block from the
+ * capabilities, and the snapshot keyed by device
+ * (`<name>__<platform>-<device>-<osMajor>`).
+ *
+ * The status bar's height: on Android, the window manager's frame of the bar
+ * at capture time (`mobile: getSystemBars`). UiAutomator2's own figure
+ * (`mobile: viewportRect`, `statBarHeight`) is read once, when the session
+ * starts, from a resource of its server app; on the Android 14 emulator it
+ * came back 63 px for a 136 px bar in 1 of the first 5 CI runs, and it does
+ * not follow a rotation. It stays the fallback, and iOS's source.
  *
  * The fake drivers answer as Appium does: page scripts rejected, `mobile:`
  * commands answered, the context from getContext().
@@ -97,6 +104,14 @@ const IOS_CAPS = {
 
 const PAGE_DOM = '<html><body><h1>Hi</h1></body></html>';
 
+/** A `mobile: getSystemBars` answer in the Android driver's shape, with a status bar `height` px tall. */
+function systemBars(height: number, width = 1080): Record<string, unknown> {
+  return {
+    statusBar: { visible: true, x: 0, y: 0, width, height },
+    navigationBar: { visible: true, x: 0, y: 2337, width: 1080, height: 63 },
+  };
+}
+
 interface FakeSession {
   browser: WitnessBrowser;
   /** Every script passed to execute(), in order. */
@@ -106,13 +121,15 @@ interface FakeSession {
 
 /**
  * An Appium session. In NATIVE_APP every page script is rejected, as Appium
- * does; `mobile: viewportRect` answers `viewportRect` (or rejects when it is
- * an Error). In a web view or a browser (WEBVIEW_…, CHROMIUM) page scripts run.
+ * does; `mobile: viewportRect` answers `viewportRect` and
+ * `mobile: getSystemBars` answers `systemBars` (each rejects when it is an
+ * Error). In a web view or a browser (WEBVIEW_…, CHROMIUM) page scripts run.
  */
 function appiumSession(opts: {
   capabilities: Record<string, unknown>;
   context?: string | Error | 'absent';
   viewportRect?: Record<string, number> | Error;
+  systemBars?: Record<string, unknown> | Error;
   screenshot?: string;
 }): FakeSession {
   const scripts: string[] = [];
@@ -130,6 +147,10 @@ function appiumSession(opts: {
       if (s === 'mobile: viewportRect') {
         if (opts.viewportRect instanceof Error) throw opts.viewportRect;
         return opts.viewportRect ?? { left: 0, top: 136, width: 1080, height: 2264 };
+      }
+      if (s === 'mobile: getSystemBars') {
+        if (opts.systemBars instanceof Error) throw opts.systemBars;
+        return opts.systemBars ?? systemBars(136);
       }
       if (typeof context === 'string' && /^(WEBVIEW|CHROMIUM)/.test(context)) return PAGE_DOM;
       throw new Error('Method is not implemented');
@@ -167,7 +188,7 @@ describe('witness() native mode', () => {
 
       expect(fs.readdirSync(tempDir(ANDROID_NAME)).sort()).toEqual(['metadata.json', 'screenshot.png']);
       expect(pageScripts(s.scripts)).toEqual([]);
-      expect(s.scripts).toEqual(['mobile: viewportRect']);
+      expect(s.scripts).toEqual(['mobile: getSystemBars']);
       expect(s.getContext).toHaveBeenCalledTimes(1);
       expect(s.browser.takeScreenshot).toHaveBeenCalledTimes(1);
     });
@@ -192,20 +213,53 @@ describe('witness() native mode', () => {
       expect(meta.environment.os.platform).toBe(process.platform);
     });
 
-    it('masks the status bar measured at capture time, not the one from the session start', async () => {
-      await witness(appiumSession({ capabilities: ANDROID_CAPS, viewportRect: { left: 0, top: 63, width: 2400, height: 1017 } }).browser, 'settings');
+    it("masks the window manager's status bar, not UiAutomator2's short reading from the session start", async () => {
+      // The CI run on 744d8bd: UiAutomator2 said 63 px all session, the bar was 136 px tall.
+      const shortReading = { ...ANDROID_CAPS, statBarHeight: 63, viewportRect: { left: 0, top: 63, width: 1080, height: 2337 } };
+      const s = appiumSession({ capabilities: shortReading, viewportRect: shortReading.viewportRect, systemBars: systemBars(136) });
+      await witness(s.browser, 'settings');
+      expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 136 }]);
+      expect(s.scripts).toEqual(['mobile: getSystemBars']);
+    });
+
+    it('follows a rotation: the landscape bar, not the portrait height the session started with', async () => {
+      const s = appiumSession({ capabilities: ANDROID_CAPS, systemBars: systemBars(63, 2400) });
+      await witness(s.browser, 'settings');
       expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 63 }]);
     });
 
-    it('falls back to the capabilities when mobile: viewportRect fails', async () => {
-      const s = appiumSession({ capabilities: ANDROID_CAPS, viewportRect: new Error('unknown method') });
+    it('falls back to mobile: viewportRect when getSystemBars fails, and asks for it once per session', async () => {
+      const s = appiumSession({
+        capabilities: ANDROID_CAPS,
+        viewportRect: { left: 0, top: 136, width: 1080, height: 2264 },
+        systemBars: new Error('Cannot parse any window information from the dumpsys output'),
+      });
+      await witness(s.browser, 'settings');
+      expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 136 }]);
+      await witness(s.browser, 'settings');
+      expect(s.scripts).toEqual(['mobile: getSystemBars', 'mobile: viewportRect', 'mobile: viewportRect']);
+    });
+
+    it('falls back to mobile: viewportRect when the window manager shows no status bar, and asks again next time', async () => {
+      const s = appiumSession({ capabilities: ANDROID_CAPS, systemBars: { statusBar: { visible: false, x: 0, y: 0, width: 0, height: 0 } } });
+      await witness(s.browser, 'settings');
+      await witness(s.browser, 'settings');
+      expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 136 }]);
+      expect(s.scripts).toEqual(['mobile: getSystemBars', 'mobile: viewportRect', 'mobile: getSystemBars', 'mobile: viewportRect']);
+    });
+
+    it('falls back to the capabilities when getSystemBars and mobile: viewportRect both fail', async () => {
+      const s = appiumSession({ capabilities: ANDROID_CAPS, viewportRect: new Error('unknown method'), systemBars: new Error('unknown method') });
       await witness(s.browser, 'settings');
       expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 136 }]);
     });
 
     it('writes no mask when nothing says where the status bar is', async () => {
       const caps = { ...ANDROID_CAPS, viewportRect: undefined, statBarHeight: undefined };
-      await witness(appiumSession({ capabilities: caps, viewportRect: new Error('unknown method') }).browser, 'settings');
+      await witness(
+        appiumSession({ capabilities: caps, viewportRect: new Error('unknown method'), systemBars: new Error('unknown method') }).browser,
+        'settings',
+      );
       expect(metadata(ANDROID_NAME).masks).toBeUndefined();
       expect(fs.existsSync(path.join(tempDir(ANDROID_NAME), 'screenshot.png'))).toBe(true);
     });
@@ -250,7 +304,11 @@ describe('witness() native mode', () => {
       const H = 40;
       const caps = { ...ANDROID_CAPS, viewportRect: { left: 0, top: 6, width: W, height: H - 6 } };
       const capture = (dark?: { from: number; to: number }) =>
-        witness(appiumSession({ capabilities: caps, viewportRect: caps.viewportRect, screenshot: png(W, H, dark) }).browser, 'settings');
+        witness(
+          appiumSession({ capabilities: caps, viewportRect: caps.viewportRect, systemBars: systemBars(6, W), screenshot: png(W, H, dark) })
+            .browser,
+          'settings',
+        );
       const store = path.join(projectRoot, '.testivai');
       const approve = () => {
         fs.cpSync(tempDir(ANDROID_NAME), path.join(store, 'baselines', ANDROID_NAME), { recursive: true });
@@ -265,6 +323,25 @@ describe('witness() native mode', () => {
       await capture({ from: 10, to: 14 }); // a change below the status bar
       expect(compareAll({ projectRoot, reportDir: 'visual-report' }).find((r) => r.name === ANDROID_NAME)?.status).toBe('changed');
     });
+
+    it("a clock change passes when UiAutomator2's reading is short, as in the failed CI run", async () => {
+      const W = 20;
+      const H = 40;
+      // UiAutomator2 read 3 px for a bar that draws 6 px: the clock reaches rows 3–4.
+      const caps = { ...ANDROID_CAPS, statBarHeight: 3, viewportRect: { left: 0, top: 3, width: W, height: H - 3 } };
+      const capture = (dark: { from: number; to: number }) =>
+        witness(
+          appiumSession({ capabilities: caps, viewportRect: caps.viewportRect, systemBars: systemBars(6, W), screenshot: png(W, H, dark) })
+            .browser,
+          'settings',
+        );
+      await capture({ from: 1, to: 3 });
+      fs.cpSync(tempDir(ANDROID_NAME), path.join(projectRoot, '.testivai', 'baselines', ANDROID_NAME), { recursive: true });
+      fs.rmSync(path.join(projectRoot, '.testivai', 'temp'), { recursive: true, force: true });
+      await capture({ from: 2, to: 5 });
+      expect(metadata(ANDROID_NAME).masks).toEqual([{ top: 6 }]);
+      expect(compareAll({ projectRoot, reportDir: 'visual-report' }).find((r) => r.name === ANDROID_NAME)?.status).toBe('passed');
+    });
   });
 
   describe('an iOS app in the native context', () => {
@@ -275,6 +352,8 @@ describe('witness() native mode', () => {
       expect(meta.masks).toEqual([{ top: 162 }]);
       expect(meta.environment.device).toEqual({ platform: 'ios', osVersion: '17.5', name: 'iPhone 15', automation: 'XCUITest' });
       expect(pageScripts(s.scripts)).toEqual([]);
+      // getSystemBars is the Android driver's: XCUITest would reject it, and WebdriverIO would resend it.
+      expect(s.scripts).toEqual(['mobile: viewportRect']);
     });
   });
 
@@ -285,6 +364,7 @@ describe('witness() native mode', () => {
       expect(fs.existsSync(path.join(tempDir('checkout'), 'dom.html'))).toBe(true);
       expect(pageScripts(s.scripts).length).toBeGreaterThan(0);
       expect(s.scripts).not.toContain('mobile: viewportRect');
+      expect(s.scripts).not.toContain('mobile: getSystemBars');
     });
 
     it('a mobile browser session never asks for the context', async () => {
@@ -292,6 +372,7 @@ describe('witness() native mode', () => {
       await witness(s.browser, 'home');
       expect(s.getContext).not.toHaveBeenCalled();
       expect(s.scripts).not.toContain('mobile: viewportRect');
+      expect(s.scripts).not.toContain('mobile: getSystemBars');
       expect(fs.existsSync(path.join(tempDir('home'), 'dom.html'))).toBe(true);
     });
 

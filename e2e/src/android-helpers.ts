@@ -33,8 +33,18 @@ export function prepareDevice(): void {
   adb('shell', 'cmd', 'uimode', 'night', 'no');
 }
 
+/**
+ * Turn the display: 0 portrait, 1 landscape (a quarter turn). Auto-rotate is
+ * switched off first, so the device keeps the turn it is given.
+ */
+export function rotate(quarterTurns: 0 | 1 | 2 | 3): void {
+  adb('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0');
+  adb('shell', 'settings', 'put', 'system', 'user_rotation', String(quarterTurns));
+}
+
 export function restoreDevice(): void {
   try {
+    rotate(0);
     adb('shell', 'cmd', 'uimode', 'night', 'no');
     demo('exit');
   } catch {
@@ -118,6 +128,18 @@ export function differingPixels(a: PNG, b: PNG, splitY: number): { above: number
     }
   }
   return out;
+}
+
+/** The lowest row (0-based) where two same-size captures differ, or -1 when none does. */
+export function lastDifferingRow(a: PNG, b: PNG): number {
+  if (a.width !== b.width || a.height !== b.height) return -1;
+  for (let y = a.height - 1; y >= 0; y--) {
+    for (let x = 0; x < a.width; x++) {
+      const i = (y * a.width + x) * 4;
+      if (a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1] || a.data[i + 2] !== b.data[i + 2]) return y;
+    }
+  }
+  return -1;
 }
 
 /** Expectations that print as they go and are asserted together at the end. */

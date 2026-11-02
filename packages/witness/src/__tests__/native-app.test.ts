@@ -16,6 +16,7 @@ import {
   nativeAppDevice,
   nativeAppVariant,
   statusBarFromCapabilities,
+  statusBarFromSystemBars,
 } from '../capture/native-app';
 import { describeCaptureMethod, describeEnvironmentChange, diffEnvironments } from '../report/environment';
 
@@ -128,6 +129,48 @@ describe('statusBarFromCapabilities', () => {
     expect(statusBarFromCapabilities({ statBarHeight: 89 })).toBe(89);
     expect(statusBarFromCapabilities(IOS_CAPS)).toBeNull();
     expect(statusBarFromCapabilities({ viewportRect: { top: -4 } })).toBeNull();
+  });
+});
+
+/**
+ * `mobile: getSystemBars` (Appium's Android driver) reads the status bar's
+ * window frame from the window manager (`dumpsys window windows`) at the time
+ * of the call. The shape is the driver's: `{ statusBar, navigationBar }`, each
+ * `{ visible, x, y, width, height }`, and a bar it cannot find comes back
+ * `{ visible: false, x: 0, y: 0, width: 0, height: 0 }`.
+ */
+describe('statusBarFromSystemBars', () => {
+  const bars = (statusBar: unknown) => ({
+    statusBar,
+    navigationBar: { visible: true, x: 0, y: 2337, width: 1080, height: 63 },
+  });
+
+  it("is the bottom of a visible status bar's frame", () => {
+    expect(statusBarFromSystemBars(bars({ visible: true, x: 0, y: 0, width: 1080, height: 136 }))).toBe(136);
+    // landscape on the same device: a shorter bar across the long side
+    expect(statusBarFromSystemBars(bars({ visible: true, x: 0, y: 0, width: 2400, height: 63 }))).toBe(63);
+    // a frame that does not start at the top edge still ends where the mask must end
+    expect(statusBarFromSystemBars(bars({ visible: true, x: 0, y: 10, width: 1080, height: 50 }))).toBe(60);
+  });
+
+  it('rounds a fractional bottom up, so no row of the bar is left out', () => {
+    expect(statusBarFromSystemBars(bars({ visible: true, x: 0, y: 0, width: 1080, height: 135.5 }))).toBe(136);
+  });
+
+  it('is null when the bar is not visible, or the driver found none', () => {
+    expect(statusBarFromSystemBars(bars({ visible: false, x: 0, y: 0, width: 1080, height: 136 }))).toBeNull();
+    expect(statusBarFromSystemBars(bars({ visible: false, x: 0, y: 0, width: 0, height: 0 }))).toBeNull();
+    expect(statusBarFromSystemBars(bars({ visible: true, x: 0, y: 0, width: 1080, height: 0 }))).toBeNull();
+  });
+
+  it('is null for anything that is not the driver answer', () => {
+    expect(statusBarFromSystemBars(null)).toBeNull();
+    expect(statusBarFromSystemBars('136')).toBeNull();
+    expect(statusBarFromSystemBars({})).toBeNull();
+    expect(statusBarFromSystemBars(bars(undefined))).toBeNull();
+    expect(statusBarFromSystemBars(bars({ visible: true, y: 0, height: '136' }))).toBeNull();
+    expect(statusBarFromSystemBars(bars({ visible: true, y: 0, height: Number.NaN }))).toBeNull();
+    expect(statusBarFromSystemBars(bars({ visible: true, y: -200, height: 136 }))).toBeNull();
   });
 });
 
