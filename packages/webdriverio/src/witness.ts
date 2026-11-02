@@ -37,6 +37,7 @@ import {
   normalizeElementIdAttributes,
   RENDER_PROBE_EXPRESSION,
   statusBarFromCapabilities,
+  statusBarFromSystemBars,
   statusBarFromViewportRect,
   webDriverEnvironment,
   type CollectedElement,
@@ -144,8 +145,7 @@ async function isNativeCapture(browser: WitnessBrowser, forced: boolean | undefi
  * Native mode: a native screen has no page, so no page script runs (Appium
  * rejects them all there, and WebdriverIO resends each failed one three
  * times: ~1.5 s each, measured on an Android 14 emulator). The capture is the
- * screenshot alone, with the status bar masked (its height from
- * `mobile: viewportRect` at capture time, else the capabilities), the
+ * screenshot alone, with the status bar masked (`statusBarHeight`), the
  * environment from the capabilities, and the name keyed by device unless the
  * call gives a variant.
  */
@@ -165,15 +165,7 @@ async function witnessNative(browser: WitnessBrowser, name: string, options: Wit
     localConfig.environmentPolicy,
   );
 
-  let statusBar: number | null = null;
-  if (options.maskStatusBar !== false) {
-    try {
-      statusBar = statusBarFromViewportRect(await browser.execute<unknown>('mobile: viewportRect'));
-    } catch {
-      // older drivers: the capabilities' reading from the session start
-    }
-    statusBar ??= statusBarFromCapabilities(browser.capabilities);
-  }
+  const statusBar = options.maskStatusBar === false ? null : await statusBarHeight(browser);
 
   const base64 = await browser.takeScreenshot();
   if (typeof base64 !== 'string' || base64.length === 0) {
@@ -187,6 +179,37 @@ async function witnessNative(browser: WitnessBrowser, name: string, options: Wit
   }
   store.writeTemp(name, Buffer.from(base64, 'base64'));
   store.writeTempMetadata(name, { name, environment, ...(statusBar ? { masks: [{ top: statusBar }] } : {}) });
+}
+
+/** Sessions whose `mobile: getSystemBars` failed: not asked again, as WebdriverIO resends a failed command. */
+const withoutSystemBars = new WeakSet<object>();
+
+/**
+ * The status bar's height in screenshot pixels for the mask, or null.
+ *
+ * On Android, the bar's window frame from the window manager at capture time
+ * (`mobile: getSystemBars`). UiAutomator2's own figure (`mobile: viewportRect`,
+ * then the capabilities) is read once, when the session starts, from a
+ * resource of its server app: on an Android 14 emulator it came back 63 px for
+ * a 136 px bar in one CI run, and it does not follow a rotation. It is the
+ * fallback, and the iOS source.
+ */
+async function statusBarHeight(browser: WitnessBrowser): Promise<number | null> {
+  if (mobilePlatform(browser.capabilities) === 'android' && !withoutSystemBars.has(browser)) {
+    try {
+      const fromWindowManager = statusBarFromSystemBars(await browser.execute<unknown>('mobile: getSystemBars'));
+      if (fromWindowManager !== null) return fromWindowManager;
+    } catch {
+      withoutSystemBars.add(browser);
+    }
+  }
+  try {
+    const fromViewport = statusBarFromViewportRect(await browser.execute<unknown>('mobile: viewportRect'));
+    if (fromViewport !== null) return fromViewport;
+  } catch {
+    // older drivers: the capabilities' reading from the session start
+  }
+  return statusBarFromCapabilities(browser.capabilities);
 }
 
 /**

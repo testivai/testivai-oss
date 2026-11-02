@@ -92,8 +92,9 @@ export interface WitnessOptions {
    */
   native?: boolean;
   /**
-   * Native mode only: mask the status bar (its height from Appium's
-   * `mobile: viewportRect`, measured at capture time). Default: true.
+   * Native mode only: mask the status bar, measured at capture time: on
+   * Android the bar's frame in the window manager (`mobile: getSystemBars`),
+   * on iOS `mobile: viewportRect`. Default: true.
    */
   maskStatusBar?: boolean;
   /**

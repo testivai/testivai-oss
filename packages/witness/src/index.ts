@@ -83,6 +83,7 @@ export {
   nativeAppDevice,
   nativeAppVariant,
   statusBarFromCapabilities,
+  statusBarFromSystemBars,
   statusBarFromViewportRect,
 } from './capture/native-app';
 export type { AppiumEnvironmentInput } from './capture/native-app';
