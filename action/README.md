@@ -134,6 +134,18 @@ GitHub refuses to move a tag onto a commit whose workflow files (`.github/workfl
 
 Without the secret, the workflow uses the built-in token, which works only when no workflow file changed since the last release. When the push is refused, the job fails saying so, with the commands to move the major tag by hand; after adding or fixing the secret, re-run the job (or run the workflow by hand with the release tag).
 
+### Releasing from your clone
+
+`scripts/release-action.js` tags a release and moves the major tag with your own git credentials, so it works whatever the workflow's token can do. Use it as the release step, or when the workflow could not move the major tag:
+
+```bash
+node scripts/release-action.js v1.6.2 --dry-run   # check, change nothing
+node scripts/release-action.js v1.6.2             # tag origin/main, move v1, check the remote
+node scripts/release-action.js v1.6.1 --ref beb0eab   # an earlier commit of main; reuses an existing tag at it
+```
+
+It fetches `main` and the tags first, and refuses, changing nothing, when the version is not `vMAJOR.MINOR.PATCH`, is older than a release of the same major, or exists at another commit, or when the commit is not on `origin/main`, has no `action/dist/index.js`, or has no `## [X.Y.Z]` section in `action/CHANGELOG.md`. `--message` sets the release tag's message. The workflow still runs on the tag push and moves the major tag to the same commit (or fails harmlessly).
+
 ## License
 
 MIT

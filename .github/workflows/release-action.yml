@@ -107,6 +107,7 @@ jobs:
             echo "  git fetch origin --tags"
             echo "  git tag -f -a $MAJOR_TAG -m \"$MESSAGE\" $SRC_SHA"
             echo "  git push -f origin refs/tags/$MAJOR_TAG"
+            echo "or, with the same checks as a release: node scripts/release-action.js $SRC_TAG --ref $SRC_SHA"
             exit 1
           fi
           echo "Pointed $MAJOR_TAG at $SRC_TAG ($SRC_SHA)"
