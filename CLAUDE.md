@@ -137,6 +137,7 @@ The GitHub Action (`action.yml` at repo root → `action/dist/index.js`) uses a 
 - Semver tags like `v1.0.2` are for the action
 - The `v1` major tag is rolled automatically by `.github/workflows/release-action.yml` on every clean semver tag push
 - After any change to `action/src/`, rebuild dist AND push a new semver tag to roll `v1`
+- `scripts/release-action.js vX.Y.Z` tags `origin/main` and moves `v1` from a maintainer's clone (checks, `--dry-run`); the fallback when the workflow cannot move `v1` (its push needs the `RELEASE_TAG_TOKEN` secret with Workflows write once a workflow file changed)
 
 The approve action (`approve/action.yml`) is a composite action; its reply step loads `action/dist/approve.cjs`, so rebuild the dist after changing `action/src/approve.ts`. It ships with the dist at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
 

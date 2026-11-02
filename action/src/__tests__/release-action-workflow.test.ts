@@ -131,6 +131,7 @@ describe('the roll step, run against a local remote', () => {
     expect(output).toMatch(/Workflows/);
     expect(output).toContain(`git tag -f -a v1 -m "Rolling major tag → v1.6.1 (${v161()})" ${v161()}`);
     expect(output).toContain('git push -f origin refs/tags/v1');
+    expect(output).toContain(`node scripts/release-action.js v1.6.1 --ref ${v161()}`);
   });
 
   it('with RELEASE_TAG_TOKEN set, a refused push says the token lacks the permission', () => {
