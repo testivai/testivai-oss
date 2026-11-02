@@ -1,8 +1,0 @@
----
-"@testivai/witness": minor
-"@testivai/witness-playwright": minor
-"@testivai/witness-selenium": minor
-"@testivai/witness-webdriverio": minor
----
-
-New opt-in config `elementIdAttributes` (for example `["data-testid"]`) anchors element-map paths on attributes your tests already set. An element's path starts at its nearest ancestor-or-self carrying one of them with a non-empty value no other element in the page shares: `div[data-testid="board"] > div.css-146c3p1` instead of a `body > div > div.css-g5y9jx > div.css-g5y9jx:nth-of-type(2) > …` chain. Content inserted above an anchored element no longer renumbers its path, so an element that only moved reads as a shift (with the page shift detected) instead of a change, and the style check pairs the same elements. The list order is the precedence; a duplicated value is skipped and the path continues upward, so paths stay unique; values are escaped as CSS strings (`>` included), so each anchored path is a working selector. Unset, nothing changes: the attributes are never read and `elements.json`, the style digests, `results.json` and the report are byte-identical. The Playwright, Selenium and WebdriverIO adapters read it from `.testivai/config.json` and record it in the capture's `metadata.json` (only when set); approving freezes it into the baseline, and styles are compared only when both sides used the same setting (`dom.styleCheck: "unavailable"` until baselines are re-approved after a change), so paths built two ways never produce a style verdict on part of the page. `@testivai/witness` exports `normalizeElementIdAttributes`; `buildElementMapExpression` takes the list as a third argument.

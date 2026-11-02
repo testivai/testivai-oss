@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- 117bac5: New opt-in config `elementIdAttributes` (for example `["data-testid"]`) anchors element-map paths on attributes your tests already set. An element's path starts at its nearest ancestor-or-self carrying one of them with a non-empty value no other element in the page shares: `div[data-testid="board"] > div.css-146c3p1` instead of a `body > div > div.css-g5y9jx > div.css-g5y9jx:nth-of-type(2) > …` chain. Content inserted above an anchored element no longer renumbers its path, so an element that only moved reads as a shift (with the page shift detected) instead of a change, and the style check pairs the same elements. The list order is the precedence; a duplicated value is skipped and the path continues upward, so paths stay unique; values are escaped as CSS strings (`>` included), so each anchored path is a working selector. Unset, nothing changes: the attributes are never read and `elements.json`, the style digests, `results.json` and the report are byte-identical. The Playwright, Selenium and WebdriverIO adapters read it from `.testivai/config.json` and record it in the capture's `metadata.json` (only when set); approving freezes it into the baseline, and styles are compared only when both sides used the same setting (`dom.styleCheck: "unavailable"` until baselines are re-approved after a change), so paths built two ways never produce a style verdict on part of the page. `@testivai/witness` exports `normalizeElementIdAttributes`; `buildElementMapExpression` takes the list as a third argument.
+- f3e3fc7: Native app screens (experimental): `@testivai/witness-webdriverio` captures native Android and iOS app screens in an Appium session. In a session on Android or iOS that names no browser and is in the `NATIVE_APP` context (or, when the context cannot be read, was started with `app`, `appPackage` or `bundleId`), `witness()` runs no page script: a native screen has no page, Appium rejects them there and WebdriverIO resends each failed one three times (~1.5 s each, ~8 s per capture on an Android 14 emulator). The capture is the whole screen, pixel diff only. The status bar is masked per capture (`masks: [{ "top": <px> }]` in the capture's `metadata.json`): on Android to the bottom of the bar's frame in the window manager at capture time (`mobile: getSystemBars`), so a rotation is followed; UiAutomator2's own reading (`mobile: viewportRect`, the session capabilities) is taken once at the session start and came back 63 px for a 136 px bar in one emulator run, so it is only the fallback. On iOS it comes from `mobile: viewportRect`. The environment block comes from the capabilities, with `browser.name: "native-app"`, capture method `screen:appium` and a new `device` section (platform, OS version, model, the requested device name, the Appium driver, screen size, density). The snapshot is keyed `<name>__<platform>-<device>-<osMajor>` (`login__android-pixel_7-15`) unless the call gives a `variant`. New options `native` (`true` forces native mode, `false` keeps the web path) and `maskStatusBar` (default `true`); `WitnessBrowser` gains the optional `getContext()`. A hybrid app in a web view, and every browser session, keep the web path, and a browser session makes no extra call. Verified on an Android 14 emulator in CI; iOS is not verified.
+
+  `@testivai/witness`: results.json schema 2.9.0 (additive) adds the `device` section of a snapshot's environment blocks and capture method `screen:appium`. The device's platform, OS version, model, screen and density can change rendering; the device name and the Appium driver are context, and so is `os` (the machine running the tests) when both sides are native app captures. The report words device changes ("device sdk_gphone64_x86_64 → Pixel 7, device OS 14 → 15") and the capture method ("full screen (Appium)"). New exports: `appiumEnvironment`, `isNativeAppCapabilities`, `mobilePlatform`, `namesBrowser`, `nativeAppDevice`, `nativeAppVariant`, `statusBarFromCapabilities`, `statusBarFromSystemBars`, `statusBarFromViewportRect`, `CAPTURE_METHODS.APPIUM_SCREEN` and the `DeviceEnvironment` type. Guide: docs/guides/native-mobile.md.
+
+- 8462b36: Hybrid app web views (experimental): new `witness()` option `context` captures in another Appium context for one call and switches back afterwards, also when the capture fails. `context: 'webview'` is the app's web view (the `WEBVIEW_<appPackage>` context on Android, else the first `WEBVIEW_…` context, as iOS numbers them); any other value is an exact context name (`'WEBVIEW_com.example.app'`, `'NATIVE_APP'`). A hybrid app driven in the native context gets its web view captured as a page, with every layer (DOM diff, style check, attribution, shift detection), instead of a native capture; `context: 'NATIVE_APP'` from a web view is a native capture. A session with no web view, or without the name asked for, fails with the contexts it has and what the app's build needs (WebView debugging enabled). `WitnessBrowser` gains the optional `getContexts()` and `switchContext()`.
+
+### Patch Changes
+
+- Updated dependencies [1ac04ef]
+- Updated dependencies [117bac5]
+- Updated dependencies [f3e3fc7]
+- Updated dependencies [9eaa9f4]
+- Updated dependencies [a3278e1]
+- Updated dependencies [62964eb]
+- Updated dependencies [c53604c]
+  - @testivai/witness@2.6.0
+
 ## 0.4.6
 
 ### Patch Changes
