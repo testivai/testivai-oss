@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-02
+
+### Added
+
+- Native app captures (`@testivai/witness-webdriverio` 0.5.0, experimental) read in plain words. When the device changed since the baseline, the PR comment and the job summary say so as `testivai report` does: "The environment also changed since the baseline (device sdk_gphone64_x86_64 → Pixel 7, device OS 14 → 15)" (device platform, device, device OS, screen, density, device name, Appium driver), and a capture method reads "full screen (Appium)"; `publish@v1`'s report pages use the same words. v1.6.1 printed the raw field names (`device.model sdk_gphone64_x86_64 → Pixel 7, device.osVersion 14 → 15`) and `screen:appium` (#246)
+
+### Changed
+
+- The comparison bundled in the action (used when it compares a run's captures itself) is `@testivai/witness` 2.6.0's: it writes results.json schema 2.9.0, with the `device` section of a native capture's environment block, and when both sides are native captures the machine running the tests (`os`) is context, not a rendering change (#246)
+
+### Fixed
+
+- In that comparison, a claimed shift is checked against the pixels. Content inserted above an element renumbers its path, which can pair it with a look-alike neighbour, so it read as a shift by a wrong distance. A pair now counts as a shift only when the element's pixels match at its new position (at most 1% differ, best of ±1 px); otherwise it reads as a change, and `shiftTolerance` no longer passes it (#243)
+- In that comparison, `<script>` attribute values are no longer a DOM change: a bundle renamed by content hash, its `integrity` and a per-request `nonce` made a stylesheet-only change read as a DOM change. A script added or removed still counts (#243)
+
 ## [1.6.1] - 2026-11-01
 
 ### Fixed
