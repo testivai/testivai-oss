@@ -71,9 +71,9 @@ the context cannot be read, a session started with `app`, `appPackage` or
 
 | Part | Native mode | Why |
 |---|---|---|
-| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture; in native mode a capture there takes 0.5–1 s. |
+| Page scripts | none run | A native screen has no page: Appium rejects them, and WebdriverIO resends each failed command 3 times. On an Android 14 emulator that cost ~1.5 s per script, ~8 s per capture; in native mode a capture there took 0.4–1.8 s, the status bar reading included. |
 | Screenshot | the whole screen, in physical pixels (1080×2400 on a Pixel 7 profile) | Appium's `takeScreenshot()` |
-| Status bar | masked, measured at capture time: on Android the bar's frame in the window manager, `mobile: getSystemBars` (136 px on that profile); on iOS `mobile: viewportRect` | the clock, battery and signal change between runs |
+| Status bar | masked, measured at capture time: on Android the bar's frame in the window manager, `mobile: getSystemBars` (136 px on that profile, 74 px in landscape; the call took 45–460 ms); on iOS `mobile: viewportRect` | the clock, battery and signal change between runs |
 | Environment | the device from the capabilities: platform, OS version, model, the Appium driver, screen size, density, pixel ratio | so a device or OS change is listed when pixels differ |
 | Snapshot name | `<name>__<platform>-<device>-<osMajor>` | each device is compared only with its own baseline |
 
@@ -89,7 +89,8 @@ runs, so the mask missed part of the clock. Of the 3 runs whose device log was
 kept, the short one was the only run where the newly installed server app
 started before Android's "package modified" notice for it; three runs do not
 prove that is the cause. That figure also keeps its portrait height after a
-rotation. The adapter uses it only when
+rotation: turned to landscape, it still said 136 px for a 74 px bar, which
+would have hidden 62 rows of the app. The adapter uses it only when
 `mobile: getSystemBars` fails or finds no visible bar.
 
 ### Options
@@ -225,7 +226,7 @@ app.
 | **Toolchain updates** | A new system image, Xcode or emulator GPU can change every image. The environment lists the device fields that changed. | Re-baseline after a toolchain update. Pin Appium and driver versions in CI. |
 | **iOS** | Not verified. The status bar height comes from XCUITest's `mobile: viewportRect`; whether it follows a rotation is not known. | Report what you see in a GitHub issue. |
 | **Other languages** | Only the WebdriverIO adapter has native mode. The Java, Python and Ruby adapters capture web pages. | Use WebdriverIO for native screens. |
-| **Navigation bar, notches, rotation** | Only the top status bar is masked. On Android the bar is measured at each capture, so a rotation is followed (checked in landscape on the emulator). An app that hides the status bar (full screen) is not verified. | Mask the bottom bar with a config mask if it changes. |
+| **Navigation bar, notches, rotation** | Only the top status bar is masked. On Android the bar is measured at each capture, so a rotation is followed (checked in landscape on the emulator: a 74 px bar). An app that hides the status bar (full screen) is not verified. | Mask the bottom bar with a config mask if it changes. |
 | **Status bar fallback (Android)** | When `mobile: getSystemBars` fails (an older driver) or finds no visible bar, the mask comes from UiAutomator2's reading from the session start, which can be short (above) and keeps the portrait height after a rotation. A failed call is not repeated in that session. | Freeze the status bar with demo mode (above), or add a config mask of the full height, `"mask": [{ "top": 136 }]`. |
 | **WebView apps on Google APIs emulators** | Soon after boot, Android killed the WebView app when Google Play Services restarted ("depends on provider … FontsProvider in dying proc com.google.android.gms"), and the web view context vanished. | Let the emulator settle after boot, or relaunch the app and switch again. |
 
