@@ -103,13 +103,26 @@ export interface InstallResult {
 /** Writes the skill under `root`. A different file already there is kept unless `force`. */
 export function installClaudeSkill(root: string, { force = false }: { force?: boolean } = {}): InstallResult {
   const file = path.join(root, CLAUDE_SKILL_PATH);
-  if (fs.existsSync(file)) {
-    if (fs.readFileSync(file, 'utf8') === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
-    if (!force) return { status: 'conflict', path: file };
-    fs.writeFileSync(file, TESTIVAI_SKILL);
-    return { status: 'updated', path: file };
+  let existing: string | undefined;
+  try {
+    existing = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (existing === undefined) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    try {
+      // wx: create only. A file that appeared since the read is kept.
+      fs.writeFileSync(file, TESTIVAI_SKILL, { flag: 'wx' });
+      return { status: 'created', path: file };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      if (!force) return { status: 'conflict', path: file };
+      existing = '';
+    }
+  }
+  if (existing === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
+  if (!force) return { status: 'conflict', path: file };
   fs.writeFileSync(file, TESTIVAI_SKILL);
-  return { status: 'created', path: file };
+  return { status: 'updated', path: file };
 }
