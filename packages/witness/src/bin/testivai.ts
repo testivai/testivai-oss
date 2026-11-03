@@ -6,6 +6,7 @@ import { initCommand } from '../commands/init';
 import { runCommand } from '../commands/run';
 import { witnessCommand } from '../commands/capture';
 import { approveCommand } from '../commands/approve';
+import { initClaudeCommand } from '../commands/init-claude';
 import { mergeCapturesCommand } from '../commands/merge-captures';
 import { reportCommand } from '../commands/report';
 import { envCommand } from '../commands/env';
@@ -46,6 +47,7 @@ program
 
 // Add commands
 program.addCommand(initCommand);
+program.addCommand(initClaudeCommand);
 program.addCommand(runCommand);
 program.addCommand(witnessCommand);
 program.addCommand(approveCommand);

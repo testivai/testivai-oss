@@ -131,6 +131,9 @@ export { initCommand } from './commands/init';
 export { runCommand } from './commands/run';
 export { witnessCommand } from './commands/capture';
 export { approveCommand } from './commands/approve';
+export { initClaudeCommand } from './commands/init-claude';
+export { CLAUDE_SKILL_PATH, installClaudeSkill, TESTIVAI_SKILL } from './claude/skill';
+export type { InstallResult as ClaudeSkillInstallResult } from './claude/skill';
 
 // Version
 // eslint-disable-next-line @typescript-eslint/no-var-requires
