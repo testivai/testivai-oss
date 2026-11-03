@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-03
+
 ### Changed
 
-- `approve@v1` reads only the first line of a comment as the `/testivai approve` command, so a comment with a note or a signature after the command now approves (it was skipped silently). A bare `/testivai approve` followed by more lines approves nothing: it used to read the next line as the names, and reading the first line alone would have made it `--all`. Put the names or `--all` on the first line. This lets Claude Code's `/testivai approve <name> --pr` (`npx testivai init-claude`) post the command with the footer its comments carry
+- `approve@v1` reads only the first line of a comment as the `/testivai approve` command, so a comment with a note or a signature after the command now approves (it was skipped silently). A bare `/testivai approve` followed by more lines approves nothing: it used to read the next line as the names, and reading the first line alone would have made it `--all`. Put the names or `--all` on the first line. This lets Claude Code's `/testivai approve <name> --pr` (`npx testivai init-claude`) post the command with the footer its comments carry (#254)
 
 ## [1.7.0] - 2026-11-02
 
