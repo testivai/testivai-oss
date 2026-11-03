@@ -33,6 +33,7 @@ Pick the framework you use:
 - **[`testivai witness`](./cli/capture.md)** — manual single-snapshot capture
 - **[`testivai report`](./cli/report.md)** — compare + report, `--json`, CI exit codes
 - **[`testivai approve`](./cli/approve.md)** — promote captures to baselines, `--all`, `--undo`
+- **[`testivai init-claude`](./cli/init-claude.md)** — the `/testivai` command for Claude Code (status, report, approve), in the terminal, the desktop app and claude.ai/code
 - **[`testivai env`](./cli/env.md)** — this machine's capture environment (OS, distro, CI, container, label), `--fonts`, `--json`
 
 ## Reference

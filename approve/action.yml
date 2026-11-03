@@ -59,14 +59,23 @@ runs:
         script: |
           const body = context.payload.comment?.body?.trim() ?? '';
 
-          // Only handle /testivai commands
-          const match = body.match(/^\/testivai\s+(approve)\s*(.+)?$/i);
+          // Only handle /testivai commands. The command is the comment's
+          // first line; later lines (a note, a footer) are ignored.
+          const [firstLine, ...rest] = body.split(/\r?\n/);
+          const match = firstLine.trim().match(/^\/testivai\s+(approve)\s*(.+)?$/i);
           if (!match) {
             core.info('Not a /testivai command — skipping.');
             return { skip: true };
           }
 
           const cmd    = match[1].toLowerCase();   // 'approve'
+          // A bare command means --all only when it is the whole comment:
+          // with more lines after it, the names may be on the next line, so
+          // approve nothing rather than everything.
+          if (match[2] === undefined && rest.length > 0) {
+            core.info('/testivai approve with no name on its first line, and more lines after it — skipping. Put the names (or --all) on the command line.');
+            return { skip: true };
+          }
           const target = (match[2] ?? '--all').trim(); // name or '--all'
 
           // Verify the commenter has write access to this repo

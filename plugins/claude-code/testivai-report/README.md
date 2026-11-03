@@ -40,7 +40,9 @@ same after you pick a scope.
 Cloud sessions (claude.ai/code, or a cloud session in the desktop app) cannot
 load it: they have no `/plugin` command ("Plugins aren't available in this
 environment"), and they don't install plugins that a repository's
-`.claude/settings.json` turns on.
+`.claude/settings.json` turns on. For those, `npx testivai init-claude` adds a
+`/testivai` command (status, report, approve) to the repository as a project
+skill, which cloud sessions do load ([`testivai init-claude`](../../../docs/cli/init-claude.md)).
 
 Then run your visual tests as usual. The report is read from
 `visual-report/` under the session's working directory (the TestivAI
