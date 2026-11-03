@@ -42,6 +42,39 @@ export function rotate(quarterTurns: 0 | 1 | 2 | 3): void {
   adb('shell', 'settings', 'put', 'system', 'user_rotation', String(quarterTurns));
 }
 
+/** The screen's size now, read from a screencap's PNG header (IHDR width and height). */
+function screenSize(): { width: number; height: number } {
+  const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+/**
+ * Turns the display and waits until the screen really is that way round. A
+ * fixed sleep was not enough on a slow runner: right after `uimode night no`
+ * restarts Settings, the turn could take longer than 3 s and the capture was
+ * still portrait. Asks once more halfway; throws after `timeoutMs`.
+ */
+export async function rotateAndWait(
+  quarterTurns: 0 | 1 | 2 | 3,
+  { timeoutMs = 20_000, pollMs = 500 }: { timeoutMs?: number; pollMs?: number } = {},
+): Promise<void> {
+  const wantLandscape = quarterTurns % 2 === 1;
+  rotate(quarterTurns);
+  const start = Date.now();
+  let askedAgain = false;
+  for (;;) {
+    const { width, height } = screenSize();
+    if (width > height === wantLandscape) return;
+    const waited = Date.now() - start;
+    if (waited > timeoutMs) throw new Error(`the display did not turn: ${width}x${height} after ${waited} ms`);
+    if (!askedAgain && waited > timeoutMs / 2) {
+      rotate(quarterTurns);
+      askedAgain = true;
+    }
+    await sleep(pollMs);
+  }
+}
+
 export function restoreDevice(): void {
   try {
     rotate(0);
