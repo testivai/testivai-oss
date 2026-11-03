@@ -81,6 +81,20 @@ describe('installClaudeSkill', () => {
     expect(fs.readFileSync(target(), 'utf8')).toBe(TESTIVAI_SKILL);
   });
 
+  it('--force replaces a longer file whole, leaving none of its bytes behind', () => {
+    fs.mkdirSync(path.dirname(target()), { recursive: true });
+    fs.writeFileSync(target(), 'x'.repeat(TESTIVAI_SKILL.length * 2));
+    expect(installClaudeSkill(tmp, { force: true })).toEqual({ status: 'updated', path: target() });
+    expect(fs.readFileSync(target(), 'utf8')).toBe(TESTIVAI_SKILL);
+  });
+
+  it('--force on a file that is already this version changes nothing', () => {
+    installClaudeSkill(tmp);
+    const before = fs.statSync(target()).mtimeMs;
+    expect(installClaudeSkill(tmp, { force: true })).toEqual({ status: 'unchanged', path: target() });
+    expect(fs.statSync(target()).mtimeMs).toBe(before);
+  });
+
   it('touches nothing else under .claude/', () => {
     fs.mkdirSync(path.join(tmp, '.claude', 'skills', 'other'), { recursive: true });
     fs.writeFileSync(path.join(tmp, '.claude', 'settings.json'), '{}');

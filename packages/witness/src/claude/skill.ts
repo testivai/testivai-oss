@@ -100,29 +100,37 @@ export interface InstallResult {
   path: string;
 }
 
-/** Writes the skill under `root`. A different file already there is kept unless `force`. */
+/**
+ * Writes the skill under `root`. A different file already there is kept unless
+ * `force`. An existing file is opened once, and read, emptied and rewritten
+ * through that handle, so a file that appears or is swapped meanwhile is never
+ * written by path; a new one is created only with the exclusive `wx` flag.
+ */
 export function installClaudeSkill(root: string, { force = false }: { force?: boolean } = {}): InstallResult {
   const file = path.join(root, CLAUDE_SKILL_PATH);
-  let existing: string | undefined;
+  let fd: number;
   try {
-    existing = fs.readFileSync(file, 'utf8');
+    fd = fs.openSync(file, force ? 'r+' : 'r');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-  }
-  if (existing === undefined) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     try {
-      // wx: create only. A file that appeared since the read is kept.
       fs.writeFileSync(file, TESTIVAI_SKILL, { flag: 'wx' });
       return { status: 'created', path: file };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    } catch (createErr) {
+      if ((createErr as NodeJS.ErrnoException).code !== 'EEXIST') throw createErr;
+      // It appeared since the open: keep it, or with force, replace it below.
       if (!force) return { status: 'conflict', path: file };
-      existing = '';
+      fd = fs.openSync(file, 'r+');
     }
   }
-  if (existing === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
-  if (!force) return { status: 'conflict', path: file };
-  fs.writeFileSync(file, TESTIVAI_SKILL);
-  return { status: 'updated', path: file };
+  try {
+    if (fs.readFileSync(fd, 'utf8') === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
+    if (!force) return { status: 'conflict', path: file };
+    fs.ftruncateSync(fd, 0);
+    fs.writeSync(fd, TESTIVAI_SKILL, 0);
+    return { status: 'updated', path: file };
+  } finally {
+    fs.closeSync(fd);
+  }
 }
