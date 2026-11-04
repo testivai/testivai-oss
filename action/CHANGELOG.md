@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-11-04
+
+### Changed
+
+- The report upload uses `@actions/artifact` 6.3.1 (was 6.2.1), with the newer `@azure/storage-blob` and `@actions/http-client` it requires. The bundled `dist/index.js` grows from 4.6 MB to 5.8 MB. Inputs, outputs and behaviour are unchanged (#252)
+
 ## [1.8.0] - 2026-11-03
 
 ### Changed

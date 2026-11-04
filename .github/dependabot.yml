@@ -39,27 +39,25 @@ updates:
       # CJS+ESM and is the current target. Unblock when Jest ESM migration done.
       - dependency-name: "commander"
         versions: [">=15.0.0"]
+      # TypeScript 7 exposes no JavaScript compiler API, which ts-jest needs
+      # ("does not expose the JavaScript compiler API required by ts-jest",
+      # #145). Moving to it is a planned migration, not a bump.
+      - dependency-name: "typescript"
+        versions: [">=7"]
+      # The packages support Node 18+ and type against an older Node; a newer
+      # major's types let code call APIs that Node lacks (#155).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # examples/expo-web pins React to what its Expo SDK expects (npm ci
+      # failed on #252's bump). Upgrade with `npx expo install --fix` there.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
 
-  # GitHub Action source (action/dist must be rebuilt; surface major bumps)
-  - package-ecosystem: "npm"
-    directory: "/action"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "github-action"
-    commit-message:
-      prefix: "chore(deps,action)"
-      include: "scope"
-    groups:
-      action-non-major:
-        update-types:
-          - "minor"
-          - "patch"
+  # No separate entry for /action: it is a member of the pnpm workspace above,
+  # which updates action/package.json and the one lockfile together. An entry
+  # of its own changed package.json only, so its PRs could never install
+  # (#42, #131, #139). After a bump that reaches the bundle, rebuild
+  # action/dist (`pnpm run build` in action/) and release the action.
 
   # GitHub Actions used in our workflows (CI, release, codeql)
   - package-ecosystem: "github-actions"
@@ -85,3 +83,9 @@ updates:
           - "major"
           - "minor"
           - "patch"
+    ignore:
+      # changesets/action 2 runs only with Changesets CLI 3, and release.yml
+      # runs on main only, so a PR's CI cannot catch the mismatch. Both move
+      # together (#156); drop this then.
+      - dependency-name: "changesets/action"
+        versions: [">=2"]
