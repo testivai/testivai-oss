@@ -23,7 +23,7 @@ name: testivai
 description: TestivAI visual regression tests. status summarises the last visual report, report shows it, approve <name|--all> accepts changed screenshots as the new baselines.
 argument-hint: "status | report [folder] | approve <name|--all> [--pr]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Bash(npx testivai approve:*)
+allowed-tools: Read, Glob, Bash(npx testivai approve:*), Bash(npx testivai report --share)
 ---
 
 # /testivai
@@ -51,6 +51,10 @@ say, first match wins:
   baseline (those fields)
 - otherwise: pixels differ while the DOM and styles match
 
+Whatever matched first, also name the elements in \`dom.styleChanges\` when
+\`dom.styleCheck\` is \`"mismatch"\` (a restyled element can sit next to a DOM
+change), and a \`pageShift\` (content moved down or up by its \`dy\`).
+
 Then the \`missingBaselines\`. Never call a diff noise or harmless from these
 fields alone; the HTML report (\`/testivai report\`) gives the complete
 reading. Do not approve anything.
@@ -58,9 +62,19 @@ reading. Do not approve anything.
 ## report [folder]
 
 If the \`/testivai-report\` command is available (the TestivAI Claude Code
-plugin), tell the person to run \`/testivai-report [folder]\`. Otherwise give
-the path of \`<folder>/index.html\` (default \`visual-report/index.html\`), and
-show it if you can show files here.
+plugin), tell the person to run \`/testivai-report [folder]\` and stop.
+
+Otherwise show the report with its images inside the page: \`index.html\`
+loads its screenshots from \`images/\`, which a side panel or file viewer may
+not show. When the folder is the default \`visual-report\` and
+\`.testivai/temp/\` has captures, run \`npx testivai report --share\`: it
+compares those captures again (the same comparison the tests ran) and writes
+\`visual-report/share.html\`, one file with every image inlined. Show that
+file if you can show files here, and give its path. If
+\`.testivai/config.json\` sets \`shareUploadCommand\`, never run it with
+\`--share\`: that would also upload the report. In that case, or with no
+captures in \`.testivai/temp/\`, or for another folder, give the path of
+\`<folder>/index.html\` and say its screenshots load from \`images/\` next to it.
 
 ## approve <name...|--all> [--pr]
 
