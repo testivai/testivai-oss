@@ -36,8 +36,8 @@ to `.claude/skills/testivai/SKILL.md` yourself. It is the same file.
 
 | You type | What happens |
 |---|---|
-| `/testivai status` | A summary of `visual-report/results.json`: counts, each changed snapshot and what its fields say, missing baselines. |
-| `/testivai report [folder]` | Points you to `/testivai-report` when the plugin is installed, otherwise to the report's `index.html`. |
+| `/testivai status` | A summary of `visual-report/results.json`: counts, each changed snapshot and what its fields say (with any restyled elements and page shift), missing baselines. |
+| `/testivai report [folder]` | Points you to `/testivai-report` when the plugin is installed. Otherwise runs `npx testivai report --share` and shows `visual-report/share.html`, the report with its screenshots inside the page, so it shows in the app's side panel. Never when `shareUploadCommand` is set (that would upload it): then it gives the path of `index.html`. |
 | `/testivai approve <name...\|--all>` | With the captures in this checkout (`.testivai/temp/`), runs [`npx testivai approve`](./approve.md) for those names. It does not commit. |
 | `/testivai approve <name...\|--all> --pr` | Comments `/testivai approve <name...\|--all>` on the branch's pull request, for the [approve action](../github-action.md#approving-changes-from-pr-feedback) to do it. With no way to comment, it gives you the line to post. |
 

@@ -38,6 +38,26 @@ describe('the /testivai skill', () => {
     expect(TESTIVAI_SKILL).toMatch(/never run a bare `npx testivai approve`/i);
   });
 
+  // Found dogfooding 2.7.0: a page with an added <style> read only as a DOM
+  // change, so the restyled button (dom.styleChanges) went unmentioned.
+  it('status names style changes even when the DOM also changed', () => {
+    expect(TESTIVAI_SKILL.replace(/\s+/g, ' ')).toMatch(/also name the elements in `dom\.styleChanges`/);
+  });
+
+  // Found dogfooding 2.7.0: index.html loads its screenshots from images/,
+  // which the app's side panel cannot show, so the report had no images.
+  it('report shows the page with its images inlined (report --share, share.html)', () => {
+    expect(TESTIVAI_SKILL).toContain('npx testivai report --share');
+    expect(TESTIVAI_SKILL).toContain('share.html');
+    const allowed = (frontmatter.match(/^allowed-tools: (.*)$/m) ?? [])[1] ?? '';
+    expect(allowed).toContain('Bash(npx testivai report --share)');
+  });
+
+  it('report never uploads: no --share when the config sets shareUploadCommand', () => {
+    const text = TESTIVAI_SKILL.replace(/\s+/g, ' ');
+    expect(text).toMatch(/sets `shareUploadCommand`, never run it with `--share`/);
+  });
+
   it('puts the PR comment command alone on the first line', () => {
     expect(TESTIVAI_SKILL).toContain('`/testivai approve <target>`');
     expect(TESTIVAI_SKILL).toMatch(/first line/i);
