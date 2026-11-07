@@ -18,11 +18,36 @@ export function demo(command: string, ...extras: string[]): void {
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * No new crash or "not responding" dialogs over the app (a slow CI boot
+ * Google Play Services disabled (see disablePlayServices), no new crash or "not responding" dialogs over the app (a slow CI boot
  * leaves the launcher not responding), light mode, and the status bar frozen
  * with demo mode, clock at 12:00.
  */
+const PLAY_SERVICES = 'com.google.android.gms';
+
+/**
+ * Disables Google Play Services on the throwaway emulator, before any app
+ * under test starts. On the google_apis image it applies a module update
+ * about two minutes after boot and kills its own processes to restart
+ * ("Module config changed, forcing restart"); Android then kills every app
+ * using one of its providers. The WebView fixture uses its FontsProvider, so
+ * the app and its WebView renderer died at whatever step was running (#266,
+ * #270). Disabled, nothing depends on it and the WebView uses system fonts.
+ */
+export function disablePlayServices(): 'disabled' | 'not installed' {
+  const installed = adb('shell', 'pm', 'list', 'packages', PLAY_SERVICES)
+    .split('\n')
+    .some((l) => l.trim() === `package:${PLAY_SERVICES}`);
+  if (!installed) return 'not installed';
+  adb('shell', 'pm', 'disable-user', '--user', '0', PLAY_SERVICES);
+  const disabled = adb('shell', 'pm', 'list', 'packages', '-d', PLAY_SERVICES)
+    .split('\n')
+    .some((l) => l.trim() === `package:${PLAY_SERVICES}`);
+  if (!disabled) throw new Error(`fixture: Google Play Services is still enabled after pm disable-user ${PLAY_SERVICES}`);
+  return 'disabled';
+}
+
 export function prepareDevice(): void {
+  console.log(`[device] Google Play Services: ${disablePlayServices()}`);
   adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
   adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
   demo('enter');
