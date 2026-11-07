@@ -85,7 +85,7 @@ CI (GitHub Actions):
 - `src/report/generator.ts`  — writes results.json + renders index.html
 - `src/report/template.ts`   — HTML template for the report; escapes every value it shows; `snapshotAnchorId()` is each snapshot's link target (`#snap-<name>`), shared with the PR comment
 - `src/capture/native-app.ts` — native app captures (experimental): the device, the snapshot key and the environment block from an Appium session's capabilities (`isNativeAppCapabilities`, `nativeAppDevice`, `nativeAppVariant`, `appiumEnvironment`); the WebdriverIO adapter's native mode uses it
-- `src/claude/skill.ts`       — the `/testivai` Claude Code skill (`TESTIVAI_SKILL`, `disable-model-invocation: true`) and `installClaudeSkill`, written by `testivai init-claude`; `docs/claude-code/testivai/SKILL.md` is the same text (a test keeps them identical)
+- `src/claude/skill.ts`       — the `/testivai` Claude Code skill (`TESTIVAI_SKILL`, `disable-model-invocation: true`) and `installClaudeSkill`, written by `testivai init-claude`, which replaces an earlier release's skill only when unedited (`PREVIOUS_SKILL_SHA256`: add the old hash whenever the text changes; a test pins the current one); `docs/claude-code/testivai/SKILL.md` is the same text (a test keeps them identical)
 - `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)

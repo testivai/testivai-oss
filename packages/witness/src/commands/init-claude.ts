@@ -14,10 +14,15 @@ export const initClaudeCommand = new Command('init-claude')
       return;
     }
     if (result.status === 'conflict') {
-      console.error(chalk.yellow(`  ${result.path} exists and differs from this version: kept. Run with --force to replace it.`));
+      console.error(chalk.yellow(`  ${result.path} differs from this version and from every unedited earlier one: kept. Run with --force to replace it.`));
       return;
     }
-    const verb = { created: 'Created', updated: 'Replaced', unchanged: 'Already up to date:' }[result.status];
+    const verb = {
+      created: 'Created',
+      // Without --force, only an earlier release's skill, unedited, is replaced.
+      updated: options.force ? 'Replaced' : 'Updated an earlier version of the skill:',
+      unchanged: 'Already up to date:',
+    }[result.status];
     console.log(chalk.green(`  ${verb} ${result.path}`));
     console.log('  Commit it, then type /testivai status, /testivai report or /testivai approve <name|--all> in Claude Code');
     console.log('  (terminal, desktop app, or a claude.ai/code session on this repository).');
