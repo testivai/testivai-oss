@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { disablePlayServices } from './android-helpers';
+import { disablePlayServices, prepareDevice } from './android-helpers';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-adb-gms-'));
 const state = path.join(dir, 'state.json');
@@ -68,6 +68,16 @@ try {
   setup({ installed: true, stuck: true });
   assert.throws(() => disablePlayServices(), /fixture: Google Play Services is still enabled/);
   console.log('✓ fails, as a fixture problem, when Play Services stays enabled');
+  // With Play Services disabled, apps post an "Enable Google Play services"
+  // heads-up notification over the screen (#271's first run: one from
+  // Settings Services, then one from Messages, so the native captures
+  // differed far below the status bar). Heads-up notifications go off too.
+  setup({ installed: true });
+  prepareDevice();
+  const all = fs.readFileSync(calls, 'utf8').split('\n');
+  assert.ok(all.includes('shell settings put global heads_up_notifications_enabled 0'), 'heads-up notifications are turned off');
+  assert.ok(all.includes('shell pm disable-user --user 0 com.google.android.gms'), 'Play Services is disabled');
+  console.log('✓ prepareDevice disables Play Services and turns off heads-up notifications');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }

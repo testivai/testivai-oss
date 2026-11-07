@@ -47,6 +47,9 @@ export function disablePlayServices(): 'disabled' | 'not installed' {
 }
 
 export function prepareDevice(): void {
+  // Before Play Services goes: with it disabled, apps post an "Enable Google
+  // Play services" heads-up notification over the screen under test.
+  adb('shell', 'settings', 'put', 'global', 'heads_up_notifications_enabled', '0');
   console.log(`[device] Google Play Services: ${disablePlayServices()}`);
   adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
   adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
