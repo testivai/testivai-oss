@@ -24,10 +24,11 @@ npx testivai init-claude [options]
 | `-f, --force` | Replace the file when it differs from this version |
 | `--json` | Print `{ "status", "path" }` to stdout |
 
-`status` is `created`, `unchanged` (already this version), `updated` (replaced
-with `--force`) or `conflict`. A file you changed is kept and the command
-exits with code 1. Run it again after upgrading `@testivai/witness` to pick
-up a newer skill.
+`status` is `created`, `unchanged` (already this version), `updated` (replaced)
+or `conflict`. After upgrading `@testivai/witness`, run it again to pick up a
+newer skill: a skill an earlier release wrote, unedited, is replaced without
+`--force` (`@testivai/witness` 2.7.1 and later). A file you changed is
+kept and the command exits with code 1; `--force` replaces it.
 
 Prefer not to run it? Copy [`docs/claude-code/testivai/SKILL.md`](../claude-code/testivai/SKILL.md)
 to `.claude/skills/testivai/SKILL.md` yourself. It is the same file.

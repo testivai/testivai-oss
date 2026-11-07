@@ -6,10 +6,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CLAUDE_SKILL_PATH, installClaudeSkill, TESTIVAI_SKILL } from '../../claude/skill';
+import { createHash } from 'crypto';
+import { CLAUDE_SKILL_PATH, installClaudeSkill, PREVIOUS_SKILL_SHA256, TESTIVAI_SKILL } from '../../claude/skill';
 import { initClaudeCommand } from '../../commands/init-claude';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
+const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+/** The skill exactly as @testivai/witness 2.7.0 wrote it (taken from the published package). */
+const SKILL_2_7_0 = fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'claude-skill', '2.7.0.md'), 'utf8');
 
 describe('the /testivai skill', () => {
   const frontmatter = (TESTIVAI_SKILL.match(/^---\n([\s\S]*?)\n---\n/) ?? [])[1] ?? '';
@@ -69,6 +73,24 @@ describe('the /testivai skill', () => {
   });
 });
 
+describe('earlier versions of the skill', () => {
+  it('knows the 2.7.0 skill, as published', () => {
+    expect(sha256(SKILL_2_7_0)).toBe('57ae96bdb9e988b0540618e8b84e3f5a962466901abe2b71db8a924b94e2a143');
+    expect(PREVIOUS_SKILL_SHA256).toContain(sha256(SKILL_2_7_0));
+  });
+
+  it('never lists the current skill as an earlier one', () => {
+    expect(PREVIOUS_SKILL_SHA256).not.toContain(sha256(TESTIVAI_SKILL));
+  });
+
+  // When the skill text changes, this fails: add the old hash (this one) to
+  // PREVIOUS_SKILL_SHA256 so an unedited install of it upgrades without
+  // --force, then pin the new hash here.
+  it('is the version whose predecessors are listed', () => {
+    expect(sha256(TESTIVAI_SKILL)).toBe('df95b240be39f60682381c599d287c712b00173301a0c897af2463d59c451864');
+  });
+});
+
 describe('installClaudeSkill', () => {
   let tmp: string;
   beforeEach(() => {
@@ -115,6 +137,21 @@ describe('installClaudeSkill', () => {
     expect(fs.statSync(target()).mtimeMs).toBe(before);
   });
 
+  it('replaces a skill an earlier release wrote, unedited, without --force', () => {
+    fs.mkdirSync(path.dirname(target()), { recursive: true });
+    fs.writeFileSync(target(), SKILL_2_7_0);
+    expect(installClaudeSkill(tmp)).toEqual({ status: 'updated', path: target() });
+    expect(fs.readFileSync(target(), 'utf8')).toBe(TESTIVAI_SKILL);
+  });
+
+  it('keeps an earlier release\'s skill that someone edited, unless forced', () => {
+    fs.mkdirSync(path.dirname(target()), { recursive: true });
+    const edited = SKILL_2_7_0.replace('# /testivai', '# /testivai (our team)');
+    fs.writeFileSync(target(), edited);
+    expect(installClaudeSkill(tmp)).toEqual({ status: 'conflict', path: target() });
+    expect(fs.readFileSync(target(), 'utf8')).toBe(edited);
+  });
+
   it('touches nothing else under .claude/', () => {
     fs.mkdirSync(path.join(tmp, '.claude', 'skills', 'other'), { recursive: true });
     fs.writeFileSync(path.join(tmp, '.claude', 'settings.json'), '{}');
@@ -158,6 +195,15 @@ describe('testivai init-claude', () => {
     expect(process.exitCode).toBe(1);
     expect(fs.readFileSync(path.join(tmp, CLAUDE_SKILL_PATH), 'utf8')).toBe('mine\n');
     expect(out.join('\n')).toContain('--force');
+  });
+
+  it('upgrades an unedited earlier skill without --force (exit 0)', async () => {
+    fs.mkdirSync(path.join(tmp, '.claude', 'skills', 'testivai'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, CLAUDE_SKILL_PATH), SKILL_2_7_0);
+    await run();
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(fs.readFileSync(path.join(tmp, CLAUDE_SKILL_PATH), 'utf8')).toBe(TESTIVAI_SKILL);
+    expect(out.join('\n')).toMatch(/earlier version/i);
   });
 
   it('--force replaces it', async () => {

@@ -12,6 +12,7 @@
  * test keeps the two identical.
  */
 
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -108,43 +109,76 @@ Say which subcommands exist: \`status\`, \`report [folder]\`,
 \`approve <name...|--all> [--pr]\`.
 `;
 
+/**
+ * SHA-256 of every earlier version of TESTIVAI_SKILL that a release wrote
+ * (2.7.0). A file with one of these is that release's skill, unedited, so
+ * installing replaces it without --force. When the skill text changes, add
+ * the old text's hash here (a test pins the current one and says so).
+ */
+export const PREVIOUS_SKILL_SHA256: readonly string[] = [
+  '57ae96bdb9e988b0540618e8b84e3f5a962466901abe2b71db8a924b94e2a143', // 2.7.0
+];
+
+const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+
 export interface InstallResult {
-  /** created: written; unchanged: already this version; updated: replaced (force); conflict: a different file is there, kept. */
+  /**
+   * created: written; unchanged: already this version; updated: replaced (an
+   * earlier release's skill, unedited, or force); conflict: a different file is
+   * there, kept.
+   */
   status: 'created' | 'unchanged' | 'updated' | 'conflict';
   path: string;
 }
 
 /**
- * Writes the skill under `root`. A different file already there is kept unless
- * `force`. An existing file is opened once, and read, emptied and rewritten
- * through that handle, so a file that appears or is swapped meanwhile is never
- * written by path; a new one is created only with the exclusive `wx` flag.
+ * Writes the skill under `root`. An earlier release's skill, unedited, is
+ * replaced; any other different file is kept unless `force`. An existing file
+ * is opened once, and read, emptied and rewritten through that handle, so a
+ * file that appears or is swapped meanwhile is never written by path; a new
+ * one is created only with the exclusive `wx` flag.
  */
 export function installClaudeSkill(root: string, { force = false }: { force?: boolean } = {}): InstallResult {
   const file = path.join(root, CLAUDE_SKILL_PATH);
   let fd: number;
+  let writable = true;
   try {
-    fd = fs.openSync(file, force ? 'r+' : 'r');
+    fd = openExisting(file);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    try {
-      fs.writeFileSync(file, TESTIVAI_SKILL, { flag: 'wx' });
-      return { status: 'created', path: file };
-    } catch (createErr) {
-      if ((createErr as NodeJS.ErrnoException).code !== 'EEXIST') throw createErr;
-      // It appeared since the open: keep it, or with force, replace it below.
-      if (!force) return { status: 'conflict', path: file };
-      fd = fs.openSync(file, 'r+');
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM') {
+      if (force) throw err;
+      // Read-only: it can still be compared, never replaced.
+      fd = fs.openSync(file, 'r');
+      writable = false;
+    } else {
+      if (code !== 'ENOENT') throw err;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      try {
+        fs.writeFileSync(file, TESTIVAI_SKILL, { flag: 'wx' });
+        return { status: 'created', path: file };
+      } catch (createErr) {
+        if ((createErr as NodeJS.ErrnoException).code !== 'EEXIST') throw createErr;
+        // It appeared since the open: keep it, or with force, replace it below.
+        if (!force) return { status: 'conflict', path: file };
+        fd = openExisting(file);
+      }
     }
   }
   try {
-    if (fs.readFileSync(fd, 'utf8') === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
-    if (!force) return { status: 'conflict', path: file };
+    const existing = fs.readFileSync(fd, 'utf8');
+    if (existing === TESTIVAI_SKILL) return { status: 'unchanged', path: file };
+    const earlier = PREVIOUS_SKILL_SHA256.includes(sha256(existing));
+    if (!writable || (!force && !earlier)) return { status: 'conflict', path: file };
     fs.ftruncateSync(fd, 0);
     fs.writeSync(fd, TESTIVAI_SKILL, 0);
     return { status: 'updated', path: file };
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/** Opens an existing file for reading and writing, through one handle. */
+function openExisting(file: string): number {
+  return fs.openSync(file, 'r+');
 }
