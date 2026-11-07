@@ -365,7 +365,14 @@ Exit-code contract (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 c
 
 ## Code style
 
-- Keep cyclomatic complexity below 10.
+- **Keep cyclomatic complexity below 10 in the code you change.** New functions start below 10.
+  When a change edits an existing function at 10 or more, bring it below 10 in the same PR:
+  tests that pin today's behaviour first, then the split in its own commit, before the
+  behaviour change. Leave functions the change does not edit as they are: existing code
+  comes down one change at a time, never in one sweep. Count as ESLint's `complexity` rule
+  does: 1, plus 1 for each `if`, loop, `case`, `catch`, ternary, `&&`, `||`, `??`, `?.` and
+  default parameter. Functions sent to the browser as text (`collectElementMap`,
+  `settleProbe`) keep their helpers nested inside them.
 
 ## PR conventions
 
