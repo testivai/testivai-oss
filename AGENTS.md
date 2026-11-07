@@ -39,6 +39,8 @@ Everything here runs **fully locally** — no account, no API key, no server.
    Semver tags (`v1.x.y`) roll the `v1` major tag automatically via CI. See the
    "Action versioning" section below.
 
+6. **Keep cyclomatic complexity below 10.**
+
 ---
 
 ## Repo layout
