@@ -23,7 +23,7 @@ for what only the native app shows.
 
 The setup below runs end to end in this repository's CI on Pixel 7
 (Chromium) and iPhone 13 (WebKit) profiles, with Expo SDK 58,
-react-native-web 0.21.4, React 19.3.0 and @playwright/test 1.64.1. The
+react-native-web 0.21.4, React 19.3.0 and @playwright/test 1.65.0. The
 readings table says which phone each row was measured on. See
 [How this was verified](#how-this-was-verified).
 
