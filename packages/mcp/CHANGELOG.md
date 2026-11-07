@@ -1,5 +1,12 @@
 # @testivai/mcp
 
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [0f3ae5c]
+  - @testivai/witness@2.7.1
+
 ## 0.9.2
 
 ### Patch Changes
