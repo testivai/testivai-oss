@@ -46,7 +46,7 @@ jobs:
     steps:
       # The push in the last step uses these credentials.
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: true

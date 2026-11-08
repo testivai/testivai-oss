@@ -65,7 +65,7 @@ import {
   meanLuma,
   prepareDevice,
   restoreDevice,
-  rotate,
+  rotateAndWait,
   sleep,
 } from './android-helpers';
 
@@ -266,8 +266,8 @@ async function main(): Promise<void> {
     // 5. Landscape, after the session started.
     adb('shell', 'cmd', 'uimode', 'night', 'no');
     demo('clock', '-e', 'hhmm', '1200');
-    rotate(1);
-    await sleep(3000);
+    await rotateAndWait(1);
+    await sleep(1000); // the system bars settle after the turn
     const landscapeBars = await session.execute('mobile: getSystemBars');
     const landscapeBar = barBottom(landscapeBars);
     const laterTop = ((await session.execute('mobile: viewportRect')) as { top: number }).top;

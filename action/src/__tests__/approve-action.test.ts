@@ -131,8 +131,11 @@ describe('no step splices an expression into script source', () => {
 /**
  * Only the comment's first line is the command: a note, a signature or a
  * footer below it is ignored (Claude Code ends every comment it posts with
- * one). Before, such a comment was skipped with no reply. Write access is
- * checked as before, for every command.
+ * one). Before v1.8.0, such a comment was skipped with no reply. A bare
+ * `/testivai approve` with more lines below it approves nothing (it used to
+ * take the next line as the names), and since v1.8.0 skipped silently: now
+ * the reply asks for the target. Write access is checked as before, for every
+ * command.
  */
 describe('Parse command + verify permissions', () => {
   const auth = step('Parse command + verify permissions');
@@ -149,8 +152,10 @@ describe('Parse command + verify permissions', () => {
     ['a single line', '/testivai approve', '--all'],
     ['a single line with --all', '/testivai approve --all', '--all'],
     ['a single line naming a snapshot', '/testivai approve home', 'home'],
+    ['a single line, padded and in capitals', '  /TESTIVAI Approve home about  ', 'home about'],
     ['a command and a note on later lines', '/testivai approve --all\n\nLooks good, thanks', '--all'],
     ['a command and a footer', `/testivai approve --all${FOOTER}`, '--all'],
+    ['a named snapshot and a footer', `/testivai approve home${FOOTER}`, 'home'],
     ['a named snapshot and a note', '/testivai approve home\nLooks good', 'home'],
     ['CRLF line endings', '/testivai approve home about\r\n\r\nthe new header is intended\r\n', 'home about'],
   ])("%s: the first line's target goes to the next steps", async (_label, body, target) => {
@@ -164,6 +169,8 @@ describe('Parse command + verify permissions', () => {
     ['plain text', 'Looks good'],
     ['the command on a later line', 'Thanks!\n/testivai approve --all'],
     ['a quoted command', '> /testivai approve --all\n\nShould I run this?'],
+    ['the command mid-sentence', 'please /testivai approve home'],
+    ['an empty comment', ''],
     ['no body', undefined],
   ])('not a command (%s): skipped, with no API call', async (_label, body) => {
     const { result, comments, calls, logs } = await runAuth(body);

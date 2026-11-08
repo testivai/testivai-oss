@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `approve@v1`: a bare `/testivai approve` followed by more lines now gets a reply. Since v1.8.0 it approved nothing and only logged why, so the person who commented saw nothing happen. It still approves nothing, but after the write-access check it now replies asking for the names, or `--all`, on the first line. The reply's own first line is never a command, so a reply posted with a token that starts workflows cannot approve
+- The command is read by `parseApproveCommand` in `action/dist/approve.cjs`, which the auth step now loads as the reply step does, instead of a regex inline in `approve/action.yml`. A one-line comment, and the first-line rule of v1.8.0, read as before
+
 ### Fixed
 
-- `approve@v1`: a `/testivai approve` comment with more lines below the command is read. The command was matched against the whole comment, so a note under it (`/testivai approve --all`, a blank line, `Looks good, thanks`), a signature or a footer, such as the one Claude Code adds to every comment it posts, made the action log "Not a /testivai command — skipping." and stop: nothing was approved and no reply was posted. Now only the first line is read, and anything below it is ignored, so it never becomes a snapshot name. Lines may end in `\n` or `\r\n`. A single-line comment reads as before, including a bare `/testivai approve` meaning `--all`. With more lines below it, a bare `/testivai approve` approves nothing: after the write-access check, the reply asks for the names or `--all` on the first line. The old parser read names on the next line (`/testivai approve`, then `home`) as the target, so reading the bare command as `--all` would approve more than was asked. The parser (`parseApproveCommand`) moved from the step's inline script into `action/dist/approve.cjs`, which the reply step already loads. The write-access check and the apply step's snapshot-name checks are unchanged
+- `approve@v1`: a lone `\r`, U+2028 or U+2029 also ends the command's line. v1.8.0 split the comment only at `\n` and `\r\n`, so `/testivai approve home` followed by a note after one of those was not read as a command and was skipped
+
+## [1.8.1] - 2026-11-04
+
+### Changed
+
+- The report upload uses `@actions/artifact` 6.3.1 (was 6.2.1), with the newer `@azure/storage-blob` and `@actions/http-client` it requires. The bundled `dist/index.js` grows from 4.6 MB to 5.8 MB. Inputs, outputs and behaviour are unchanged (#252)
+
+## [1.8.0] - 2026-11-03
+
+### Changed
+
+- `approve@v1` reads only the first line of a comment as the `/testivai approve` command, so a comment with a note or a signature after the command now approves (it was skipped silently). A bare `/testivai approve` followed by more lines approves nothing: it used to read the next line as the names, and reading the first line alone would have made it `--all`. Put the names or `--all` on the first line. This lets Claude Code's `/testivai approve <name> --pr` (`npx testivai init-claude`) post the command with the footer its comments carry (#254)
 
 ## [1.7.0] - 2026-11-02
 

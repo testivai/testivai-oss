@@ -39,6 +39,15 @@ Everything here runs **fully locally** — no account, no API key, no server.
    Semver tags (`v1.x.y`) roll the `v1` major tag automatically via CI. See the
    "Action versioning" section below.
 
+6. **Keep cyclomatic complexity below 10 in the code you change.** New functions start below 10.
+   When a change edits an existing function at 10 or more, bring it below 10 in the same PR:
+   tests that pin today's behaviour first, then the split in its own commit, before the
+   behaviour change. Leave functions the change does not edit as they are: existing code
+   comes down one change at a time, never in one sweep. Count as ESLint's `complexity` rule
+   does: 1, plus 1 for each `if`, loop, `case`, `catch`, ternary, `&&`, `||`, `??`, `?.` and
+   default parameter. Functions sent to the browser as text (`collectElementMap`,
+   `settleProbe`) keep their helpers nested inside them.
+
 ---
 
 ## Repo layout

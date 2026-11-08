@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.7.2
+
+### Patch Changes
+
+- b9e4795: `testivai init-claude` replaces a `/testivai` skill that an earlier release wrote and nobody edited (recognised by its SHA-256, listed in `PREVIOUS_SKILL_SHA256`), without `--force`: upgrading from 2.7.0 is `npx testivai init-claude`. A file that differs from every released version is still kept unless `--force`, and the message now says so.
+- 74c5082: `testivai witness <url>`: the headless Chrome it launches picks a free debugging port itself (`--remote-debugging-port=0`, read back from `DevToolsActivePort`). The port used to be random in 9222–10021 and never checked, so a port another process held made the run wait 30s and fail. A Chrome that has not opened its debugging endpoint by half of `TESTIVAI_CHROME_STARTUP_TIMEOUT_MS` (default 30s) is stopped and launched once more, with a warning quoting its stderr; if both launches stall, the error says so and quotes both. A Chrome that exits still fails at once. `--port` (reuse a running Chrome) is unchanged.
+
+## 2.7.1
+
+### Patch Changes
+
+- 0f3ae5c: The `/testivai` skill (`testivai init-claude`): `/testivai report` shows the report with its screenshots. It runs `npx testivai report --share` and shows `visual-report/share.html`, every image inlined, since the app's side panel cannot load `index.html`'s `images/` folder. It never does when `.testivai/config.json` sets `shareUploadCommand`, which would upload the report: then it gives the path of `index.html`. `/testivai status` also names restyled elements (`dom.styleChanges`) and a page shift when the DOM changed too. Run `npx testivai init-claude --force` to update an installed skill.
+
+## 2.7.0
+
+### Minor Changes
+
+- 1a3692c: `testivai init-claude` adds a `/testivai` command for Claude Code to the project (`.claude/skills/testivai/SKILL.md`): `status` summarises `visual-report/results.json`, `report` points to the report, and `approve <name...|--all>` runs `testivai approve` on the local captures, or with `--pr` comments `/testivai approve` on the pull request. It works in the terminal, the desktop app and claude.ai/code cloud sessions, which load project skills but no plugins. Only a person typing `/testivai` runs it (`disable-model-invocation: true`). A changed file is kept unless `--force`. Also exported: `installClaudeSkill`, `TESTIVAI_SKILL`, `CLAUDE_SKILL_PATH`.
+
 ## 2.6.0
 
 ### Minor Changes

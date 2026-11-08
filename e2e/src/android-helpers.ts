@@ -18,11 +18,39 @@ export function demo(command: string, ...extras: string[]): void {
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * No new crash or "not responding" dialogs over the app (a slow CI boot
+ * Google Play Services disabled (see disablePlayServices), no new crash or "not responding" dialogs over the app (a slow CI boot
  * leaves the launcher not responding), light mode, and the status bar frozen
  * with demo mode, clock at 12:00.
  */
+const PLAY_SERVICES = 'com.google.android.gms';
+
+/**
+ * Disables Google Play Services on the throwaway emulator, before any app
+ * under test starts. On the google_apis image it applies a module update
+ * about two minutes after boot and kills its own processes to restart
+ * ("Module config changed, forcing restart"); Android then kills every app
+ * using one of its providers. The WebView fixture uses its FontsProvider, so
+ * the app and its WebView renderer died at whatever step was running (#266,
+ * #270). Disabled, nothing depends on it and the WebView uses system fonts.
+ */
+export function disablePlayServices(): 'disabled' | 'not installed' {
+  const installed = adb('shell', 'pm', 'list', 'packages', PLAY_SERVICES)
+    .split('\n')
+    .some((l) => l.trim() === `package:${PLAY_SERVICES}`);
+  if (!installed) return 'not installed';
+  adb('shell', 'pm', 'disable-user', '--user', '0', PLAY_SERVICES);
+  const disabled = adb('shell', 'pm', 'list', 'packages', '-d', PLAY_SERVICES)
+    .split('\n')
+    .some((l) => l.trim() === `package:${PLAY_SERVICES}`);
+  if (!disabled) throw new Error(`fixture: Google Play Services is still enabled after pm disable-user ${PLAY_SERVICES}`);
+  return 'disabled';
+}
+
 export function prepareDevice(): void {
+  // Before Play Services goes: with it disabled, apps post an "Enable Google
+  // Play services" heads-up notification over the screen under test.
+  adb('shell', 'settings', 'put', 'global', 'heads_up_notifications_enabled', '0');
+  console.log(`[device] Google Play Services: ${disablePlayServices()}`);
   adb('shell', 'settings', 'put', 'global', 'hide_error_dialogs', '1');
   adb('shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1');
   demo('enter');
@@ -40,6 +68,39 @@ export function prepareDevice(): void {
 export function rotate(quarterTurns: 0 | 1 | 2 | 3): void {
   adb('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0');
   adb('shell', 'settings', 'put', 'system', 'user_rotation', String(quarterTurns));
+}
+
+/** The screen's size now, read from a screencap's PNG header (IHDR width and height). */
+function screenSize(): { width: number; height: number } {
+  const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+/**
+ * Turns the display and waits until the screen really is that way round. A
+ * fixed sleep was not enough on a slow runner: right after `uimode night no`
+ * restarts Settings, the turn could take longer than 3 s and the capture was
+ * still portrait. Asks once more halfway; throws after `timeoutMs`.
+ */
+export async function rotateAndWait(
+  quarterTurns: 0 | 1 | 2 | 3,
+  { timeoutMs = 20_000, pollMs = 500 }: { timeoutMs?: number; pollMs?: number } = {},
+): Promise<void> {
+  const wantLandscape = quarterTurns % 2 === 1;
+  rotate(quarterTurns);
+  const start = Date.now();
+  let askedAgain = false;
+  for (;;) {
+    const { width, height } = screenSize();
+    if (width > height === wantLandscape) return;
+    const waited = Date.now() - start;
+    if (waited > timeoutMs) throw new Error(`the display did not turn: ${width}x${height} after ${waited} ms`);
+    if (!askedAgain && waited > timeoutMs / 2) {
+      rotate(quarterTurns);
+      askedAgain = true;
+    }
+    await sleep(pollMs);
+  }
 }
 
 export function restoreDevice(): void {

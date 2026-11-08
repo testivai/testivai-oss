@@ -133,17 +133,20 @@ export function chromeStartupTimeoutMs(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_STARTUP_TIMEOUT_MS;
 }
 
-/**
- * Launch a throwaway headless Chrome with remote debugging enabled.
- * Uses a temp profile so the user's browser state is never touched.
- */
-export async function launchChrome(executable: string, port: number): Promise<LaunchedChrome> {
+/** One Chrome process and what it said, while it starts. */
+interface Attempt {
+  child: ChildProcess;
+  userDataDir: string;
+  stderr: () => string;
+  /** Why the process ended (exit code, signal or spawn error), or null while it runs. */
+  ended: () => string | null;
+  kill: () => void;
+}
+
+function spawnChrome(executable: string, port: number): Attempt {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'testivai-chrome-'));
-
-  const args = chromeLaunchArgs(port, userDataDir);
-
   logger.debug(`Launching Chrome: ${executable}`);
-  const child: ChildProcess = spawn(executable, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  const child: ChildProcess = spawn(executable, chromeLaunchArgs(port, userDataDir), { stdio: ['ignore', 'ignore', 'pipe'] });
 
   // Keep the tail of stderr for error messages, and keep draining it for the
   // life of the process so a chatty Chrome never blocks on a full pipe.
@@ -174,24 +177,91 @@ export async function launchChrome(executable: string, port: number): Promise<La
       // best-effort temp cleanup
     }
   };
+  return { child, userDataDir, stderr: () => stderr, ended: () => ended, kill };
+}
 
+/**
+ * The port Chrome chose for --remote-debugging-port=0: the first line of the
+ * DevToolsActivePort file it writes into its profile once the endpoint is open.
+ */
+function readActivePort(userDataDir: string): number | null {
+  try {
+    const port = Number(fs.readFileSync(path.join(userDataDir, 'DevToolsActivePort'), 'utf8').split('\n')[0]);
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The endpoint's port once it answers, or null when the time runs out or Chrome exits. */
+async function waitForEndpoint(attempt: Attempt, port: number, timeoutMs: number): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  const stop = () => attempt.ended() !== null;
+  let actual = port;
+  while (actual === 0 && Date.now() < deadline && !stop()) {
+    actual = readActivePort(attempt.userDataDir) ?? 0;
+    if (actual === 0) await new Promise((r) => setTimeout(r, 100));
+  }
+  if (actual === 0) return null;
+  const ready = await waitForDevtools(actual, Math.max(deadline - Date.now(), 1), stop);
+  return ready ? actual : null;
+}
+
+function launchHints(): string {
+  const sandboxHint = needsNoSandbox()
+    ? ''
+    : ' If this is a container, Chrome may be refusing to start because its ' +
+      'sandbox is unavailable — set TESTIVAI_CHROME_NO_SANDBOX=1.';
+  return ' Set TESTIVAI_CHROME_PATH to a working Chrome/Chromium binary if the auto-detected one is broken.' + sandboxHint;
+}
+
+function stderrSection(label: string, stderr: string): string {
+  return stderr.trim() ? `\n${label} (last ${STDERR_TAIL_CHARS} characters at most):\n${stderr.trim()}` : '';
+}
+
+/**
+ * Launch a throwaway headless Chrome with remote debugging enabled.
+ *
+ * Without `port` (or with 0), Chrome picks a free port itself and the launcher
+ * reads it from DevToolsActivePort, so a port another process holds cannot
+ * make the launch fail. A Chrome that exits fails at once. A Chrome that is
+ * still running but has not opened its endpoint by half the startup timeout
+ * (TESTIVAI_CHROME_STARTUP_TIMEOUT_MS) is killed and launched once more: on
+ * CI runners Chrome now and then stalls early in startup, and a second launch
+ * starts normally.
+ */
+export async function launchChrome(executable: string, port = 0): Promise<LaunchedChrome> {
   const timeoutMs = chromeStartupTimeoutMs();
-  const ready = await waitForDevtools(port, timeoutMs, () => ended !== null);
-  if (!ready) {
-    kill();
-    const sandboxHint = needsNoSandbox()
-      ? ''
-      : ' If this is a container, Chrome may be refusing to start because its ' +
-        'sandbox is unavailable — set TESTIVAI_CHROME_NO_SANDBOX=1.';
-    const pathHint = ' Set TESTIVAI_CHROME_PATH to a working Chrome/Chromium binary if the auto-detected one is broken.';
-    const stderrTail = stderr.trim() ? `\nChrome stderr (last ${STDERR_TAIL_CHARS} characters at most):\n${stderr.trim()}` : '';
-    const what =
-      ended !== null
-        ? `Chrome exited before opening its debugging endpoint (${ended}).`
-        : `Chrome did not open its debugging endpoint on port ${port} within ${timeoutMs / 1000}s. ` +
-          'Set TESTIVAI_CHROME_STARTUP_TIMEOUT_MS to wait longer.';
-    throw new Error(what + pathHint + sandboxHint + stderrTail);
+  const started = Date.now();
+
+  const first = spawnChrome(executable, port);
+  const firstPort = await waitForEndpoint(first, port, timeoutMs / 2);
+  if (firstPort !== null) return { port: firstPort, kill: first.kill };
+  first.kill();
+  const firstEnded = first.ended();
+  if (firstEnded !== null) {
+    throw new Error(
+      `Chrome exited before opening its debugging endpoint (${firstEnded}).` + launchHints() + stderrSection('Chrome stderr', first.stderr()),
+    );
   }
 
-  return { port, kill };
+  logger.warn(
+    `Chrome did not open its debugging endpoint within ${timeoutMs / 2000}s; launching it once more.` +
+      stderrSection('Chrome stderr', first.stderr()),
+  );
+  const second = spawnChrome(executable, port);
+  const secondPort = await waitForEndpoint(second, port, Math.max(timeoutMs - (Date.now() - started), 1));
+  if (secondPort !== null) return { port: secondPort, kill: second.kill };
+  second.kill();
+  const what =
+    second.ended() !== null
+      ? `Chrome stalled, then exited before opening its debugging endpoint (${second.ended()}).`
+      : `Chrome did not open its debugging endpoint within ${timeoutMs / 1000}s (launched twice). ` +
+        'Set TESTIVAI_CHROME_STARTUP_TIMEOUT_MS to wait longer.';
+  throw new Error(
+    what +
+      launchHints() +
+      stderrSection('First launch, Chrome stderr', first.stderr()) +
+      stderrSection('Second launch, Chrome stderr', second.stderr()),
+  );
 }

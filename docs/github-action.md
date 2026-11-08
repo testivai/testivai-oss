@@ -206,14 +206,7 @@ captures it bundles for `/testivai approve`.
 
 ## Approving changes from PR feedback
 
-The fastest path is the comment command: post `/testivai approve <name>` (or `/testivai approve --all`) directly on the PR. The companion `testivai/testivai-oss/approve@v1` action verifies the commenter has write access, restores the pending baselines from the workflow artifact, and commits them back to the PR branch — no local checkout needed.
-
-Only the comment's first line is read, so put the snapshot names (separated
-by spaces), or `--all`, on that line. A note, a signature or a footer below
-it is ignored. A bare `/testivai approve` approves every pending snapshot only
-when it is the whole comment. With more lines below it, nothing is approved
-and the reply asks for the names or `--all` on the first line, because the
-lines below could be the names.
+The fastest path is the comment command: post `/testivai approve <name>` (or `/testivai approve --all`) directly on the PR. Only the comment's first line is read, so put the names (separated by spaces) or `--all` on it; later lines (a note, a signature) are ignored. A bare `/testivai approve` followed by more lines approves nothing, and the reply asks for the names or `--all` on the first line, because the lines below could be the names. In Claude Code, [`/testivai approve <name> --pr`](./cli/init-claude.md) posts it for you. The companion `testivai/testivai-oss/approve@v1` action verifies the commenter has write access, restores the pending baselines from the workflow artifact, and commits them back to the PR branch — no local checkout needed.
 
 Its reply lists what was approved and names the CI run the captures came from.
 When [`publish@v1`](#reports-on-github-pages) has put that run's report on

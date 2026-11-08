@@ -85,6 +85,7 @@ CI (GitHub Actions):
 - `src/report/generator.ts`  — writes results.json + renders index.html
 - `src/report/template.ts`   — HTML template for the report; escapes every value it shows; `snapshotAnchorId()` is each snapshot's link target (`#snap-<name>`), shared with the PR comment
 - `src/capture/native-app.ts` — native app captures (experimental): the device, the snapshot key and the environment block from an Appium session's capabilities (`isNativeAppCapabilities`, `nativeAppDevice`, `nativeAppVariant`, `appiumEnvironment`); the WebdriverIO adapter's native mode uses it
+- `src/claude/skill.ts`       — the `/testivai` Claude Code skill (`TESTIVAI_SKILL`, `disable-model-invocation: true`) and `installClaudeSkill`, written by `testivai init-claude`, which replaces an earlier release's skill only when unedited (`PREVIOUS_SKILL_SHA256`: add the old hash whenever the text changes; a test pins the current one); `docs/claude-code/testivai/SKILL.md` is the same text (a test keeps them identical)
 - `src/capture/stable-capture.ts` — fresh-frame wait + capture until two in a row match, guarding against Chrome's wrong-viewport frames in beyond-viewport captures (shared by the standalone CLI and the Playwright and Selenium adapters)
 
 ### @testivai/witness-playwright (`packages/playwright/`)
@@ -361,6 +362,17 @@ Exit-code contract (`packages/witness/src/commands/exit-codes.ts`): 0 pass / 1 c
 
 - Core vocabulary: pixel diff, DOM diff, noise hint, layered analysis, baselines, threshold, heatmap.
 - TestivAI's packages are **local-first**: no account, no API key, nothing sent anywhere, no telemetry. Today there is no hosted product — never invent one in docs or code, and never describe a feature as paid or gated. TestivAI is free to use (`docs/philosophy.md`, "Free and open source"); keep wording about cost consistent with it. AI-powered explanation is bring-your-own-model via `@testivai/mcp` (`explain_snapshot`).
+
+## Code style
+
+- **Keep cyclomatic complexity below 10 in the code you change.** New functions start below 10.
+  When a change edits an existing function at 10 or more, bring it below 10 in the same PR:
+  tests that pin today's behaviour first, then the split in its own commit, before the
+  behaviour change. Leave functions the change does not edit as they are: existing code
+  comes down one change at a time, never in one sweep. Count as ESLint's `complexity` rule
+  does: 1, plus 1 for each `if`, loop, `case`, `catch`, ternary, `&&`, `||`, `??`, `?.` and
+  default parameter. Functions sent to the browser as text (`collectElementMap`,
+  `settleProbe`) keep their helpers nested inside them.
 
 ## PR conventions
 
