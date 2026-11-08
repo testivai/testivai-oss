@@ -191,7 +191,7 @@ CI — GitHub Actions
 
 | File | Responsibility |
 |---|---|
-| `action.yml` | Composite action; its reply step loads `action/dist/approve.cjs` (`action/src/approve.ts`: names the approved run, links its published report from the TestivAI comment) |
+| `action.yml` | Composite action; its auth and reply steps load `action/dist/approve.cjs` (`action/src/approve.ts`: `parseApproveCommand` reads the command from the comment's first line only; the reply names the approved run, links its published report from the TestivAI comment) |
 
 ---
 

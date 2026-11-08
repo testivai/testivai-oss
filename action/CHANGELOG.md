@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `approve@v1`: a `/testivai approve` comment with more lines below the command is read. The command was matched against the whole comment, so a note under it (`/testivai approve --all`, a blank line, `Looks good, thanks`), a signature or a footer, such as the one Claude Code adds to every comment it posts, made the action log "Not a /testivai command — skipping." and stop: nothing was approved and no reply was posted. Now only the first line is read, and anything below it is ignored, so it never becomes a snapshot name. Lines may end in `\n` or `\r\n`. A single-line comment reads as before, including a bare `/testivai approve` meaning `--all`. With more lines below it, a bare `/testivai approve` approves nothing: after the write-access check, the reply asks for the names or `--all` on the first line. The old parser read names on the next line (`/testivai approve`, then `home`) as the target, so reading the bare command as `--all` would approve more than was asked. The parser (`parseApproveCommand`) moved from the step's inline script into `action/dist/approve.cjs`, which the reply step already loads. The write-access check and the apply step's snapshot-name checks are unchanged
+
 ## [1.7.0] - 2026-11-02
 
 ### Added

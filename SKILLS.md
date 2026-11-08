@@ -78,12 +78,14 @@ git push origin v1.5.1
 
 ## Skill: Change the approve composite action
 
-**When:** Modifying `approve/action.yml` (permission check, baseline copy logic) or the reply it posts on the PR (`action/src/approve.ts`)
+**When:** Modifying `approve/action.yml` (permission check, baseline copy logic), how it reads the command, or the reply it posts on the PR (`action/src/approve.ts`)
 
-The shell steps in `approve/action.yml` ship as they are. The reply step loads
-`action/dist/approve.cjs`, built from `action/src/approve.ts`: it names the
-approved run and links its report when publish@v1 has published it. A change
-to the reply needs the dist rebuilt and committed:
+The shell steps in `approve/action.yml` ship as they are. The auth and reply
+steps load `action/dist/approve.cjs`, built from `action/src/approve.ts`: the
+auth step reads the command from the comment's first line
+(`parseApproveCommand`), and the reply names the approved run and links its
+report when publish@v1 has published it. A change to either needs the dist
+rebuilt and committed:
 
 ```bash
 cd action
@@ -179,6 +181,10 @@ Post a comment on the PR:
 /testivai approve homepage        ← approves one snapshot
 /testivai approve --all           ← approves all changed snapshots
 ```
+
+Only the comment's first line is read: put the names, or `--all`, on it. A note
+or footer below it is ignored. A bare `/testivai approve` with more lines below
+it approves nothing, and the reply asks for the names or `--all` on the first line.
 
 **What happens:**
 1. The `testivai/testivai-oss/approve@v1` action verifies you have write access

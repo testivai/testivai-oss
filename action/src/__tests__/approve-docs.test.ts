@@ -96,6 +96,19 @@ describe('approve setup docs', () => {
     expect(skill).toMatch(/GitHub Pages/);
   });
 
+  it.each([
+    ['docs/github-action.md', '## Approving changes from PR feedback'],
+    ['README.md', '### Approve changed baselines'],
+    ['SKILLS.md', '## Skill: Approve baselines via PR comment'],
+  ])('%s says only the first line of the comment is read', (file, heading) => {
+    const doc = read(file);
+    const start = doc.indexOf(heading);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const section = doc.slice(start, doc.indexOf('\n#', start + heading.length));
+    expect(section).toMatch(/only the (comment's )?first line( of the comment)? is read/i);
+    expect(section).toContain('`--all`');
+  });
+
   it.each(['README.md', 'SKILLS.md', 'AGENTS.md', 'CLAUDE.md', 'approve/action.yml'])(
     '%s does not promise an unconditional CI re-run after approve',
     (file) => {

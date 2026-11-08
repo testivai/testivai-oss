@@ -1,6 +1,7 @@
 /**
- * The reply to `/testivai approve` (approve/action.yml's last step), bundled
- * as dist/approve.cjs.
+ * The `/testivai approve` command (approve/action.yml's first step reads it
+ * with parseApproveCommand) and the reply to it (the last step), bundled as
+ * dist/approve.cjs.
  *
  * It names the run whose captures were approved and, when that run's report
  * is published on the repository's Pages site (publish@v1), links it and
@@ -19,6 +20,56 @@ import { assessHealth } from '../../packages/witness/src/report/health';
 import { readRunKey, safeReportUrl } from './comment';
 import { BOT_LOGIN } from './publish/comments';
 import { readRunStamp, type RunStamp } from './report-artifact';
+
+export interface ApproveCommand {
+  cmd: 'approve';
+  /**
+   * Snapshot names separated by whitespace, or `--all`. Null when the first
+   * line is a bare `/testivai approve` and the comment goes on below it: ask
+   * for the target (buildNeedsTargetReply), never assume `--all`.
+   */
+  target: string | null;
+}
+
+/** Every line break a regex `.` does not match. */
+const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
+const COMMAND = /^\/testivai\s+(approve)\s*(.+)?$/i;
+
+/**
+ * The `/testivai approve [<name>… | --all]` command in a pull request
+ * comment, or null when the comment is not one. Only the first line is read
+ * (after leading blank lines), so a note, a signature or a footer below it is
+ * ignored. On that line, the rule is the one the action always had: a bare
+ * `/testivai approve` means `--all`, but only when it is the whole comment.
+ * With more lines below it, the target is null: names written on the next
+ * line used to be read as the target, so taking the bare command as `--all`
+ * would approve more than was asked.
+ */
+export function parseApproveCommand(body: string | null | undefined): ApproveCommand | null {
+  const text = (body ?? '').trim();
+  const [first] = text.split(LINE_BREAK, 1);
+  const match = first.trim().match(COMMAND);
+  if (!match) return null;
+  const target = match[2]?.trim();
+  if (target) return { cmd: 'approve', target };
+  return { cmd: 'approve', target: first.length === text.length ? '--all' : null };
+}
+
+/** The reply to a bare `/testivai approve` with more lines below it. Its first line is never a command. */
+export function buildNeedsTargetReply(actor: string): string {
+  return [
+    `@${actor} — nothing was approved. Only the first line of a comment is read, and it names no snapshot while the comment goes on below it.`,
+    '',
+    'Put the snapshot names, or `--all`, on the first line:',
+    '',
+    '```',
+    '/testivai approve <name> [<name> …]',
+    '/testivai approve --all',
+    '```',
+    '',
+    'Anything below the first line, such as a note or a signature, is ignored.',
+  ].join('\n');
+}
 
 export interface ExistingComment {
   author: string;

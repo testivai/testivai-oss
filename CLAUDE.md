@@ -120,7 +120,7 @@ CI (GitHub Actions):
 - `action.yml`               — composite action: `actions/cache/restore@v6` (with `cache: true`) → github-script build → `actions/cache/save@v6` (with `cache: true`) → `actions/upload-pages-artifact@v5` → `actions/deploy-pages@v5` → github-script finish; loads `action/dist/publish.cjs`, never checks out code; setup in `docs/github-action.md#reports-on-github-pages`
 
 ### GitHub Action approver (`approve/`)
-- `action.yml`               — composite action: github-script auth → checkout → shell download and apply → commit → github-script reply; the reply loads `action/dist/approve.cjs` (`action/src/approve.ts`: names the approved run, links its published report from the TestivAI comment)
+- `action.yml`               — composite action: github-script auth → checkout → shell download and apply → commit → github-script reply; the auth and reply steps load `action/dist/approve.cjs` (`action/src/approve.ts`: `parseApproveCommand` reads the command from the comment's first line only; the reply names the approved run, links its published report from the TestivAI comment)
 
 ## Changesets (versioning + publishing)
 
@@ -139,7 +139,7 @@ The GitHub Action (`action.yml` at repo root → `action/dist/index.js`) uses a 
 - After any change to `action/src/`, rebuild dist AND push a new semver tag to roll `v1`
 - `scripts/release-action.js vX.Y.Z` tags `origin/main` and moves `v1` from a maintainer's clone (checks, `--dry-run`); the fallback when the workflow cannot move `v1` (its push needs the `RELEASE_TAG_TOKEN` secret with Workflows write once a workflow file changed)
 
-The approve action (`approve/action.yml`) is a composite action; its reply step loads `action/dist/approve.cjs`, so rebuild the dist after changing `action/src/approve.ts`. It ships with the dist at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
+The approve action (`approve/action.yml`) is a composite action; its auth and reply steps load `action/dist/approve.cjs`, so rebuild the dist after changing `action/src/approve.ts`. It ships with the dist at the same `v1` tag. The review action (`review/action.yml`) is composite too, but its logic is `action/dist/review.cjs`: rebuild the dist after changing `action/src/review.ts` (or the MCP triage rubric it bundles). The publish action (`publish/action.yml`) likewise loads `action/dist/publish.cjs`: rebuild after changing `action/src/publish*` or the witness report code it bundles (template, validate).
 
 ## .testivai/ directory layout (on-disk contract)
 
