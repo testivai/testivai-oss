@@ -432,8 +432,9 @@ export async function runStandaloneWitness(
           '(a Playwright-downloaded chromium works: npx playwright install chromium).',
       );
     }
-    port = 9222 + Math.floor(Math.random() * 800);
-    launched = await launchChrome(executable, port);
+    // Chrome picks a free port itself (--remote-debugging-port=0).
+    launched = await launchChrome(executable);
+    port = launched.port;
   }
 
   const store = new BaselineStore(projectRoot);

@@ -45,10 +45,14 @@ process runs as root (which is the default in most Docker images).
 `TESTIVAI_CHROME_NO_SANDBOX=1` forces it on for non-root containers whose
 seccomp profile still blocks the sandbox; `=0` forces it off.
 
-TestivAI waits up to 30s for Chrome to open its debugging endpoint;
-`TESTIVAI_CHROME_STARTUP_TIMEOUT_MS` changes that (for slow CI runners). If
-Chrome exits instead, the run fails straight away with its exit code and the
-end of its stderr, so a crash and a slow start are told apart.
+Chrome picks a free debugging port itself (`--remote-debugging-port=0`), so a
+port another process holds cannot get in the way. TestivAI waits up to 30s for
+Chrome to open its debugging endpoint; `TESTIVAI_CHROME_STARTUP_TIMEOUT_MS`
+changes that (for slow CI runners). A Chrome still silent at half that time is
+stopped and launched once more, with a warning that quotes its stderr: on CI
+runners Chrome now and then stalls early in startup. If Chrome exits instead,
+the run fails straight away with its exit code and the end of its stderr, so a
+crash and a slow start are told apart.
 
 First run creates baselines — approve and commit them:
 
