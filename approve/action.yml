@@ -50,33 +50,28 @@ runs:
   steps:
 
     # ── Step 1: Parse command, verify commenter, resolve PR branch ──────────
+    # Only the comment's first line is the command; a note, a signature or a
+    # footer below it is ignored. Parser: action/dist/approve.cjs
+    # (parseApproveCommand), which ships with this action at the same tag.
     - name: Parse command + verify permissions
       id: auth
       uses: actions/github-script@v9
+      env:
+        TESTIVAI_APPROVE_LIB: ${{ github.action_path }}/../action/dist/approve.cjs
       with:
         github-token: ${{ inputs.github-token }}
         result-encoding: json
         script: |
-          const body = context.payload.comment?.body?.trim() ?? '';
+          const approve = require(process.env.TESTIVAI_APPROVE_LIB);
 
-          // Only handle /testivai commands. The command is the comment's
-          // first line; later lines (a note, a footer) are ignored.
-          const [firstLine, ...rest] = body.split(/\r?\n/);
-          const match = firstLine.trim().match(/^\/testivai\s+(approve)\s*(.+)?$/i);
-          if (!match) {
+          // Only handle /testivai commands
+          const command = approve.parseApproveCommand(context.payload.comment?.body);
+          if (!command) {
             core.info('Not a /testivai command — skipping.');
             return { skip: true };
           }
 
-          const cmd    = match[1].toLowerCase();   // 'approve'
-          // A bare command means --all only when it is the whole comment:
-          // with more lines after it, the names may be on the next line, so
-          // approve nothing rather than everything.
-          if (match[2] === undefined && rest.length > 0) {
-            core.info('/testivai approve with no name on its first line, and more lines after it — skipping. Put the names (or --all) on the command line.');
-            return { skip: true };
-          }
-          const target = (match[2] ?? '--all').trim(); // name or '--all'
+          const { cmd, target } = command; // 'approve'; names, '--all', or null: ask
 
           // Verify the commenter has write access to this repo
           let permission = 'none';
@@ -97,6 +92,19 @@ runs:
               repo:         context.repo.repo,
               issue_number: context.issue.number,
               body: `@${context.actor} — only collaborators with **write** access can approve visual baselines.`,
+            });
+            return { skip: true };
+          }
+
+          // A bare `/testivai approve` with more lines below it: the names may
+          // be on the next line, so ask rather than approve everything.
+          if (target === null) {
+            core.info('The first line names no snapshot and the comment goes on — asking for the target.');
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body:         approve.buildNeedsTargetReply(context.actor),
             });
             return { skip: true };
           }

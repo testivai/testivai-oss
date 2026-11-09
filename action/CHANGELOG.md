@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `approve@v1`: a bare `/testivai approve` followed by more lines now gets a reply. Since v1.8.0 it approved nothing and only logged why, so the person who commented saw nothing happen. It still approves nothing, but after the write-access check it now replies asking for the names, or `--all`, on the first line. The reply's own first line is never a command, so a reply posted with a token that starts workflows cannot approve
+- The command is read by `parseApproveCommand` in `action/dist/approve.cjs`, which the auth step now loads as the reply step does, instead of a regex inline in `approve/action.yml`. A one-line comment, and the first-line rule of v1.8.0, read as before
+
+### Fixed
+
+- `approve@v1`: a lone `\r`, U+2028 or U+2029 also ends the command's line. v1.8.0 split the comment only at `\n` and `\r\n`, so `/testivai approve home` followed by a note after one of those was not read as a command and was skipped
+
 ## [1.8.1] - 2026-11-04
 
 ### Changed

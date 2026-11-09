@@ -296,6 +296,8 @@ After CI posts the diff report on your PR, review the `testivai-visual-report` a
 | `/testivai approve homepage` | Approves one named snapshot |
 | `/testivai approve --all` | Approves every changed snapshot at once |
 
+Only the first line of the comment is read: put the names, or `--all`, on it. A note or signature below it is ignored.
+
 **What happens:**
 1. Action verifies you have **write** access to the repository (others get a polite rejection)
 2. Downloads the `testivai-visual-report` artifact from the latest CI run on your branch

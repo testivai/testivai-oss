@@ -32,7 +32,9 @@ var approve_exports = {};
 __export(approve_exports, {
   approvedRun: () => approvedRun,
   buildApproveReply: () => buildApproveReply,
+  buildNeedsTargetReply: () => buildNeedsTargetReply,
   findReportUrl: () => findReportUrl,
+  parseApproveCommand: () => parseApproveCommand,
   readApprovedHealth: () => readApprovedHealth,
   reply: () => reply
 });
@@ -377,6 +379,31 @@ function parseRunStamp(text2) {
 }
 
 // src/approve.ts
+var LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
+var COMMAND = /^\/testivai\s+(approve)\s*(.+)?$/i;
+function parseApproveCommand(body) {
+  const text2 = (body ?? "").trim();
+  const [first] = text2.split(LINE_BREAK, 1);
+  const match = first.trim().match(COMMAND);
+  if (!match) return null;
+  const target = match[2]?.trim();
+  if (target) return { cmd: "approve", target };
+  return { cmd: "approve", target: first.length === text2.length ? "--all" : null };
+}
+function buildNeedsTargetReply(actor) {
+  return [
+    `@${actor} \u2014 nothing was approved. Only the first line of a comment is read, and it names no snapshot while the comment goes on below it.`,
+    "",
+    "Put the snapshot names, or `--all`, on the first line:",
+    "",
+    "```",
+    "/testivai approve <name> [<name> \u2026]",
+    "/testivai approve --all",
+    "```",
+    "",
+    "Anything below the first line, such as a note or a signature, is ignored."
+  ].join("\n");
+}
 var LINK = /\]\((https:\/\/[^\s()<>"'`\\]+)\)/g;
 function findReportUrl(comments, { pr, runKey }) {
   const page = `/pr/${Math.trunc(pr)}/${runKey}/`;
@@ -481,7 +508,9 @@ async function reply({ github, context, core, env }) {
 0 && (module.exports = {
   approvedRun,
   buildApproveReply,
+  buildNeedsTargetReply,
   findReportUrl,
+  parseApproveCommand,
   readApprovedHealth,
   reply
 });
