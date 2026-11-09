@@ -71,6 +71,14 @@ describe('.github/dependabot.yml', () => {
     expect(ignored(entry('npm'), '@types/node')?.['update-types']).toEqual(['version-update:semver-major']);
   });
 
+  test('chalk stays on 4 while @testivai/witness is CommonJS', () => {
+    // chalk 5 and later are ESM-only, so jest cannot load them from the CJS
+    // sources (12 witness suites failed on #262), and chalk 6 needs Node 22.
+    const witness = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages', 'witness', 'package.json'), 'utf8'));
+    expect(major(witness.dependencies.chalk)).toBe(4);
+    expect(ignored(entry('npm'), 'chalk')?.versions).toEqual(['>=5']);
+  });
+
   test("React follows the Expo SDK in examples/expo-web, not Dependabot", () => {
     for (const name of ['react', 'react-dom']) {
       expect(ignored(entry('npm'), name)).toBeDefined();

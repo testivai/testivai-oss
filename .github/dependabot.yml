@@ -39,6 +39,11 @@ updates:
       # CJS+ESM and is the current target. Unblock when Jest ESM migration done.
       - dependency-name: "commander"
         versions: [">=15.0.0"]
+      # chalk >=5 is ESM-only, so jest cannot load it from the CJS sources
+      # (12 witness suites failed on #262), and chalk 6 needs Node 22.
+      # Unblock with the Jest ESM migration, as for inquirer and commander.
+      - dependency-name: "chalk"
+        versions: [">=5"]
       # TypeScript 7 exposes no JavaScript compiler API, which ts-jest needs
       # ("does not expose the JavaScript compiler API required by ts-jest",
       # #145). Moving to it is a planned migration, not a bump.
