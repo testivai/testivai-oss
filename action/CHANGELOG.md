@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-09
+
+The first release tag since v1.8.0: v1.8.1 (below) was never tagged, so `@v1` gets its change with this release too.
+
 ### Changed
 
 - `approve@v1`: a bare `/testivai approve` followed by more lines now gets a reply. Since v1.8.0 it approved nothing and only logged why, so the person who commented saw nothing happen. It still approves nothing, but after the write-access check it now replies asking for the names, or `--all`, on the first line. The reply's own first line is never a command, so a reply posted with a token that starts workflows cannot approve
