@@ -72,6 +72,6 @@
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15",
     "typescript": "^6.0.3",
-    "webdriverio": "^9.31.7"
+    "webdriverio": "^10.2.0"
   }
 }
