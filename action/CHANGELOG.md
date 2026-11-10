@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-11-09
+## [1.9.0] - 2026-11-10
 
 The first release tag since v1.8.0: v1.8.1 (below) was never tagged, so `@v1` gets its change with this release too.
 
