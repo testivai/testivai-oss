@@ -128,6 +128,9 @@ The first release tag since v1.8.0: v1.8.1 (below) was never tagged, so `@v1` ge
 ### Changed
 - The PR comment calls an identical-DOM diff with matching computed styles "likely render noise" only when the diff is small and scattered. When every diff region fits in a box covering at most a third of the page, it says **DOM and styles unchanged, but the diff is concentrated in one area**, names the regions and their box, and says it is a bad capture or a change the style check does not cover (size, overflow, transform, images…); a spread-out diff over 1% of pixels says **the diff is large**. Both ask for the images to be compared before approving. The rule is `diffShape` from `@testivai/witness`, read from `results.json` fields older witness versions already write
 
+### Security
+- `approve@v1`: snapshot names can no longer run code in the approve job or reach outside `pending-baselines/`. The names come from the `/testivai approve` comment and from the directory names in the report artifact's `pending-baselines/`, which the pull request's own CI run uploads (a fork's pull request controls them). In v1.0.3 to v1.0.14, the confirmation step put the approved and skipped names inside its `actions/github-script` source, so a directory name containing a quote ran as JavaScript with the approve token as soon as someone commented `/testivai approve --all` or a bare `/testivai approve`; the names now reach the script through `env:`. The apply step copied `pending-baselines/<name>` for any name, so `../x`, `.` and `..` copied files from outside it; it now approves only a real directory directly inside `pending-baselines/` (never `.`, `..`, a name with `/`, or a symbolic link), with globbing off. The report is downloaded to `$RUNNER_TEMP` instead of `/tmp`. Workflows on `@v1` have the fix; update a pin to v1.0.3–v1.0.14, or to a commit SHA from before the fix, to this release or later. CWE-94, CWE-22 (#179)
+
 ## [1.0.10] - 2026-07-14
 
 ### Added
