@@ -36,14 +36,12 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from ._capture import (
-    STABILIZE_CSS,
     _DEFAULT_MAX_ELEMENTS,
+    CapturePlan,
     _element_map_expression,
-    wait_for_settled,
+    plan_capture,
     stop_settle_observer,
-    build_ignore_css,
-    load_local_config,
-    sanitize_variant,
+    wait_for_settled,
 )
 
 _STYLE_ID = "__testivai_capture_style__"
@@ -117,91 +115,95 @@ def witness(
     Returns:
         The temp directory the capture was written to.
     """
-    if not name or not isinstance(name, str):
-        raise ValueError(
-            "testivai.selenium.witness: snapshot name is required and must be a non-empty string"
-        )
+    plan = plan_capture("testivai.selenium.witness", name, ignore_selectors, stabilize, variant, project_root)
+    _shoot(driver, plan)
+    _write_page_data(driver, plan, skip_dom, skip_element_map, max_elements)
+    return plan.temp_dir
 
-    root = Path(project_root) if project_root else Path.cwd()
-    config = load_local_config(root)
 
-    effective_stabilize = config["stabilize"] if stabilize is None else stabilize
-    merged_selectors = list(
-        dict.fromkeys([*config.get("ignoreSelectors", []), *(ignore_selectors or [])])
-    )
-
-    if variant:
-        name = f"{name}__{sanitize_variant(variant)}"
-
-    # 1. Prepare the page: one style tag covering stabilization + ignores
-    css_parts = []
-    if effective_stabilize:
-        css_parts.append(STABILIZE_CSS)
-    if merged_selectors:
-        css_parts.append(build_ignore_css(merged_selectors))
-
-    style_injected = False
-    if css_parts:
-        try:
-            driver.execute_script(_INJECT_STYLE_JS, _STYLE_ID, "\n".join(css_parts))
-            style_injected = True
-        except Exception:
-            style_injected = False  # locked-down page; capture proceeds
-        if effective_stabilize:
-            _wait_for_fonts(driver)
-            # Then wait for the page itself to stop changing — images finished,
-            # DOM quiet. This is the load question the DOM/style layer cannot
-            # answer: content that never arrived reads as a real change.
-            wait_for_settled(driver)
-
-    temp_dir = root / ".testivai" / "temp" / name
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
+def _shoot(driver: Any, plan: CapturePlan) -> None:
+    """Prepare the page, take the screenshot, put the page back."""
+    style_injected = _inject_style(driver, plan)
+    plan.temp_dir.mkdir(parents=True, exist_ok=True)
     try:
-        # 2. Full-page screenshot, best mechanism the browser offers
+        # Full-page screenshot, best mechanism the browser offers
         png = _capture_screenshot(driver)
-        (temp_dir / "screenshot.png").write_bytes(png)
+        (plan.temp_dir / "screenshot.png").write_bytes(png)
     finally:
-        if style_injected:
-            try:
-                driver.execute_script(_REMOVE_STYLE_JS, _STYLE_ID)
-            except Exception:
-                pass  # best-effort cleanup
-        if effective_stabilize:
-            # Detach the observer so it does not linger on the page under test.
-            stop_settle_observer(driver)
+        _restore_page(driver, plan, style_injected)
 
-    # 3. DOM snapshot with ignored elements removed (best-effort — a flaky
-    #    page never breaks the screenshot path; missing dom.html just
-    #    suppresses the noise hint)
+
+def _inject_style(driver: Any, plan: CapturePlan) -> bool:
+    """One style tag covering stabilization + ignores; then wait for the page."""
+    css = plan.css
+    if not css:
+        return False
+    try:
+        driver.execute_script(_INJECT_STYLE_JS, _STYLE_ID, css)
+        injected = True
+    except Exception:
+        injected = False  # locked-down page; capture proceeds
+    if plan.stabilize:
+        _wait_for_fonts(driver)
+        # Then wait for the page itself to stop changing — images finished,
+        # DOM quiet. This is the load question the DOM/style layer cannot
+        # answer: content that never arrived reads as a real change.
+        wait_for_settled(driver)
+    return injected
+
+
+def _restore_page(driver: Any, plan: CapturePlan, style_injected: bool) -> None:
+    if style_injected:
+        try:
+            driver.execute_script(_REMOVE_STYLE_JS, _STYLE_ID)
+        except Exception:
+            pass  # best-effort cleanup
+    if plan.stabilize:
+        # Detach the observer so it does not linger on the page under test.
+        stop_settle_observer(driver)
+
+
+def _write_page_data(
+    driver: Any, plan: CapturePlan, skip_dom: bool, skip_element_map: bool, max_elements: Optional[int]
+) -> None:
     if not skip_dom:
-        try:
-            dom = driver.execute_script(_DOM_SNAPSHOT_JS, list(merged_selectors))
-            if isinstance(dom, str) and dom:
-                (temp_dir / "dom.html").write_text(dom, encoding="utf-8")
-        except Exception:
-            pass
-
-    # 4. Element map (best-effort, same contract as the DOM snapshot).
-    #    Powers region->selector attribution, shift classification and the
-    #    style fingerprint. The injected collector is the SAME function every
-    #    other adapter injects -- see element_map.js, which is generated from
-    #    the TypeScript source so the languages cannot drift apart.
+        _write_dom(driver, plan)
     if not skip_element_map:
-        try:
-            expr = _element_map_expression(
-                max_elements if max_elements is not None else _DEFAULT_MAX_ELEMENTS,
-                list(merged_selectors),
-            )
-            element_map = driver.execute_script(expr)
-            if isinstance(element_map, list) and element_map:
-                (temp_dir / "elements.json").write_text(
-                    json.dumps(element_map), encoding="utf-8"
-                )
-        except Exception:
-            pass
+        _write_element_map(driver, plan, max_elements)
 
-    return temp_dir
+
+def _write_dom(driver: Any, plan: CapturePlan) -> None:
+    """
+    DOM snapshot with ignored elements removed (best-effort — a flaky page
+    never breaks the screenshot path; missing dom.html just suppresses the
+    noise hint).
+    """
+    try:
+        dom = driver.execute_script(_DOM_SNAPSHOT_JS, list(plan.selectors))
+        if isinstance(dom, str) and dom:
+            (plan.temp_dir / "dom.html").write_text(dom, encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _write_element_map(driver: Any, plan: CapturePlan, max_elements: Optional[int]) -> None:
+    """
+    Element map (best-effort, same contract as the DOM snapshot). Powers
+    region->selector attribution, shift classification and the style
+    fingerprint. The injected collector is the SAME function every other
+    adapter injects -- see element_map.js, which is generated from the
+    TypeScript source so the languages cannot drift apart.
+    """
+    try:
+        expr = _element_map_expression(
+            max_elements if max_elements is not None else _DEFAULT_MAX_ELEMENTS,
+            list(plan.selectors),
+        )
+        element_map = driver.execute_script(expr)
+        if isinstance(element_map, list) and element_map:
+            (plan.temp_dir / "elements.json").write_text(json.dumps(element_map), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _browser_name(driver: Any) -> str:

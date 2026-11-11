@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -82,6 +83,58 @@ def build_ignore_css(selectors: Sequence[str]) -> str:
     return "\n".join(f"{sel} {{ visibility: hidden !important; }}" for sel in selectors)
 
 
+@dataclass(frozen=True)
+class CapturePlan:
+    """What one witness() call captures, resolved from its arguments and config.json."""
+
+    name: str
+    temp_dir: Path
+    stabilize: bool
+    selectors: list
+    variant: Optional[str]
+
+    @property
+    def css(self) -> str:
+        """The one style tag a capture injects: stabilization, then the ignores."""
+        parts = []
+        if self.stabilize:
+            parts.append(STABILIZE_CSS)
+        if self.selectors:
+            parts.append(build_ignore_css(self.selectors))
+        return "\n".join(parts)
+
+
+def plan_capture(
+    caller: str,
+    name: Any,
+    ignore_selectors: Optional[Sequence[str]],
+    stabilize: Optional[bool],
+    variant: Optional[str],
+    project_root: Optional[Path],
+) -> CapturePlan:
+    """
+    Validate the name and resolve what to capture, the same way for every
+    Python adapter: per-call ignore selectors after config.json's (each kept
+    once, in first-seen order), the per-call stabilize over config's, and the
+    variant folded into the name as `<name>__<variant>`.
+    """
+    if not name or not isinstance(name, str):
+        raise ValueError(f"{caller}: snapshot name is required and must be a non-empty string")
+
+    root = Path(project_root) if project_root else Path.cwd()
+    config = load_local_config(root)
+    selectors = list(dict.fromkeys([*config.get("ignoreSelectors", []), *(ignore_selectors or [])]))
+    if variant:
+        name = f"{name}__{sanitize_variant(variant)}"
+    return CapturePlan(
+        name=name,
+        temp_dir=root / ".testivai" / "temp" / name,
+        stabilize=config["stabilize"] if stabilize is None else stabilize,
+        selectors=selectors,
+        variant=variant,
+    )
+
+
 def witness(
     page: Any,
     name: str,
@@ -117,59 +170,59 @@ def witness(
     Returns:
         The temp directory the capture was written to.
     """
-    if not name or not isinstance(name, str):
-        raise ValueError("testivai.witness: snapshot name is required and must be a non-empty string")
-
-    root = Path(project_root) if project_root else Path.cwd()
-    config = load_local_config(root)
-
-    effective_stabilize = config["stabilize"] if stabilize is None else stabilize
-    merged_selectors = list(dict.fromkeys([*config.get("ignoreSelectors", []), *(ignore_selectors or [])]))
-
-    if variant:
-        name = f"{name}__{sanitize_variant(variant)}"
-
-    # 1. Prepare the page: one style tag covering stabilization + ignores
-    css_parts = []
-    if effective_stabilize:
-        css_parts.append(STABILIZE_CSS)
-    if merged_selectors:
-        css_parts.append(build_ignore_css(merged_selectors))
-
-    style_handle = None
-    if css_parts:
-        try:
-            style_handle = page.add_style_tag(content="\n".join(css_parts))
-        except Exception:
-            style_handle = None  # locked-down page; capture proceeds
-        if effective_stabilize:
-            _wait_for_fonts(page)
-
-    temp_dir = root / ".testivai" / "temp" / name
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        # 2. Full-page screenshot via Playwright's native API
-        page.screenshot(path=str(temp_dir / "screenshot.png"), full_page=True)
-    finally:
-        if style_handle is not None:
-            try:
-                style_handle.evaluate("el => el.remove()")
-            except Exception:
-                pass  # best-effort cleanup
-
-    # 3. DOM snapshot with ignored elements removed (best-effort — a flaky
-    #    page never breaks the screenshot path; missing dom.html just
-    #    suppresses the noise hint)
+    plan = plan_capture("testivai.witness", name, ignore_selectors, stabilize, variant, project_root)
+    _shoot(page, plan)
     if not skip_dom:
-        try:
-            dom = page.evaluate(_DOM_SNAPSHOT_JS, list(merged_selectors))
-            if isinstance(dom, str) and dom:
-                (temp_dir / "dom.html").write_text(dom, encoding="utf-8")
-        except Exception:
-            pass
+        _write_dom(page, plan)
+    return plan.temp_dir
 
-    return temp_dir
+
+def _shoot(page: Any, plan: CapturePlan) -> None:
+    """Prepare the page, take the full-page screenshot, put the page back."""
+    style_handle = _add_style(page, plan)
+    plan.temp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # Full-page screenshot via Playwright's native API
+        page.screenshot(path=str(plan.temp_dir / "screenshot.png"), full_page=True)
+    finally:
+        _remove_style(style_handle)
+
+
+def _add_style(page: Any, plan: CapturePlan) -> Any:
+    """One style tag covering stabilization + ignores; then wait for web fonts."""
+    css = plan.css
+    if not css:
+        return None
+    try:
+        handle = page.add_style_tag(content=css)
+    except Exception:
+        handle = None  # locked-down page; capture proceeds
+    if plan.stabilize:
+        _wait_for_fonts(page)
+    return handle
+
+
+def _remove_style(handle: Any) -> None:
+    if handle is None:
+        return
+    try:
+        handle.evaluate("el => el.remove()")
+    except Exception:
+        pass  # best-effort cleanup
+
+
+def _write_dom(page: Any, plan: CapturePlan) -> None:
+    """
+    DOM snapshot with ignored elements removed (best-effort — a flaky page
+    never breaks the screenshot path; missing dom.html just suppresses the
+    noise hint).
+    """
+    try:
+        dom = page.evaluate(_DOM_SNAPSHOT_JS, list(plan.selectors))
+        if isinstance(dom, str) and dom:
+            (plan.temp_dir / "dom.html").write_text(dom, encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _wait_for_fonts(page: Any, timeout_seconds: float = 10.0) -> None:
