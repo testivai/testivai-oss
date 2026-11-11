@@ -217,10 +217,18 @@ class TestSeleniumWebDriver:
         meta = metadata(se_witness(chrome_driver, "healthy"))
         assert_nothing_failed(meta["health"])
         env = meta["environment"]
+        caps = chrome_driver.capabilities
         assert env["browser"]["name"] == "chromium"
-        assert env["browser"]["version"] == chrome_driver.capabilities["browserVersion"]
-        assert env["browser"]["headless"] is True
-        assert env["driver"]["name"] == "chromedriver"
+        assert env["browser"]["version"] == caps["browserVersion"]
+        assert env["browser"]["channel"] == "chrome"
+        # headless comes only from launch args in the returned capabilities,
+        # as in the JS adapters; chromedriver does not echo them back, and then
+        # it is left out, never guessed.
+        if "args" in (caps.get("goog:chromeOptions") or {}):
+            assert env["browser"]["headless"] is True
+        else:
+            assert "headless" not in env["browser"]
+        assert env["driver"] == {"name": "chromedriver", "version": caps["chrome"]["chromedriverVersion"].split()[0]}
         assert env["adapter"]["captureMethod"] == "full-page:cdp"
 
 

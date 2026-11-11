@@ -97,6 +97,9 @@ CAPABILITIES = [
     {"browserName": "Safari", "browserVersion": "26.0"},
     {"browserName": "chrome-headless-shell", "browserVersion": "1"},
     {"browserName": "chrome", "browserVersion": "1", "goog:chromeOptions": {"args": []}},
+    # what a real chromedriver session returns: no args, only the debugger address
+    {"browserName": "chrome", "browserVersion": "153.0.8010.12", "goog:chromeOptions": {"debuggerAddress": "localhost:40169"},
+     "chrome": {"chromedriverVersion": "153.0.8010.12 (6d3f-refs/branch-heads/8010@{#12})", "userDataDir": "/tmp/x"}},
     {"browserName": "chrome", "browserVersion": "1", "goog:chromeOptions": {"args": ["--headless\n", 7, "--headless-ish"]}},
     {"browserName": "chrome", "goog:chromeOptions": "not an object"},
     {"browserName": "chrome", "browserVersion": "", "version": "9"},

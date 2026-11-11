@@ -188,6 +188,23 @@ class TestBrowserFromCapabilities:
         assert browser_from_capabilities(None) is None
         assert browser_from_capabilities({"browserName": "Servo", "browserVersion": "0.1"}) == {"browser": {"name": "servo", "version": "0.1"}}
 
+    def test_the_capabilities_chromedriver_returns_carry_no_launch_args_so_headless_is_not_recorded(self):
+        # What a real session's driver.capabilities holds: chromedriver does
+        # not echo the launch args back, so headless is left out, as the JS
+        # adapters leave it out (never guessed from the user agent here).
+        returned = {
+            "acceptInsecureCerts": False,
+            "browserName": "chrome",
+            "browserVersion": "153.0.8010.12",
+            "chrome": {"chromedriverVersion": "153.0.8010.12 (6d3f-refs/branch-heads/8010@{#12})", "userDataDir": "/tmp/.org.chromium.Chromium.x"},
+            "goog:chromeOptions": {"debuggerAddress": "localhost:40169"},
+            "platformName": "linux",
+        }
+        assert browser_from_capabilities(returned) == {
+            "browser": {"name": "chromium", "version": "153.0.8010.12", "channel": "chrome"},
+            "driver": {"name": "chromedriver", "version": "153.0.8010.12"},
+        }
+
     def test_an_old_style_version_capability_and_a_missing_version(self):
         assert browser_from_capabilities({"browserName": "chrome", "version": "99.0"})["browser"]["version"] == "99.0"
         assert browser_from_capabilities({"browserName": "chrome"})["browser"]["version"] is None
