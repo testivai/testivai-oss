@@ -54,6 +54,13 @@ stylesheet-only change — and `noiseAutoPass` never passes it. Selenium
 captures (`from testivai.selenium import witness`) record the element map
 and get the full style check.
 
+Since 0.3.0 both write `metadata.json` beside the screenshot, as the JS
+adapters do: capture health (`health`: a web font or stylesheet that failed
+to load makes the report call the capture unhealthy, never render noise)
+and capture provenance (`environment`: OS, browser and version, how the
+screenshot was taken, render settings), so a diff caused by another browser
+build or machine reads as rendering drift.
+
 The compare/report half runs via the `@testivai/witness` CLI — Node.js is
 already present wherever playwright-python is (Playwright for Python ships a
 Node driver). Resolution order: `TESTIVAI_CLI` env → `testivai` on PATH →

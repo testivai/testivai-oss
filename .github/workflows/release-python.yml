@@ -92,7 +92,7 @@ jobs:
           echo "inspecting $wheel_file"
           contents=$(python3 -m zipfile -l "$wheel_file")
           echo "$contents"
-          for asset in testivai/element_map.js testivai/settle.js; do
+          for asset in testivai/element_map.js testivai/settle.js testivai/health_probe.js testivai/render_probe.js; do
             echo "$contents" | grep -q "$asset" || {
               echo "::error::$asset is missing from the built wheel"
               exit 1
@@ -111,6 +111,9 @@ jobs:
           assert expr.startswith("return (function collectElementMap"), "collector did not load"
           settle = _settle_expression(150)
           assert settle.startswith("return (function settleProbe"), "settle probe did not load"
+          from testivai._probes import HEALTH_PROBE, RENDER_PROBE
+          assert HEALTH_PROBE.expression().startswith("(function () {"), "health probe did not load"
+          assert RENDER_PROBE.expression().startswith("(function () {"), "render probe did not load"
           print(f"installed wheel loads the collectors ({testivai.__version__})")
           PY
 

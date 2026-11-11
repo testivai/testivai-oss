@@ -41,7 +41,7 @@ class FakePage:
 
     def evaluate(self, script, arg=None):
         self.evaluated.append((script, arg))
-        if "document.fonts" in script:
+        if "document.fonts.status !== 'loading'" in script:  # the font wait, not the health probe
             return True
         if "cloneNode" in script:
             # simulate exclusion: drop any selector's text crudely for assertions
@@ -199,7 +199,7 @@ class LoggingPage(FakePage):
         return handle
 
     def evaluate(self, script, arg=None):
-        if "document.fonts" in script:
+        if "document.fonts.status !== 'loading'" in script:
             self.log.append("fonts")
         elif "cloneNode" in script:
             self.log.append("dom")

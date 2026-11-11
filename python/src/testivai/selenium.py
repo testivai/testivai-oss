@@ -9,7 +9,11 @@ JS/TS adapters — one on-disk contract, one report, one approval flow:
      from the DOM snapshot (one consistent semantic)
   3. variant keying: `<name>__<variant>` so parallel browsers/viewports
      never overwrite each other's baselines
-  4. on-disk contract: .testivai/temp/<name>/{screenshot.png, dom.html}
+  4. on-disk contract: .testivai/temp/<name>/{screenshot.png, dom.html,
+     elements.json, metadata.json}: metadata.json holds capture provenance
+     (`environment`, with the capture method that took the screenshot) and
+     capture health (`health`, what failed to load), as the JS adapters
+     record them
 
 Full-page screenshots per browser:
   - Chromium (Chrome/Edge): CDP `Page.captureScreenshot` with
@@ -43,6 +47,10 @@ from ._capture import (
     stop_settle_observer,
     wait_for_settled,
 )
+from ._environment import CAPTURE_METHODS, adapter_block, python_framework, webdriver_environment
+from ._health import probe_health
+from ._metadata import write_capture_metadata
+from ._probes import RENDER_PROBE, run_probe
 
 _STYLE_ID = "__testivai_capture_style__"
 
@@ -116,21 +124,46 @@ def witness(
         The temp directory the capture was written to.
     """
     plan = plan_capture("testivai.selenium.witness", name, ignore_selectors, stabilize, variant, project_root)
-    _shoot(driver, plan)
+    # What the page is rendered with, read before anything is injected.
+    render = run_probe(driver.execute_script, RENDER_PROBE, webdriver=True)
+    capture_method, health = _shoot(driver, plan)
     _write_page_data(driver, plan, skip_dom, skip_element_map, max_elements)
+    environment = _environment(driver, plan, render, capture_method)
+    write_capture_metadata(plan.temp_dir, plan.name, environment=environment, health=health)
     return plan.temp_dir
 
 
-def _shoot(driver: Any, plan: CapturePlan) -> None:
-    """Prepare the page, take the screenshot, put the page back."""
+def _shoot(driver: Any, plan: CapturePlan) -> tuple:
+    """Prepare the page, take the screenshot, read its health, put the page back."""
     style_injected = _inject_style(driver, plan)
     plan.temp_dir.mkdir(parents=True, exist_ok=True)
     try:
         # Full-page screenshot, best mechanism the browser offers
-        png = _capture_screenshot(driver)
+        png, capture_method = _capture_screenshot(driver)
         (plan.temp_dir / "screenshot.png").write_bytes(png)
+        # Capture health right after the screenshot, before the styles come
+        # off: removing one that hid an element can start loading a web font
+        # that was never in the image.
+        return capture_method, probe_health(driver.execute_script, webdriver=True)
     finally:
         _restore_page(driver, plan, style_injected)
+
+
+def _environment(driver: Any, plan: CapturePlan, render: Any, capture_method: str) -> Optional[dict]:
+    """
+    Capture provenance: the browser and driver from the session's
+    capabilities (the user agent when they say nothing), the render settings
+    from the probe. Best-effort, like the rest of the metadata.
+    """
+    try:
+        capabilities = getattr(driver, "capabilities", None)
+    except Exception:
+        capabilities = None  # the session is gone: the user agent is the fallback
+    try:
+        return webdriver_environment(capabilities, render, adapter_block(capture_method),
+                                     python_framework("selenium"), project=plan.variant)
+    except Exception:
+        return None
 
 
 def _inject_style(driver: Any, plan: CapturePlan) -> bool:
@@ -214,8 +247,8 @@ def _browser_name(driver: Any) -> str:
         return ""
 
 
-def _capture_screenshot(driver: Any) -> bytes:
-    """Full-page where the browser supports it, viewport otherwise."""
+def _capture_screenshot(driver: Any) -> tuple:
+    """Full-page where the browser supports it, viewport otherwise; and how it was taken."""
     browser = _browser_name(driver)
 
     # Chromium: CDP captureBeyondViewport — the same full-page mechanism
@@ -228,19 +261,19 @@ def _capture_screenshot(driver: Any) -> bytes:
             )
             data = (result or {}).get("data")
             if data:
-                return base64.b64decode(data)
+                return base64.b64decode(data), CAPTURE_METHODS["CDP_FULL_PAGE"]
         except Exception:
             pass  # fall through to the viewport screenshot
 
     # Firefox exposes full-page natively in the Python bindings.
     if hasattr(driver, "get_full_page_screenshot_as_png"):
         try:
-            return driver.get_full_page_screenshot_as_png()
+            return driver.get_full_page_screenshot_as_png(), CAPTURE_METHODS["FIREFOX_FULL_PAGE"]
         except Exception:
             pass
 
     # Fallback: viewport-only (Safari and friends).
-    return driver.get_screenshot_as_png()
+    return driver.get_screenshot_as_png(), CAPTURE_METHODS["WEBDRIVER_VIEWPORT"]
 
 
 def _wait_for_fonts(driver: Any, timeout_seconds: float = 10.0) -> None:

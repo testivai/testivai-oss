@@ -8,7 +8,10 @@ Semantics mirror the JS adapters exactly (@testivai/witness-playwright):
      from the DOM snapshot (one consistent semantic)
   3. variant keying: `<name>__<variant>` so parallel browsers/viewports
      never overwrite each other's baselines
-  4. on-disk contract: .testivai/temp/<name>/{screenshot.png, dom.html}
+  4. on-disk contract: .testivai/temp/<name>/{screenshot.png, dom.html,
+     metadata.json}: metadata.json holds capture provenance (`environment`)
+     and capture health (`health`, what failed to load), as the JS adapters
+     record them
 
 The compare/report half stays in @testivai/witness — run `testivai report`
 (see runner.run_report), which playwright-python users can always do because
@@ -24,6 +27,11 @@ from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any, Optional, Sequence
+
+from ._environment import CAPTURE_METHODS, playwright_environment
+from ._health import probe_health
+from ._metadata import write_capture_metadata
+from ._probes import RENDER_PROBE, run_probe
 
 #: Mirrors STABILIZE_CSS in @testivai/witness-playwright (config/stabilize.ts).
 #: Near-zero durations (not `none`) let entry animations COMPLETE at their
@@ -171,21 +179,46 @@ def witness(
         The temp directory the capture was written to.
     """
     plan = plan_capture("testivai.witness", name, ignore_selectors, stabilize, variant, project_root)
-    _shoot(page, plan)
+    # What the page is rendered with, read before anything is injected.
+    render = run_probe(page.evaluate, RENDER_PROBE, webdriver=False)
+    health = _shoot(page, plan)
     if not skip_dom:
         _write_dom(page, plan)
+    write_capture_metadata(plan.temp_dir, plan.name, environment=_environment(page, plan, render), health=health)
     return plan.temp_dir
 
 
-def _shoot(page: Any, plan: CapturePlan) -> None:
-    """Prepare the page, take the full-page screenshot, put the page back."""
+def _shoot(page: Any, plan: CapturePlan) -> Optional[dict]:
+    """Prepare the page, take the full-page screenshot, read its health, put the page back."""
     style_handle = _add_style(page, plan)
     plan.temp_dir.mkdir(parents=True, exist_ok=True)
     try:
         # Full-page screenshot via Playwright's native API
         page.screenshot(path=str(plan.temp_dir / "screenshot.png"), full_page=True)
+        # Capture health right after the screenshot, before the styles come
+        # off: removing one that hid an element can start loading a web font
+        # that was never in the image.
+        return probe_health(page.evaluate, webdriver=False)
     finally:
         _remove_style(style_handle)
+
+
+def _browser_of(page: Any) -> tuple:
+    """Playwright's own name and version for the browser, or (None, None): a persistent context has no Browser."""
+    try:
+        browser = page.context.browser
+        return (browser.browser_type.name, browser.version) if browser is not None else (None, None)
+    except Exception:
+        return None, None
+
+
+def _environment(page: Any, plan: CapturePlan, render: Any) -> Optional[dict]:
+    """Capture provenance for this capture. Best-effort, like the rest of the metadata."""
+    name, version = _browser_of(page)
+    try:
+        return playwright_environment(name, version, render, CAPTURE_METHODS["PLAYWRIGHT_FULL_PAGE"], plan.variant)
+    except Exception:
+        return None
 
 
 def _add_style(page: Any, plan: CapturePlan) -> Any:

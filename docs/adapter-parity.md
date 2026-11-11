@@ -31,8 +31,8 @@ What the columns mean:
 | Playwright (JS/TS) | [`packages/playwright`](https://github.com/testivai/testivai-oss/blob/main/packages/playwright/src/snapshot.ts) | yes | yes | yes | partial | yes | yes | yes | yes |
 | WebdriverIO (JS/TS) | [`packages/webdriverio`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) | yes | yes | yes | no | partial | no | yes | yes |
 | Selenium (JS/TS) | [`packages/selenium`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) | yes | yes | yes | partial | partial | no | yes | yes |
-| Python Playwright | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) | yes | no | no | no | partial | no | no | partial |
-| Python Selenium | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) | yes | yes | yes | no | partial | no | no | partial |
+| Python Playwright | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) | yes | no | no | no | partial | yes | yes | partial |
+| Python Selenium | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) | yes | yes | yes | no | partial | yes | yes | partial |
 | Ruby (Capybara / Selenium) | [`ruby`](https://github.com/testivai/testivai-oss/blob/main/ruby/lib/testivai/capture.rb) | yes | yes | yes | no | partial | no | no | no |
 | Java Playwright | [`java`](https://github.com/testivai/testivai-oss/blob/main/java/src/main/java/ai/testiv/testivai/Witness.java) | yes | no | no | no | partial | no | no | partial |
 | Java Selenium | [`java`](https://github.com/testivai/testivai-oss/blob/main/java/src/main/java/ai/testiv/testivai/SeleniumWitness.java) | yes | yes | yes | no | partial | no | no | partial |
@@ -90,8 +90,8 @@ The standalone CLI is `testivai witness <url>`, which captures pages without a t
 | Style digest | no | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `witness()` | No element map. |
 | Capture until stable | no | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `witness()` | One `page.screenshot(full_page=True)` after a web-font wait; no settle wait. |
 | Masks | partial | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `witness()` | No masks; `ignore_selectors` hides elements, it does not mask them. |
-| Capture health | no | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `witness()` | No `metadata.json` is written. |
-| Capture provenance | no | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `witness()` | No `metadata.json` is written. |
+| Capture health | yes | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `_shoot()`, [`_health.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_health.py) `probe_health` | The generated [`health_probe.js`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/health_probe.js) right after the screenshot, before the capture styles come off (since 0.3.0). No network-side evidence. |
+| Capture provenance | yes | [`_environment.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_environment.py) `playwright_environment` | `full-page:playwright`; the browser from Playwright, else the user agent; `variant` as the project (since 0.3.0). |
 | Per-browser baselines | partial | [`_capture.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) `sanitize_variant` | `variant=` gives `<name>__<variant>`; `environmentPolicy` is not read. |
 
 ### Python Selenium
@@ -103,8 +103,8 @@ The standalone CLI is `testivai witness <url>`, which captures pages without a t
 | Style digest | yes | [`element_map.js`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/element_map.js) `collectElementMap` | |
 | Capture until stable | no | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `_capture_screenshot` | One screenshot (CDP full page on Chrome and Edge, Firefox full page, else the viewport) after a web-font and settle wait. |
 | Masks | partial | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `witness()` | No masks. |
-| Capture health | no | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `witness()` | No `metadata.json` is written. |
-| Capture provenance | no | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `witness()` | No `metadata.json` is written. |
+| Capture health | yes | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `_shoot()`, [`_health.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_health.py) `probe_health` | Same probe and timing as the Playwright path (since 0.3.0). No network-side evidence. |
+| Capture provenance | yes | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `_environment()`, [`_environment.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_environment.py) `webdriver_environment` | `full-page:cdp`, `full-page:firefox` or `viewport:webdriver`, whichever took the screenshot; browser and driver from the capabilities (since 0.3.0). |
 | Per-browser baselines | partial | [`selenium.py`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) `witness()` | `variant=` only. |
 
 ### Ruby (Capybara / Selenium)

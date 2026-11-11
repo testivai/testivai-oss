@@ -38,7 +38,7 @@ class FakeChromeDriver:
         if "getElementById" in script and "remove" in script:
             self.style_removed = True
             return None
-        if "document.fonts" in script:
+        if "document.fonts.status !== 'loading'" in script:  # the font wait, not the health probe
             return True
         if "collectElementMap" in script:
             return _run_collector_in_node(script)
@@ -298,7 +298,7 @@ class LoggingChromeDriver(FakeChromeDriver):
         for marker, event in (
             ("createElement('style')", "add_style"),
             ("getElementById", "remove_style"),
-            ("document.fonts", "fonts"),
+            ("document.fonts.status !== 'loading'", "fonts"),
             ("settleProbe", "settle"),
             ("__testivaiSettleState", "stop_settle"),
             ("collectElementMap", "element_map"),

@@ -85,6 +85,28 @@ rather than likely noise, and `noiseAutoPass` never passes it. The Selenium
 path (`testivai.selenium`) records the element map and gets the full
 analysis.
 
+Both paths (`testivai` 0.3.0 and later) also write `metadata.json` next to
+the screenshot, as the JS adapters do:
+
+- **Capture health** (`health`): what failed to load, read in the page right
+  after the screenshot by the same probe the JS adapters run. A web font or a
+  stylesheet that failed makes the report call the snapshot an **unhealthy
+  capture**, never likely render noise, and an unhealthy baseline is called
+  out on every compare against it. A stylesheet that answered 404 is found
+  through Resource Timing `responseStatus` (Chromium 109 and later) or because
+  it has no stylesheet at all; the Python adapters do not watch the network,
+  so a failed request to another origin can go unseen.
+- **Capture provenance** (`environment`): the OS and Linux distro, the browser
+  and its version, Playwright or Selenium and its version, how the screenshot
+  was taken (`full-page:playwright`; for Selenium `full-page:cdp`,
+  `full-page:firefox` or `viewport:webdriver`), what the page was rendered
+  with, the CI provider, a container and `TESTIVAI_ENV_LABEL`. A diff caused
+  by a new browser build or another machine then reads as **rendering
+  drift**. `variant` is recorded as the `project`.
+
+Approving a capture freezes both into the baseline's `metadata.json`. See
+[adapter parity](../adapter-parity.md) for what each adapter records.
+
 ## Configuration
 
 Same `.testivai/config.json` as every adapter — `threshold`,
