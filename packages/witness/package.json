@@ -98,7 +98,7 @@
   "devDependencies": {
     "@types/inquirer": "^8.2.10",
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.43",
     "@types/pngjs": "^6.0.5",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15",
