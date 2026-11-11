@@ -12,6 +12,8 @@ Chrome debug port, no wrapper around your test command. You run
 New here? [vs. rolling your own](../vs-selenium-tooling.md) covers what this
 replaces in a hand-rolled screenshot setup.
 
+Which capture features this adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 ## Install
 
 ```ruby

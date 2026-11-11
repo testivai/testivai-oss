@@ -9,6 +9,8 @@ The `@testivai/witness-webdriverio` adapter is a [WDIO service](https://webdrive
 
 Everything runs on your machine — no account, no API key, fully standalone.
 
+Which capture features this adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 ---
 
 ## Prerequisites

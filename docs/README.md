@@ -39,6 +39,7 @@ Pick the framework you use:
 ## Reference
 
 - **[`results.json` schema + on-disk layout (Extension API)](./extension-api.md)** — the contract for community adapters and third-party reporters
+- **[Adapter parity](./adapter-parity.md)** — which capture features each adapter has (DOM snapshot, element map, capture health, provenance…), with the file that shows it
 - **[GitHub Action](./github-action.md)** — `testivai/testivai-oss@v1` for PR comments + commit status, `approve@v1` for `/testivai approve`, `publish@v1` for [reports on GitHub Pages](./github-action.md#reports-on-github-pages) linked from the comment, and `review@v1` for [Claude's triage of every diff](./github-action.md#ai-triage-of-every-diff)
 - **[`testivai run` experimental sidecar](./sidecar-testivai-run.md)** — what it is, why it's labeled experimental, when to use it anyway
 

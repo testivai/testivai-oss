@@ -6,6 +6,8 @@ title: Python (Playwright / Selenium)
 
 New here? [vs. rolling your own](../vs-selenium-tooling.md) covers what this replaces in a Python suite.
 
+Which capture features this adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 Local-first visual regression for **playwright-python and Selenium**,
 sharing the same baselines, tolerances, report, and PR approval flow as the
 JS/TS adapters — one on-disk contract across languages.

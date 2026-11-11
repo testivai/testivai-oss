@@ -2,6 +2,8 @@
 
 Selenium ships no visual comparison of its own — see [what TestivAI adds over a hand-rolled screenshot diff](../vs-selenium-tooling.md).
 
+Which capture features each Selenium adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 All three adapters — JavaScript, Python, and Java — capture the **element map**
 (selectors, bounding boxes, computed-style digests) using the same injected
 collector as the Playwright adapter, so region→selector attribution, the
