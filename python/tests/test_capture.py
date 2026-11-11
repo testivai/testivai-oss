@@ -41,7 +41,7 @@ class FakePage:
 
     def evaluate(self, script, arg=None):
         self.evaluated.append((script, arg))
-        if "document.fonts" in script:
+        if "document.fonts.status !== 'loading'" in script:  # the font wait, not the health probe
             return True
         if "cloneNode" in script:
             # simulate exclusion: drop any selector's text crudely for assertions
@@ -169,3 +169,112 @@ def test_resolve_cli_env_override(project, monkeypatch):
 
     monkeypatch.setenv("TESTIVAI_CLI", "node /x/testivai.js")
     assert resolve_cli() == ["node", "/x/testivai.js"]
+
+
+# ── Pins for the witness() split ────────────────────────────────────────────
+#
+# witness() is split into helpers before capture health and provenance are
+# added (the repo's complexity rule). These pin what it does today, so the
+# split cannot change it.
+
+
+class LoggingPage(FakePage):
+    """FakePage that records the order of the calls witness() makes."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.log: list[str] = []
+
+    def add_style_tag(self, content):
+        self.log.append("add_style")
+        handle = super().add_style_tag(content)
+        log = self.log
+        original = handle.evaluate
+
+        def evaluate(script):
+            log.append("remove_style")
+            original(script)
+
+        handle.evaluate = evaluate
+        return handle
+
+    def evaluate(self, script, arg=None):
+        if "document.fonts.status !== 'loading'" in script:
+            self.log.append("fonts")
+        elif "cloneNode" in script:
+            self.log.append("dom")
+        return super().evaluate(script, arg)
+
+    def screenshot(self, path, full_page):
+        self.log.append("screenshot")
+        super().screenshot(path, full_page)
+
+
+def test_capture_order_style_fonts_screenshot_unstyle_then_dom(project):
+    page = LoggingPage()
+    witness(page, "order")
+    assert page.log == ["add_style", "fonts", "screenshot", "remove_style", "dom"]
+
+
+def test_ignore_selectors_without_stabilize_inject_only_the_ignore_css(project):
+    page = LoggingPage()
+    witness(page, "x", stabilize=False, ignore_selectors=[".ad"])
+    assert page.styles == [".ad { visibility: hidden !important; }"]
+    assert page.log == ["add_style", "screenshot", "remove_style", "dom"]  # no font wait
+
+
+def test_duplicate_selectors_kept_once_in_first_seen_order(project):
+    write_config(project, ignoreSelectors=[".a", ".b"])
+    page = FakePage()
+    witness(page, "x", ignore_selectors=[".b", ".c", ".a"])
+    dom_calls = [arg for script, arg in page.evaluated if "cloneNode" in script]
+    assert dom_calls == [[".a", ".b", ".c"]]
+
+
+def test_locked_down_page_without_style_tags_still_captures(project):
+    class Locked(LoggingPage):
+        def add_style_tag(self, content):
+            raise RuntimeError("CSP")
+
+    page = Locked()
+    temp = witness(page, "locked")
+    assert (temp / "screenshot.png").read_bytes() == FakePage.PNG
+    assert (temp / "dom.html").exists()
+    assert page.log == ["fonts", "screenshot", "dom"]  # fonts still awaited
+
+
+def test_dom_snapshot_failure_never_breaks_capture(project):
+    class Boom(FakePage):
+        def evaluate(self, script, arg=None):
+            if "cloneNode" in script:
+                raise RuntimeError("navigated away")
+            return super().evaluate(script, arg)
+
+    temp = witness(Boom(), "dom-fails")
+    assert (temp / "screenshot.png").exists()
+    assert not (temp / "dom.html").exists()
+
+
+@pytest.mark.parametrize("dom", ["", None, 42])
+def test_empty_or_non_string_dom_is_not_written(project, dom):
+    class Odd(FakePage):
+        def evaluate(self, script, arg=None):
+            if "cloneNode" in script:
+                return dom
+            return super().evaluate(script, arg)
+
+    temp = witness(Odd(), "odd-dom")
+    assert not (temp / "dom.html").exists()
+
+
+def test_project_root_overrides_cwd(project, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    temp = witness(FakePage(), "rooted", project_root=elsewhere)
+    assert temp == elsewhere / ".testivai" / "temp" / "rooted"
+    assert not (project / ".testivai").exists()
+
+
+@pytest.mark.parametrize("name", [None, 7, ""])
+def test_non_string_or_empty_name_rejected(project, name):
+    with pytest.raises(ValueError, match="snapshot name is required"):
+        witness(FakePage(), name)

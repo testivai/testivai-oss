@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Generates the canonical element-map collector as a plain-JS asset for the
- * adapters that cannot import TypeScript: the Python package and the Java
- * library.
+ * adapters that cannot import TypeScript: the Python package, the Ruby gem
+ * and the Java library; with it the settle probe, and for the Python package
+ * the capture-health and render probes.
  *
  * WHY THIS EXISTS
  * ---------------
@@ -14,7 +15,9 @@
  * copies drift silently; this generator makes drift impossible to commit
  * unnoticed, because CI regenerates and fails on any diff.
  *
- * SOURCE OF TRUTH: packages/witness/src/capture/element-map.ts
+ * SOURCE OF TRUTH: packages/witness/src/capture/element-map.ts, settle.ts,
+ * health.ts (HEALTH_PROBE_EXPRESSION) and environment.ts
+ * (RENDER_PROBE_EXPRESSION)
  *
  * Usage:
  *   pnpm build && node scripts/generate-element-map-asset.js
@@ -88,6 +91,49 @@ const SETTLE_BANNER = `/**
 `;
 const settleAsset = settleProbe ? SETTLE_BANNER + settleProbe.toString() + '\n' : null;
 
+// The two in-page probes a capture records with its metadata.json: capture
+// health (what failed to load) and the render settings of capture provenance.
+// Each is one self-contained expression; an adapter evaluates the text as is.
+const { HEALTH_PROBE_EXPRESSION } = require(path.join(ROOT, 'packages/witness/dist/capture/health.js'));
+const { RENDER_PROBE_EXPRESSION } = require(path.join(ROOT, 'packages/witness/dist/capture/environment.js'));
+
+const probeBanner = (constant, source, use) => `/**
+ * AUTO-GENERATED — DO NOT EDIT.
+ *
+ * ${constant}, emitted from
+ *   ${source}
+ * by
+ *   scripts/generate-element-map-asset.js
+ *
+ * ${use}
+ * Evaluate the expression below as it is (WebDriver: prefix \`return \`), so
+ * every adapter records the same thing. Edit the TypeScript source and
+ * re-run the generator; CI fails if this file is stale.
+ */
+`;
+const healthAsset =
+  probeBanner(
+    'HEALTH_PROBE_EXPRESSION',
+    'packages/witness/src/capture/health.ts',
+    'What failed to load, read in the page right after the screenshot: `health`\n * in the capture\'s metadata.json.',
+  ) +
+  HEALTH_PROBE_EXPRESSION +
+  '\n';
+const renderAsset =
+  probeBanner(
+    'RENDER_PROBE_EXPRESSION',
+    'packages/witness/src/capture/environment.ts',
+    'What the page is rendered with (viewport, scale, colour scheme…): `render`\n * in the capture\'s `environment` block.',
+  ) +
+  RENDER_PROBE_EXPRESSION +
+  '\n';
+
+/** The probes go to the adapters that record health and provenance from them. */
+const PROBE_TARGETS = [
+  [path.join(ROOT, 'python/src/testivai/health_probe.js'), healthAsset],
+  [path.join(ROOT, 'python/src/testivai/render_probe.js'), renderAsset],
+];
+
 /** Where the asset must land for each language's packaging to pick it up. */
 const SETTLE_TARGETS = [
   path.join(ROOT, 'python/src/testivai/settle.js'),
@@ -107,9 +153,11 @@ const TARGETS = [
 const check = process.argv.includes('--check');
 let drifted = false;
 
-const ALL = settleAsset
-  ? [...TARGETS.map((t) => [t, asset]), ...SETTLE_TARGETS.map((t) => [t, settleAsset])]
-  : TARGETS.map((t) => [t, asset]);
+const ALL = [
+  ...TARGETS.map((t) => [t, asset]),
+  ...(settleAsset ? SETTLE_TARGETS.map((t) => [t, settleAsset]) : []),
+  ...PROBE_TARGETS,
+];
 
 for (const [target, contents] of ALL) {
   const rel = path.relative(ROOT, target);

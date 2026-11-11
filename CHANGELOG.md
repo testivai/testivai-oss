@@ -7,6 +7,8 @@ The repo follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conven
 ## Unreleased
 
 ### Added
+- `docs/adapter-parity.md` — which capture features each adapter has (DOM snapshot, element map, style digest, capture until stable, masks, capture health, capture provenance, per-browser baselines), yes / no / partial with the file behind each answer, written from the code. Linked from `docs/README.md` and every framework page. `action/src/__tests__/adapter-parity-docs.test.ts` fails when a listed adapter leaves the repo, a new adapter folder is not listed, a cited file is gone, or the summary and the evidence disagree.
+- `scripts/generate-element-map-asset.js` also emits `HEALTH_PROBE_EXPRESSION` and `RENDER_PROBE_EXPRESSION` as `python/src/testivai/health_probe.js` and `render_probe.js`, under the same CI `--check`, so the Python adapters evaluate the JS adapters' probes (`testivai` 0.3.0, see `python/CHANGELOG.md`).
 - `plugins/claude-code/testivai-report/` — a Claude Code plugin that shows the TestivAI report in the app: `/testivai-report` opens the full report, screenshots inlined, as a whole page in the side panel (nothing uploaded); a pane lists every snapshot with its reading, changed first; after Claude runs the visual tests, the pane refreshes and a toast says what the run found. Installed from a terminal with `claude plugin install testivai-report --marketplace testivai/testivai-oss` (`.claude-plugin/marketplace.json`); cloud sessions cannot load plugins. Its tests run against the Claude Code engine (`claude plugin test`), in CI too, pinned to the Claude Code version they were written against.
 
 ### Fixed

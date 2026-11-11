@@ -72,11 +72,11 @@ Without `elements.json` on both sides, computed styles are not compared (`styleC
 }
 ```
 
-`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer. A capture's `metadata.json` in `temp/<name>/` is optional; the JS adapters always write one, with `environment` and, when masks are used, the mask geometry. `testivai approve` (and the MCP approve tools) copy the capture's `environment` and `health` into the baseline's `metadata.json`; a capture without one leaves the baseline without one. The approve GitHub Action copies the capture directory as it is.
+`width` and `height` are advisory; the diff engine re-derives dimensions from the PNG buffer. A capture's `metadata.json` in `temp/<name>/` is optional; the JS adapters always write one, with `environment` and, when masks are used, the mask geometry, and the Python adapters (`testivai` 0.3.0 and later) write one with `environment` and `health`. `testivai approve` (and the MCP approve tools) copy the capture's `environment` and `health` into the baseline's `metadata.json`; a capture without one leaves the baseline without one. The approve GitHub Action copies the capture directory as it is.
 
 ### Capture provenance: `environment` in metadata.json
 
-Every JS adapter (Playwright, WebdriverIO, Selenium) and `testivai witness <url>` record this block, measured at capture time. A part an adapter cannot observe is left out, never guessed. Community adapters should write the same shape; only `os.platform`, `browser.name` and `adapter.captureMethod` are required for the compare to read it.
+Every JS adapter (Playwright, WebdriverIO, Selenium), the Python adapters (playwright-python and Selenium, `testivai` 0.3.0 and later) and `testivai witness <url>` record this block, measured at capture time. A part an adapter cannot observe is left out, never guessed. Community adapters should write the same shape; only `os.platform`, `browser.name` and `adapter.captureMethod` are required for the compare to read it.
 
 ```jsonc
 "environment": {
@@ -117,7 +117,7 @@ The compare reads the baseline's and the capture's blocks side by side (`snapsho
 
 ### Capture health: `health` in metadata.json
 
-What failed to load when the page was captured, read in the page **right after** the screenshot (before the capture's injected styles come off) by `HEALTH_PROBE_EXPRESSION` (`packages/witness/src/capture/health.ts`, exported from `@testivai/witness`), a self-contained expression any adapter can evaluate. The Playwright JS/TS adapter and `testivai witness <url>` record it; the crawler also merges what it saw on the network (failed requests, cross-origin ones included) in the same shape. URLs are recorded as host and path, never the query string (it can carry tokens). Lists keep the first 10 entries; the counts are complete.
+What failed to load when the page was captured, read in the page **right after** the screenshot (before the capture's injected styles come off) by `HEALTH_PROBE_EXPRESSION` (`packages/witness/src/capture/health.ts`, exported from `@testivai/witness`), a self-contained expression any adapter can evaluate. The Playwright JS/TS adapter, the Python adapters (`testivai` 0.3.0 and later, which ship it as the generated `health_probe.js`) and `testivai witness <url>` record it; the crawler also merges what it saw on the network (failed requests, cross-origin ones included) in the same shape. URLs are recorded as host and path, never the query string (it can carry tokens). Lists keep the first 10 entries; the counts are complete.
 
 ```jsonc
 "health": {

@@ -7,6 +7,8 @@ title: Playwright
 
 Playwright has its own dedicated TestivAI SDK — `@testivai/witness-playwright`. Unlike other frameworks, Playwright does **not** use the sidecar approach. The SDK integrates directly with Playwright's built-in browser control.
 
+Which capture features this adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 ---
 
 ## Prerequisites

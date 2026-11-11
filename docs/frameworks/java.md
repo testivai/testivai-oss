@@ -6,6 +6,8 @@ title: Java (experimental)
 
 New here? [vs. rolling your own](../vs-selenium-tooling.md) covers what this replaces (including how it compares to AShot).
 
+Which capture features this adapter has, next to the other adapters: [adapter parity](../adapter-parity.md).
+
 :::warning Experimental
 The Java adapter ships full source in [`java/`](https://github.com/testivai/testivai-oss/tree/main/java) with the same
 stabilization, ignore and naming semantics as the other adapters (the

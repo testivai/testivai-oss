@@ -101,6 +101,40 @@ jobs:
           pip install -e . pytest
           pytest tests/ -q
 
+  # The Python adapters in a real Chrome (a stylesheet that answers 404 must
+  # leave a failure in the capture's `health`, and the real compare must call
+  # the capture unhealthy), and their provenance and health helpers against
+  # the JS originals. Locally both groups skip without a browser or the built
+  # JS; here *_TESTS=required makes a skip a failure. GitHub's ubuntu image
+  # ships Google Chrome with a matching chromedriver.
+  python-adapter-browser:
+    name: Python adapter (Chrome, JS parity)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Build @testivai/witness (the JS helpers and the testivai CLI)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @testivai/witness build
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install and test
+        working-directory: python
+        env:
+          TESTIVAI_BROWSER_TESTS: required
+          TESTIVAI_PARITY_TESTS: required
+        run: |
+          pip install -e '.[playwright,selenium]' pytest
+          TESTIVAI_CHROME_PATH="$(command -v google-chrome)" pytest tests/ -q -rs
+
   ruby-adapter:
     name: Ruby adapter (RSpec)
     runs-on: ubuntu-latest

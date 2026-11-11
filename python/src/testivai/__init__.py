@@ -21,6 +21,7 @@ from ._capture import (
     sanitize_variant,
     witness,
 )
+from ._version import __version__
 from .runner import resolve_cli, run_report
 from .selenium import witness as witness_selenium
 
@@ -33,6 +34,6 @@ __all__ = [
     "build_ignore_css",
     "sanitize_variant",
     "STABILIZE_CSS",
+    "__version__",
 ]
 
-__version__ = "0.2.0"

@@ -303,8 +303,8 @@ session start and can be short; iOS: `mobile: viewportRect`) and keys the snapsh
 `platform`, `osVersion`, `model`, `screen` and `density` can change rendering; when both
 sides are native, `os` (the machine running the tests) is context.
 
-`captureHealth` (schema 2.7.0) is capture health: the Playwright JS/TS adapter and
-`testivai witness <url>` record what failed to load (`health` in the capture's
+`captureHealth` (schema 2.7.0) is capture health: the Playwright JS/TS adapter, the Python
+adapters and `testivai witness <url>` record what failed to load (`health` in the capture's
 `metadata.json`: web fonts, stylesheets, images, requests that answered 400 or more, read
 after the capture by `HEALTH_PROBE_EXPRESSION` in `packages/witness/src/capture/health.ts`),
 and approving freezes it into the baseline's. Per snapshot, `captureHealth` is present when

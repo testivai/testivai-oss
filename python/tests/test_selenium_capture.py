@@ -38,7 +38,7 @@ class FakeChromeDriver:
         if "getElementById" in script and "remove" in script:
             self.style_removed = True
             return None
-        if "document.fonts" in script:
+        if "document.fonts.status !== 'loading'" in script:  # the font wait, not the health probe
             return True
         if "collectElementMap" in script:
             return _run_collector_in_node(script)
@@ -278,3 +278,148 @@ def test_element_map_failure_never_breaks_capture(project):
     temp = project / ".testivai" / "temp" / "map-fails"
     assert (temp / "screenshot.png").exists()
     assert not (temp / "elements.json").exists()
+
+
+# ── Pins for the witness() split ────────────────────────────────────────────
+#
+# witness() is split into helpers before capture health and provenance are
+# added (the repo's complexity rule). These pin what it does today, so the
+# split cannot change it.
+
+
+class LoggingChromeDriver(FakeChromeDriver):
+    """FakeChromeDriver that records the order of the calls witness() makes."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.log: list[str] = []
+
+    def execute_script(self, script, *args):
+        for marker, event in (
+            ("createElement('style')", "add_style"),
+            ("getElementById", "remove_style"),
+            ("document.fonts.status !== 'loading'", "fonts"),
+            ("settleProbe", "settle"),
+            ("__testivaiSettleState", "stop_settle"),
+            ("collectElementMap", "element_map"),
+            ("cloneNode", "dom"),
+        ):
+            if marker in script:
+                self.log.append(event)
+                break
+        return super().execute_script(script, *args)
+
+    def execute_cdp_cmd(self, cmd, params):
+        self.log.append("screenshot")
+        return super().execute_cdp_cmd(cmd, params)
+
+
+def test_capture_order(project):
+    driver = LoggingChromeDriver()
+    witness(driver, "order")
+    assert driver.log == [
+        "add_style", "fonts", "settle", "screenshot",
+        "remove_style", "stop_settle", "dom", "element_map",
+    ]
+
+
+def test_no_settle_wait_or_observer_cleanup_without_stabilize(project):
+    driver = LoggingChromeDriver()
+    witness(driver, "x", stabilize=False, ignore_selectors=[".ad"])
+    assert driver.injected_css == [".ad { visibility: hidden !important; }"]
+    assert driver.log == ["add_style", "screenshot", "remove_style", "dom", "element_map"]
+
+
+def test_nothing_injected_or_removed_without_stabilize_or_selectors(project):
+    driver = LoggingChromeDriver()
+    witness(driver, "plain", stabilize=False)
+    assert driver.log == ["screenshot", "dom", "element_map"]
+
+
+def test_locked_down_page_skips_style_removal(project):
+    class Locked(LoggingChromeDriver):
+        def execute_script(self, script, *args):
+            if "createElement('style')" in script:
+                raise RuntimeError("CSP")
+            return super().execute_script(script, *args)
+
+    driver = Locked()
+    temp = witness(driver, "locked")
+    assert (temp / "screenshot.png").read_bytes() == PNG
+    assert "remove_style" not in driver.log
+    assert driver.log[:2] == ["fonts", "settle"]  # still waited for
+
+
+def test_style_removed_and_observer_stopped_when_every_screenshot_fails(project):
+    class Broken(LoggingChromeDriver):
+        def get_screenshot_as_png(self):
+            raise RuntimeError("no screenshot")
+
+    driver = Broken(fail_cdp=True)
+    with pytest.raises(RuntimeError, match="no screenshot"):
+        witness(driver, "broken")
+    assert driver.style_removed
+    assert "stop_settle" in driver.log
+
+
+def test_dom_snapshot_failure_never_breaks_capture(project):
+    class Boom(FakeChromeDriver):
+        def execute_script(self, script, *args):
+            if "cloneNode" in script:
+                raise RuntimeError("navigated away")
+            return super().execute_script(script, *args)
+
+    temp = witness(Boom(), "dom-fails")
+    assert (temp / "screenshot.png").exists()
+    assert not (temp / "dom.html").exists()
+    assert (temp / "elements.json").exists()  # the map is taken on its own
+
+
+@pytest.mark.parametrize("value", ["", None, 42])
+def test_empty_or_non_string_dom_is_not_written(project, value):
+    class Odd(FakeChromeDriver):
+        def execute_script(self, script, *args):
+            if "cloneNode" in script:
+                return value
+            return super().execute_script(script, *args)
+
+    assert not (witness(Odd(), "odd") / "dom.html").exists()
+
+
+@pytest.mark.parametrize("value", [[], None, {"a": 1}])
+def test_empty_or_non_list_element_map_is_not_written(project, value):
+    class Odd(FakeChromeDriver):
+        def execute_script(self, script, *args):
+            if "collectElementMap" in script:
+                return value
+            return super().execute_script(script, *args)
+
+    assert not (witness(Odd(), "odd") / "elements.json").exists()
+
+
+def test_element_map_gets_max_elements_and_the_merged_selectors(project):
+    write_config(project, ignoreSelectors=[".a"])
+    driver = FakeChromeDriver()
+    witness(driver, "x", ignore_selectors=[".b", ".a"], max_elements=50)
+    expr = next(s for s, _ in driver.scripts if "collectElementMap" in s)
+    assert expr.endswith('(document, window, 50, [".a", ".b"]);')
+
+
+def test_element_map_defaults_to_3000_elements(project):
+    driver = FakeChromeDriver()
+    witness(driver, "x")
+    expr = next(s for s, _ in driver.scripts if "collectElementMap" in s)
+    assert expr.endswith("(document, window, 3000, []);")
+
+
+def test_project_root_overrides_cwd(project, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    temp = witness(FakeChromeDriver(), "rooted", project_root=elsewhere)
+    assert temp == elsewhere / ".testivai" / "temp" / "rooted"
+    assert not (project / ".testivai").exists()
+
+
+@pytest.mark.parametrize("name", [None, 7, ""])
+def test_non_string_or_empty_name_rejected(project, name):
+    with pytest.raises(ValueError, match="snapshot name is required"):
+        witness(FakeChromeDriver(), name)

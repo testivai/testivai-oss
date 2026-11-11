@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "testivai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first visual regression capture for playwright-python and Selenium — pixel + DOM diff, tunable tolerances, PR approvals; shares baselines with the JS/TS TestivAI adapters"
 readme = "README.md"
 license = { text = "MIT" }
@@ -34,6 +34,11 @@ testivai = "testivai.pytest_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/testivai"]
-# element_map.js is generated (scripts/generate-element-map-asset.js) and must
-# ship in the wheel — the Selenium adapter reads it at capture time.
-artifacts = ["src/testivai/element_map.js", "src/testivai/settle.js"]
+# The .js files are generated (scripts/generate-element-map-asset.js) and must
+# ship in the wheel — the adapters read them at capture time.
+artifacts = [
+  "src/testivai/element_map.js",
+  "src/testivai/settle.js",
+  "src/testivai/health_probe.js",
+  "src/testivai/render_probe.js",
+]
