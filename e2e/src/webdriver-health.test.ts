@@ -26,6 +26,12 @@
  * test is skipped, loudly, except in CI (CI set), where it fails. ChromeDriver
  * runs with --disable-build-check, so a driver a few versions off the browser
  * still starts (GitHub's runners ship a matching pair).
+ *
+ * The WebdriverIO half runs only on a Node the e2e's webdriverio supports
+ * (its engines field: webdriverio 10 needs Node 22 or later, and on Node 20
+ * its HTTP client, undici 8, fails to load). On an older Node it says so and
+ * does not run; CI's Node 22 job runs it. The adapter itself supports Node 18
+ * and webdriverio 8 and later: this is about the driver library the test uses.
  */
 
 import * as assert from 'assert';
@@ -151,8 +157,22 @@ async function startChromedriver(binary: string): Promise<{ process: ChildProces
   throw new Error(`ChromeDriver (${binary}) did not answer on port ${port}`);
 }
 
+/** webdriverio's package.json (not in its exports map, so read from disk). */
+const WEBDRIVERIO = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'webdriverio', 'package.json'), 'utf-8')) as {
+  version: string;
+  engines?: { node?: string };
+};
+
+/** Why the e2e's webdriverio cannot run on this Node version, or null when it can. */
+function webdriverioUnsupported(nodeVersion: string): string | null {
+  if (Number(nodeVersion.split('.')[0]) >= 22) return null;
+  return `webdriverio ${WEBDRIVERIO.version} needs Node ${WEBDRIVERIO.engines?.node ?? '22 or later'}, and this is Node ${nodeVersion}`;
+}
+
 interface Adapter {
   label: string;
+  /** Why this adapter's driver library cannot run here, or null. */
+  unsupported: string | null;
   /** Opens the page in a session of its own and captures it as `name`. */
   capture(url: string, name: string): Promise<void>;
 }
@@ -161,6 +181,7 @@ function adapters(chromePath: string, driverPort: number): Adapter[] {
   return [
     {
       label: '@testivai/witness-selenium (selenium-webdriver)',
+      unsupported: null,
       async capture(url, name) {
         const options = new chrome.Options();
         options.setChromeBinaryPath(chromePath);
@@ -177,6 +198,7 @@ function adapters(chromePath: string, driverPort: number): Adapter[] {
     },
     {
       label: '@testivai/witness-webdriverio (WebdriverIO)',
+      unsupported: webdriverioUnsupported(process.versions.node),
       async capture(url, name) {
         const browser = await remote({
           hostname: '127.0.0.1',
@@ -315,7 +337,10 @@ async function main(): Promise<void> {
   const fixture = await serve(fontFile);
   const driver = await startChromedriver(driverPath);
   try {
-    for (const adapter of adapters(chromePath, driver.port)) await check(adapter, fixture);
+    for (const adapter of adapters(chromePath, driver.port)) {
+      if (adapter.unsupported) console.log(`[e2e] ⚠ NOT RUN here: ${adapter.label}, as ${adapter.unsupported}. CI's Node 22 job runs it.`);
+      else await check(adapter, fixture);
+    }
   } finally {
     driver.process.kill();
     fixture.server.close();
