@@ -4,18 +4,20 @@
   "private": true,
   "description": "OSS smoke E2E - exercises the public surface of @testivai/witness end-to-end",
   "scripts": {
-    "test": "tsx src/android-helpers.test.ts && tsx src/android-play-services.test.ts && tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts && tsx src/published-site.test.ts && tsx src/health-probe.test.ts && tsx src/unhealthy-capture.test.ts && tsx src/same-failure.test.ts && tsx src/element-id-attributes.test.ts && tsx src/rn-web.test.ts && tsx src/capture-emulation.test.ts",
+    "test": "tsx src/android-helpers.test.ts && tsx src/android-play-services.test.ts && tsx src/smoke.test.ts && tsx src/provenance.test.ts && tsx src/standalone-determinism.test.ts && tsx src/published-site.test.ts && tsx src/health-probe.test.ts && tsx src/webdriver-health.test.ts && tsx src/unhealthy-capture.test.ts && tsx src/same-failure.test.ts && tsx src/element-id-attributes.test.ts && tsx src/rn-web.test.ts && tsx src/capture-emulation.test.ts",
     "test:android": "tsx src/android-native.ts",
     "test:android-webview": "tsx src/android-webview.ts"
   },
   "dependencies": {
     "@testivai/witness": "workspace:*",
     "@testivai/witness-playwright": "workspace:*",
+    "@testivai/witness-selenium": "workspace:*",
     "@testivai/witness-webdriverio": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
     "@types/pngjs": "^6.0.5",
+    "@types/selenium-webdriver": "4.35.7",
     "esbuild": "0.28.2",
     "fflate": "0.8.3",
     "playwright-core": "1.65.0",
@@ -23,6 +25,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-native-web": "0.21.4",
+    "selenium-webdriver": "4.46.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "webdriverio": "10.2.0"

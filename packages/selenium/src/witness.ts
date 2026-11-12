@@ -40,10 +40,13 @@ import {
   parseRenderProbe,
   RENDER_PROBE_EXPRESSION,
   webDriverEnvironment,
+  type CaptureHealth,
+  type LocalConfig,
 } from '@testivai/witness';
 import * as fs from 'fs';
 import * as path from 'path';
 import { captureFullPageScreenshot, type CdpDriver } from './capture/full-page';
+import { probeCaptureHealth, recordCaptureHealth } from './capture/health';
 import type { WitnessDriver, WitnessOptions } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -186,6 +189,210 @@ async function captureScreenshot(driver: WitnessDriver): Promise<{ png: Buffer; 
   return { png: Buffer.from(base64, 'base64'), method: CAPTURE_METHODS.WEBDRIVER_VIEWPORT };
 }
 
+/** Everything a capture reads from config and the call before touching the page. */
+interface CapturePlan {
+  stabilize: boolean;
+  ignoreSelectors: string[];
+  /** The one style tag injected for the capture: stabilization, then the ignores. */
+  css: string;
+  idAttributes: string[];
+}
+
+/** What the session says about itself, read before anything is injected. */
+interface Session {
+  renderProbe: unknown;
+  capabilities: unknown;
+}
+
+function assertArguments(driver: WitnessDriver, name: string): void {
+  if (!name || typeof name !== 'string') {
+    throw new Error('testivai.witness: snapshot name is required and must be a non-empty string');
+  }
+  if (!driver || typeof driver.takeScreenshot !== 'function') {
+    throw new Error('testivai.witness: driver argument must expose takeScreenshot()');
+  }
+}
+
+/**
+ * Capture provenance: what the page is rendered with, measured before
+ * anything is injected, plus the session's capabilities. Best-effort.
+ */
+async function readSession(driver: WitnessDriver): Promise<Session> {
+  const session: Session = { renderProbe: null, capabilities: null };
+  if (typeof driver.executeScript === 'function') {
+    try {
+      session.renderProbe = await driver.executeScript<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
+    } catch {
+      // no probe: no render settings recorded
+    }
+  }
+  if (typeof driver.getCapabilities === 'function') {
+    try {
+      session.capabilities = await driver.getCapabilities();
+    } catch {
+      // no capabilities: the probe's user agent is the fallback
+    }
+  }
+  return session;
+}
+
+/** The engine, from the capabilities, else the user agent, else 'unknown'. */
+function browserNameOf(session: Session): string {
+  const fromCapabilities = browserFromCapabilities(session.capabilities)?.browser.name;
+  if (fromCapabilities !== undefined) return fromCapabilities;
+  const ua = parseRenderProbe(session.renderProbe)?.userAgent;
+  return (ua ? browserFromUserAgent(ua)?.name : undefined) ?? 'unknown';
+}
+
+/**
+ * The snapshot's key. Multi-browser runs: the variant folds into the name so
+ * sessions don't overwrite each other's baselines (same mechanism as the
+ * Playwright adapter's multi-project handling); then environmentPolicy
+ * "separate" adds the browser and platform.
+ */
+function snapshotKey(name: string, options: WitnessOptions, session: Session, localConfig: LocalConfig): string {
+  if (options.variant) {
+    name = `${name}__${options.variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase()}`;
+  }
+  return applyEnvironmentPolicyToName(name, { browser: { name: browserNameOf(session) }, os: { platform: process.platform } }, localConfig.environmentPolicy);
+}
+
+/**
+ * Stabilization CSS (animations/caret/fonts — the flake killers) +
+ * ignoreSelectors from config.json and this call, injected as one style tag
+ * and removed after the capture.
+ */
+function capturePlan(options: WitnessOptions, localConfig: LocalConfig): CapturePlan {
+  const stabilize = options.stabilize ?? localConfig.stabilize;
+  const ignoreSelectors = [
+    ...new Set([...(localConfig.ignoreSelectors ?? []), ...(options.ignoreSelectors ?? [])]),
+  ];
+  const cssParts: string[] = [];
+  if (stabilize) cssParts.push(STABILIZE_CSS);
+  if (ignoreSelectors.length > 0) cssParts.push(buildIgnoreCss(ignoreSelectors));
+  return { stabilize, ignoreSelectors, css: cssParts.join('\n'), idAttributes: normalizeElementIdAttributes(localConfig.elementIdAttributes) };
+}
+
+/** Inject the capture style and wait for the page; true when the style went in. */
+async function prepare(driver: WitnessDriver, plan: CapturePlan, options: WitnessOptions): Promise<boolean> {
+  if (plan.css.length === 0 || typeof driver.executeScript !== 'function') return false;
+  const injected = await injectCaptureCss(driver, plan.css);
+  if (plan.stabilize) {
+    await waitForFonts(driver);
+    await waitForSettled(
+      driver,
+      options.settleQuietMs ?? DEFAULT_QUIET_MS,
+      options.settleTimeoutMs ?? DEFAULT_SETTLE_TIMEOUT_MS,
+    );
+  }
+  return injected;
+}
+
+/**
+ * Prepare the page, take the screenshot (full-page on Chromium, viewport
+ * elsewhere), read what failed to load, put the page back. Capture health is
+ * read right after the screenshot and before the style comes off: removing a
+ * style that hid an element can start loading a web font only it uses.
+ */
+async function shoot(
+  driver: WitnessDriver,
+  plan: CapturePlan,
+  options: WitnessOptions,
+): Promise<{ png: Buffer; method: string; health: CaptureHealth | null }> {
+  const injected = await prepare(driver, plan, options);
+  try {
+    const shot = await captureScreenshot(driver);
+    const health = typeof driver.executeScript === 'function' ? await probeCaptureHealth((script) => driver.executeScript(script)) : null;
+    return { ...shot, health };
+  } finally {
+    if (injected) await removeCaptureCss(driver);
+    if (plan.stabilize) await stopSettleObserver(driver);
+  }
+}
+
+/** The DOM, best-effort: a failure only means no noise hint for this snapshot. */
+async function readDom(driver: WitnessDriver, options: WitnessOptions, ignoreSelectors: string[]): Promise<string | undefined> {
+  if (options.skipDom || typeof driver.executeScript !== 'function') return undefined;
+  try {
+    const result = await driver.executeScript<string>(
+      // ignoreSelectors excludes elements from the pixel diff, so they
+      // are excluded from the DOM/text signal too (consistent semantic).
+      `var clone = document.documentElement.cloneNode(true);` +
+        `var sels = arguments[0] || [];` +
+        `for (var i = 0; i < sels.length; i++) {` +
+        ` try { clone.querySelectorAll(sels[i]).forEach(function(el){ el.remove(); }); } catch (e) {}` +
+        `}` +
+        `return clone.outerHTML;`,
+      ignoreSelectors,
+    );
+    return typeof result === 'string' && result.length > 0 ? result : undefined;
+  } catch {
+    // Suppressed by design. DOM capture failure means the noise hint
+    // is unavailable for this snapshot; pixel diff still works.
+    return undefined;
+  }
+}
+
+/**
+ * The element map (best-effort — same contract as the DOM). This is what
+ * powers region→selector attribution, shift classification, and the
+ * computed-style fingerprint on the compare side. The injected function is
+ * the SAME one the Playwright adapter uses (`@testivai/witness`), so both
+ * lanes produce identical maps. Selenium's executeScript needs an explicit
+ * `return`. Paths are anchored on `elementIdAttributes` when config sets them.
+ */
+async function readElementMap(driver: WitnessDriver, options: WitnessOptions, plan: CapturePlan): Promise<unknown> {
+  if (options.skipElementMap || typeof driver.executeScript !== 'function') return undefined;
+  try {
+    const expr = buildElementMapExpression(options.maxElements ?? DEFAULT_MAX_ELEMENTS, plan.ignoreSelectors, plan.idAttributes);
+    const result = await driver.executeScript<unknown>(`return ${expr}`);
+    return Array.isArray(result) && result.length > 0 ? result : undefined;
+  } catch {
+    // Suppressed by design, exactly like DOM capture: without a map the
+    // report falls back to pixel + DOM layers instead of failing.
+    return undefined;
+  }
+}
+
+/** Capture provenance into metadata.json; nothing when no browser can be named. */
+function recordEnvironment(store: BaselineStore, name: string, session: Session, captureMethod: string): void {
+  const environment = webDriverEnvironment({
+    capabilities: session.capabilities,
+    probe: session.renderProbe,
+    adapter: { name: '@testivai/witness-selenium', version: ADAPTER_VERSION, captureMethod },
+    framework: { name: 'selenium-webdriver', version: installedPackageVersion('selenium-webdriver') },
+  });
+  if (!environment) return;
+  try {
+    store.writeTempMetadata(name, { name, environment });
+  } catch {
+    // without it the compare cannot tell rendering drift from noise for this capture
+  }
+}
+
+/**
+ * Shard manifest. A Selenium script has no end-of-run hook to attach to, so
+ * it is refreshed on every capture — which is exactly what lets a Selenium
+ * suite join the same sharded CI flow as Playwright. `complete` stays false
+ * because this adapter cannot know the run finished.
+ */
+function refreshShardManifest(): void {
+  const shard = parseShardEnv(process.env.TESTIVAI_SHARD);
+  if (shard) writeShardManifest(path.join(process.cwd(), '.testivai', 'temp'), shard);
+}
+
+function writeElementMap(store: BaselineStore, name: string, elementMap: unknown, idAttributes: string[]): void {
+  if (elementMap === undefined) return;
+  const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
+  try {
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'elements.json'), JSON.stringify(elementMap));
+    if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
+  } catch {
+    // A map we cannot persist is not worth failing a capture over.
+  }
+}
+
 /**
  * Capture a screenshot + DOM and write them as a temp snapshot.
  *
@@ -200,168 +407,21 @@ export async function witness(
   name: string,
   options: WitnessOptions = {},
 ): Promise<void> {
-  if (!name || typeof name !== 'string') {
-    throw new Error('testivai.witness: snapshot name is required and must be a non-empty string');
-  }
-  if (!driver || typeof driver.takeScreenshot !== 'function') {
-    throw new Error('testivai.witness: driver argument must expose takeScreenshot()');
-  }
-
-  // Multi-browser runs: fold the variant into the name so sessions don't
-  // overwrite each other's baselines (same mechanism as the Playwright
-  // adapter's multi-project handling).
-  if (options.variant) {
-    name = `${name}__${options.variant.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase()}`;
-  }
-
+  assertArguments(driver, name);
   const localConfig = loadLocalConfig(process.cwd());
+  const session = await readSession(driver);
+  name = snapshotKey(name, options, session, localConfig);
+  const plan = capturePlan(options, localConfig);
 
-  // Capture provenance: what the page is rendered with, measured before
-  // anything is injected, plus the session's capabilities. Best-effort.
-  let renderProbe: unknown = null;
-  let capabilities: unknown = null;
-  if (typeof driver.executeScript === 'function') {
-    try {
-      renderProbe = await driver.executeScript<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
-    } catch {
-      // no probe: no render settings recorded
-    }
-  }
-  if (typeof driver.getCapabilities === 'function') {
-    try {
-      capabilities = await driver.getCapabilities();
-    } catch {
-      // no capabilities: the probe's user agent is the fallback
-    }
-  }
-  const browserName = browserFromCapabilities(capabilities)?.browser.name ?? (() => {
-    const ua = parseRenderProbe(renderProbe)?.userAgent;
-    return (ua ? browserFromUserAgent(ua)?.name : undefined) ?? 'unknown';
-  })();
-  name = applyEnvironmentPolicyToName(name, { browser: { name: browserName }, os: { platform: process.platform } }, localConfig.environmentPolicy);
+  const { png: screenshot, method: captureMethod, health } = await shoot(driver, plan, options);
+  const dom = await readDom(driver, options, plan.ignoreSelectors);
+  const elementMap = await readElementMap(driver, options, plan);
 
-  // 0. Prepare the page: stabilization CSS (animations/caret/fonts — the
-  //    flake killers) + ignoreSelectors from config.json and this call,
-  //    injected as one style tag and removed after the capture.
-  const stabilize = options.stabilize ?? localConfig.stabilize;
-  const ignoreSelectors = [
-    ...new Set([...(localConfig.ignoreSelectors ?? []), ...(options.ignoreSelectors ?? [])]),
-  ];
-
-  const cssParts: string[] = [];
-  if (stabilize) cssParts.push(STABILIZE_CSS);
-  if (ignoreSelectors.length > 0) cssParts.push(buildIgnoreCss(ignoreSelectors));
-
-  let injected = false;
-  if (cssParts.length > 0 && typeof driver.executeScript === 'function') {
-    injected = await injectCaptureCss(driver, cssParts.join('\n'));
-    if (stabilize) {
-      await waitForFonts(driver);
-      await waitForSettled(
-        driver,
-        options.settleQuietMs ?? DEFAULT_QUIET_MS,
-        options.settleTimeoutMs ?? DEFAULT_SETTLE_TIMEOUT_MS,
-      );
-    }
-  }
-
-  // 1. Capture screenshot (full-page on Chromium, viewport elsewhere)
-  let screenshot: Buffer;
-  let captureMethod: string;
-  try {
-    ({ png: screenshot, method: captureMethod } = await captureScreenshot(driver));
-  } finally {
-    if (injected) await removeCaptureCss(driver);
-    if (stabilize) await stopSettleObserver(driver);
-  }
-
-  // 2. Capture DOM (best-effort — never break the screenshot path)
-  let dom: string | undefined;
-  if (!options.skipDom && typeof driver.executeScript === 'function') {
-    try {
-      const result = await driver.executeScript<string>(
-        // ignoreSelectors excludes elements from the pixel diff, so they
-        // are excluded from the DOM/text signal too (consistent semantic).
-        `var clone = document.documentElement.cloneNode(true);` +
-          `var sels = arguments[0] || [];` +
-          `for (var i = 0; i < sels.length; i++) {` +
-          ` try { clone.querySelectorAll(sels[i]).forEach(function(el){ el.remove(); }); } catch (e) {}` +
-          `}` +
-          `return clone.outerHTML;`,
-        ignoreSelectors,
-      );
-      if (typeof result === 'string' && result.length > 0) {
-        dom = result;
-      }
-    } catch {
-      // Suppressed by design. DOM capture failure means the noise hint
-      // is unavailable for this snapshot; pixel diff still works.
-    }
-  }
-
-  // 3. Capture the element map (best-effort — same contract as the DOM).
-  //    This is what powers region→selector attribution, shift
-  //    classification, and the computed-style fingerprint on the compare
-  //    side. The injected function is the SAME one the Playwright adapter
-  //    uses (`@testivai/witness`), so both lanes produce identical maps.
-  //    Selenium's executeScript needs an explicit `return`.
-  // Opt-in: paths anchored on attributes such as data-testid (config
-  // `elementIdAttributes`), recorded with the capture only when set.
-  const idAttributes = normalizeElementIdAttributes(localConfig.elementIdAttributes);
-  let elementMap: unknown;
-  if (!options.skipElementMap && typeof driver.executeScript === 'function') {
-    try {
-      const expr = buildElementMapExpression(
-        options.maxElements ?? DEFAULT_MAX_ELEMENTS,
-        ignoreSelectors,
-        idAttributes,
-      );
-      const result = await driver.executeScript<unknown>(`return ${expr}`);
-      if (Array.isArray(result) && result.length > 0) {
-        elementMap = result;
-      }
-    } catch {
-      // Suppressed by design, exactly like DOM capture: without a map the
-      // report falls back to pixel + DOM layers instead of failing.
-    }
-  }
-
-  // 4. Write to .testivai/temp/<name>/
+  // Write to .testivai/temp/<name>/
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
-  const environment = webDriverEnvironment({
-    capabilities,
-    probe: renderProbe,
-    adapter: { name: '@testivai/witness-selenium', version: ADAPTER_VERSION, captureMethod },
-    framework: { name: 'selenium-webdriver', version: installedPackageVersion('selenium-webdriver') },
-  });
-  if (environment) {
-    try {
-      store.writeTempMetadata(name, { name, environment });
-    } catch {
-      // without it the compare cannot tell rendering drift from noise for this capture
-    }
-  }
-
-  // 5. Shard manifest. A Selenium script has no end-of-run hook to attach to,
-  //    so it is refreshed on every capture — which is exactly what lets a
-  //    Selenium suite join the same sharded CI flow as Playwright. `complete`
-  //    stays false because this adapter cannot know the run finished.
-  const shard = parseShardEnv(process.env.TESTIVAI_SHARD);
-  if (shard) {
-    writeShardManifest(path.join(process.cwd(), '.testivai', 'temp'), shard);
-  }
-  if (elementMap !== undefined) {
-    const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
-    try {
-      fs.mkdirSync(tempDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tempDir, 'elements.json'),
-        JSON.stringify(elementMap),
-      );
-      if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
-    } catch {
-      // A map we cannot persist is not worth failing a capture over.
-    }
-  }
+  recordEnvironment(store, name, session, captureMethod);
+  recordCaptureHealth(store, name, health);
+  refreshShardManifest();
+  writeElementMap(store, name, elementMap, plan.idAttributes);
 }
