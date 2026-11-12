@@ -41,12 +41,14 @@ import {
   statusBarFromViewportRect,
   webDriverEnvironment,
   type CaptureEnvironment,
+  type CaptureHealth,
   type CollectedElement,
   type LocalConfig,
 } from '@testivai/witness';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const ADAPTER_VERSION: string = require('../package.json').version;
+import { probeCaptureHealth, recordCaptureHealth } from './capture-health';
 import { elementMapScript, isPageElementMap, toViewportElementMap } from './element-map';
 import type { WitnessBrowser, WitnessOptions } from './types';
 
@@ -357,19 +359,26 @@ async function prepare(browser: WitnessBrowser, plan: CapturePlan): Promise<bool
   return injected;
 }
 
-/** Prepare the page, take the viewport screenshot (base64 PNG → Buffer), put the page back. */
-async function shoot(browser: WitnessBrowser, plan: CapturePlan, name: string): Promise<Buffer> {
+/**
+ * Prepare the page, take the viewport screenshot (base64 PNG → Buffer), read
+ * what failed to load, put the page back. Capture health is read right after
+ * the screenshot and before the style comes off: removing a style that hid an
+ * element can start loading a web font only it uses.
+ */
+async function shoot(browser: WitnessBrowser, plan: CapturePlan, name: string): Promise<{ screenshot: Buffer; health: CaptureHealth | null }> {
   const injected = await prepare(browser, plan);
   let base64: string;
+  let health: CaptureHealth | null = null;
   try {
     base64 = await browser.takeScreenshot();
+    if (typeof browser.execute === 'function') health = await probeCaptureHealth((script) => browser.execute(script));
   } finally {
     if (injected) await removeCaptureCss(browser);
   }
   if (typeof base64 !== 'string' || base64.length === 0) {
     throw new Error(`testivai.witness("${name}"): browser.takeScreenshot() returned an empty value`);
   }
-  return Buffer.from(base64, 'base64');
+  return { screenshot: Buffer.from(base64, 'base64'), health };
 }
 
 /** The DOM, best-effort: a failure only means no noise hint for this snapshot. */
@@ -456,7 +465,7 @@ async function capture(browser: WitnessBrowser, name: string, options: WitnessOp
   name = pageSnapshotKey(name, options, environment, localConfig);
   const plan = capturePlan(options, localConfig);
 
-  const screenshot = await shoot(browser, plan, name);
+  const { screenshot, health } = await shoot(browser, plan, name);
   const dom = await readDom(browser, options, plan.ignoreSelectors);
   const elementMap = await readElementMap(browser, options, plan);
 
@@ -464,5 +473,6 @@ async function capture(browser: WitnessBrowser, name: string, options: WitnessOp
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
   recordEnvironment(store, name, environment);
+  recordCaptureHealth(store, name, health);
   writeElementMap(store, name, elementMap, plan.idAttributes);
 }

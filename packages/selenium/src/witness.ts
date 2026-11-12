@@ -40,11 +40,13 @@ import {
   parseRenderProbe,
   RENDER_PROBE_EXPRESSION,
   webDriverEnvironment,
+  type CaptureHealth,
   type LocalConfig,
 } from '@testivai/witness';
 import * as fs from 'fs';
 import * as path from 'path';
 import { captureFullPageScreenshot, type CdpDriver } from './capture/full-page';
+import { probeCaptureHealth, recordCaptureHealth } from './capture/health';
 import type { WitnessDriver, WitnessOptions } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -286,11 +288,22 @@ async function prepare(driver: WitnessDriver, plan: CapturePlan, options: Witnes
   return injected;
 }
 
-/** Prepare the page, take the screenshot (full-page on Chromium, viewport elsewhere), put the page back. */
-async function shoot(driver: WitnessDriver, plan: CapturePlan, options: WitnessOptions): Promise<{ png: Buffer; method: string }> {
+/**
+ * Prepare the page, take the screenshot (full-page on Chromium, viewport
+ * elsewhere), read what failed to load, put the page back. Capture health is
+ * read right after the screenshot and before the style comes off: removing a
+ * style that hid an element can start loading a web font only it uses.
+ */
+async function shoot(
+  driver: WitnessDriver,
+  plan: CapturePlan,
+  options: WitnessOptions,
+): Promise<{ png: Buffer; method: string; health: CaptureHealth | null }> {
   const injected = await prepare(driver, plan, options);
   try {
-    return await captureScreenshot(driver);
+    const shot = await captureScreenshot(driver);
+    const health = typeof driver.executeScript === 'function' ? await probeCaptureHealth((script) => driver.executeScript(script)) : null;
+    return { ...shot, health };
   } finally {
     if (injected) await removeCaptureCss(driver);
     if (plan.stabilize) await stopSettleObserver(driver);
@@ -400,7 +413,7 @@ export async function witness(
   name = snapshotKey(name, options, session, localConfig);
   const plan = capturePlan(options, localConfig);
 
-  const { png: screenshot, method: captureMethod } = await shoot(driver, plan, options);
+  const { png: screenshot, method: captureMethod, health } = await shoot(driver, plan, options);
   const dom = await readDom(driver, options, plan.ignoreSelectors);
   const elementMap = await readElementMap(driver, options, plan);
 
@@ -408,6 +421,7 @@ export async function witness(
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
   recordEnvironment(store, name, session, captureMethod);
+  recordCaptureHealth(store, name, health);
   refreshShardManifest();
   writeElementMap(store, name, elementMap, plan.idAttributes);
 }

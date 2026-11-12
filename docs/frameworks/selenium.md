@@ -53,6 +53,13 @@ npx testivai report            # compare + render report (--fail-on-diff in CI)
 npx testivai approve --all     # promote captures to baselines
 ```
 
+Each capture's `metadata.json` records where it came from (`environment`:
+browser, OS, how the screenshot was taken) and, since 0.5.0, what failed to
+load (`health`: web fonts, stylesheets, images, requests that answered 400 or
+more), read in the page right after the screenshot. A web font or stylesheet
+that failed makes the report call the snapshot an **unhealthy capture**,
+never likely render noise.
+
 ## Python (pytest, unittest, anything)
 
 ```bash

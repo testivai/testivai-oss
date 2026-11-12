@@ -1,8 +1,9 @@
 /**
  * Pins for the witness() split. witness() is over the repo's complexity limit
  * and capture health has to go into it, so it is split into helpers first.
- * These tests fix what it does today, call by call, so the split cannot
- * change it: the order of the calls, the settle options, the shard manifest,
+ * These tests fixed what it did, call by call, so the split could not
+ * change it; the one call added since is the capture-health probe, right
+ * after the screenshot. They pin: the order of the calls, the settle options, the shard manifest,
  * a page that refuses the style tag, stabilize off, a capture whose browser
  * nothing names, and how the variant and environmentPolicy "separate" key it.
  */
@@ -10,6 +11,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+
+import { HEALTH_PROBE_EXPRESSION } from '@testivai/witness';
 
 import { witness } from '../witness';
 import type { WitnessDriver } from '../types';
@@ -32,6 +35,10 @@ function loggingDriver({ userAgent = FIREFOX_UA, injectFails = false, settled = 
   const scripts: string[] = [];
   const executeScript = jest.fn(async (script: string) => {
     scripts.push(script);
+    if (script === `return ${HEALTH_PROBE_EXPRESSION}`) {
+      log.push('health');
+      return null;
+    }
     if (script.includes('prefers-color-scheme')) {
       log.push('render');
       return userAgent === null ? { viewport: { width: 800, height: 600 } } : { viewport: { width: 800, height: 600 }, userAgent };
@@ -106,7 +113,7 @@ describe('witness(): pinned before the split', () => {
   it('runs in this order: render probe, style, fonts, settle, screenshot, style off, observer off, DOM, element map', async () => {
     const { driver, log } = loggingDriver();
     await witness(driver, 'order');
-    expect(log).toEqual(['render', 'add_style', 'fonts', 'settle', 'screenshot', 'remove_style', 'stop_settle', 'dom', 'element_map']);
+    expect(log).toEqual(['render', 'add_style', 'fonts', 'settle', 'screenshot', 'health', 'remove_style', 'stop_settle', 'dom', 'element_map']);
   });
 
   it('asks for the capabilities after the render probe, before the page is touched', async () => {
@@ -122,19 +129,19 @@ describe('witness(): pinned before the split', () => {
   it('stabilize off with ignore selectors: the style goes on and off, with no font or settle wait', async () => {
     const { driver, log } = loggingDriver();
     await witness(driver, 'raw', { stabilize: false, ignoreSelectors: ['.ad'] });
-    expect(log).toEqual(['render', 'add_style', 'screenshot', 'remove_style', 'dom', 'element_map']);
+    expect(log).toEqual(['render', 'add_style', 'screenshot', 'health', 'remove_style', 'dom', 'element_map']);
   });
 
   it('stabilize off and no ignore selectors: nothing is injected', async () => {
     const { driver, log } = loggingDriver();
     await witness(driver, 'plain', { stabilize: false });
-    expect(log).toEqual(['render', 'screenshot', 'dom', 'element_map']);
+    expect(log).toEqual(['render', 'screenshot', 'health', 'dom', 'element_map']);
   });
 
   it('a page that refuses the style tag is still waited on, and nothing is removed', async () => {
     const { driver, log } = loggingDriver({ injectFails: true });
     await witness(driver, 'locked');
-    expect(log).toEqual(['render', 'add_style', 'fonts', 'settle', 'screenshot', 'stop_settle', 'dom', 'element_map']);
+    expect(log).toEqual(['render', 'add_style', 'fonts', 'settle', 'screenshot', 'health', 'stop_settle', 'dom', 'element_map']);
     expect(fs.existsSync(temp('locked', 'screenshot.png'))).toBe(true);
   });
 

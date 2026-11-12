@@ -133,6 +133,7 @@ Each snapshot stores the screenshot, the page DOM and an element map (computed-s
 - **Pixels differ, DOM matches, computed styles differ** → `changed` with "Styles changed" and the restyled elements: a real style-only change, never noise
 - **Pixels differ, DOM matches, styles not compared** (no element map on one side, e.g. `skipElementMap` or a baseline captured without one) → `changed` with "DOM unchanged, styles not compared": could be render noise or a stylesheet-only change, so compare the images
 - **Pixels differ, DOM differs** → `changed` with a count of added / removed / attribute changes
+- **A web font or stylesheet failed to load** (on either side) → `changed` with "Unhealthy capture" and what failed, never likely render noise: an unhealthy capture is re-captured once the asset loads, or re-baselined when the baseline is the unhealthy side. The adapter (0.6.0 and later) reads what failed to load right after the screenshot and records it as `health` in the capture's `metadata.json`; a native app screen has no page, so it is not checked
 
 None of these auto-passes unless you configure a pass criterion (`maxDiffPercent`, `maxDiffPixels`, `noiseAutoPass`, `shiftTolerance`); `noiseAutoPass` only ever passes the "styles verified unchanged" case, and never a diff concentrated in one area. The same hints appear in PR comments via the TestivAI GitHub Action.
 

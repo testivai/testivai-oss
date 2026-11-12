@@ -29,8 +29,8 @@ What the columns mean:
 | Adapter | Code | DOM snapshot | Element map | Style digest | Capture until stable | Masks | Capture health | Capture provenance | Per-browser baselines |
 |---|---|---|---|---|---|---|---|---|---|
 | Playwright (JS/TS) | [`packages/playwright`](https://github.com/testivai/testivai-oss/blob/main/packages/playwright/src/snapshot.ts) | yes | yes | yes | partial | yes | yes | yes | yes |
-| WebdriverIO (JS/TS) | [`packages/webdriverio`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) | yes | yes | yes | no | partial | no | yes | yes |
-| Selenium (JS/TS) | [`packages/selenium`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) | yes | yes | yes | partial | partial | no | yes | yes |
+| WebdriverIO (JS/TS) | [`packages/webdriverio`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) | yes | yes | yes | no | partial | yes | yes | yes |
+| Selenium (JS/TS) | [`packages/selenium`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) | yes | yes | yes | partial | partial | yes | yes | yes |
 | Python Playwright | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/_capture.py) | yes | no | no | no | partial | yes | yes | partial |
 | Python Selenium | [`python`](https://github.com/testivai/testivai-oss/blob/main/python/src/testivai/selenium.py) | yes | yes | yes | no | partial | yes | yes | partial |
 | Ruby (Capybara / Selenium) | [`ruby`](https://github.com/testivai/testivai-oss/blob/main/ruby/lib/testivai/capture.rb) | yes | yes | yes | no | partial | no | no | no |
@@ -64,7 +64,7 @@ The standalone CLI is `testivai witness <url>`, which captures pages without a t
 | Style digest | yes | [`element-map.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/witness/src/capture/element-map.ts) `collectElementMap` | |
 | Capture until stable | no | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `takeScreenshot` | One viewport screenshot (WebDriver `takeScreenshot`), after a web-font wait. No full-page capture. |
 | Masks | partial | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `writeTempMetadata` | No selector or per-call masks. Native app captures get an automatic status-bar mask. |
-| Capture health | no | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `witness()` | No probe; no `health` written. |
+| Capture health | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `shoot()`, [`capture-health.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/capture-health.ts) `probeCaptureHealth` | `HEALTH_PROBE_EXPRESSION` right after the screenshot, before the capture style comes off. Web pages only: a native app screen is never probed. No network-side evidence. |
 | Capture provenance | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `webDriverEnvironment` | `viewport:webdriver`; native app captures `screen:appium` with a `device` section. |
 | Per-browser baselines | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/webdriverio/src/witness.ts) `applyEnvironmentPolicyToName` | The platform is the machine running the tests, not a remote browser's. |
 
@@ -77,7 +77,7 @@ The standalone CLI is `testivai witness <url>`, which captures pages without a t
 | Style digest | yes | [`element-map.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/witness/src/capture/element-map.ts) `collectElementMap` | |
 | Capture until stable | partial | [`full-page.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/capture/full-page.ts) `captureFullPageScreenshot` | Only the CDP path (Chrome, Edge). Other browsers, and a failed CDP capture, take one viewport screenshot. A settle wait runs before either. |
 | Masks | partial | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) `writeTempMetadata` | No selector or per-call masks. |
-| Capture health | no | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) `witness()` | No probe; no `health` written. |
+| Capture health | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) `shoot()`, [`health.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/capture/health.ts) `probeCaptureHealth` | `HEALTH_PROBE_EXPRESSION` right after the screenshot (CDP full page or viewport), before the capture style comes off and the settle observer stops. No network-side evidence. |
 | Capture provenance | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) `webDriverEnvironment` | `full-page:cdp` or `viewport:webdriver`. |
 | Per-browser baselines | yes | [`witness.ts`](https://github.com/testivai/testivai-oss/blob/main/packages/selenium/src/witness.ts) `applyEnvironmentPolicyToName` | |
 
