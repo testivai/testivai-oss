@@ -40,7 +40,9 @@ import {
   statusBarFromSystemBars,
   statusBarFromViewportRect,
   webDriverEnvironment,
+  type CaptureEnvironment,
   type CollectedElement,
+  type LocalConfig,
 } from '@testivai/witness';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -292,62 +294,72 @@ async function inContext(
   if (switched) await browser.switchContext(current);
 }
 
-/** One capture in the session's current context: native mode or a page. */
-async function capture(browser: WitnessBrowser, name: string, options: WitnessOptions): Promise<void> {
-  if (await isNativeCapture(browser, options.native)) {
-    return witnessNative(browser, name, options);
-  }
+/** Everything a page capture reads from config and the call before touching the page. */
+interface CapturePlan {
+  stabilize: boolean;
+  ignoreSelectors: string[];
+  /** The one style tag injected for the capture: stabilization, then the ignores. */
+  css: string;
+  idAttributes: string[];
+}
 
-  // Multi-capability runs: fold the variant into the name so capabilities
-  // don't overwrite each other's baselines (same mechanism as the Playwright
-  // adapter's multi-project handling).
+/**
+ * Capture provenance: what the page is rendered with, measured before
+ * anything is injected. Best-effort.
+ */
+async function probeRender(browser: WitnessBrowser): Promise<unknown> {
+  if (typeof browser.execute !== 'function') return null;
+  try {
+    return await browser.execute<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
+  } catch {
+    return null; // no probe: no render settings recorded
+  }
+}
+
+/**
+ * The snapshot's key. Multi-capability runs: the variant folds into the name
+ * so capabilities don't overwrite each other's baselines (same mechanism as
+ * the Playwright adapter's multi-project handling); then environmentPolicy
+ * "separate" adds the browser and platform.
+ */
+function pageSnapshotKey(name: string, options: WitnessOptions, environment: CaptureEnvironment | null, localConfig: LocalConfig): string {
   if (options.variant) {
     name = `${name}__${variantSegment(options.variant)}`;
   }
-
-  const localConfig = loadLocalConfig(process.cwd());
-
-  // Capture provenance: what the page is rendered with, measured before
-  // anything is injected, plus the session's capabilities. Best-effort.
-  let renderProbe: unknown = null;
-  if (typeof browser.execute === 'function') {
-    try {
-      renderProbe = await browser.execute<unknown>(`return ${RENDER_PROBE_EXPRESSION}`);
-    } catch {
-      // no probe: no render settings recorded
-    }
-  }
-  const environment = webDriverEnvironment({
-    capabilities: browser.capabilities,
-    probe: renderProbe,
-    adapter: { name: '@testivai/witness-webdriverio', version: ADAPTER_VERSION, captureMethod: CAPTURE_METHODS.WEBDRIVER_VIEWPORT },
-    framework: { name: 'webdriverio', version: installedPackageVersion('webdriverio') },
-  });
-  name = applyEnvironmentPolicyToName(
+  return applyEnvironmentPolicyToName(
     name,
     { browser: { name: environment?.browser.name ?? 'unknown' }, os: { platform: process.platform } },
     localConfig.environmentPolicy,
   );
+}
 
-  // 0. Prepare the page: stabilization CSS (animations/caret/fonts — the
-  //    flake killers) + ignoreSelectors from config.json and this call,
-  //    injected as one style tag and removed after the capture.
+/**
+ * Stabilization CSS (animations/caret/fonts — the flake killers) +
+ * ignoreSelectors from config.json and this call, injected as one style tag
+ * and removed after the capture.
+ */
+function capturePlan(options: WitnessOptions, localConfig: LocalConfig): CapturePlan {
   const stabilize = options.stabilize ?? localConfig.stabilize;
   const ignoreSelectors = [
     ...new Set([...(localConfig.ignoreSelectors ?? []), ...(options.ignoreSelectors ?? [])]),
   ];
-
   const cssParts: string[] = [];
   if (stabilize) cssParts.push(STABILIZE_CSS);
   if (ignoreSelectors.length > 0) cssParts.push(buildIgnoreCss(ignoreSelectors));
+  return { stabilize, ignoreSelectors, css: cssParts.join('\n'), idAttributes: normalizeElementIdAttributes(localConfig.elementIdAttributes) };
+}
 
-  let injected = false;
-  if (cssParts.length > 0 && typeof browser.execute === 'function') {
-    injected = await injectCaptureCss(browser, cssParts.join('\n'));
-    if (stabilize) await waitForFonts(browser);
-  }
+/** Inject the capture style and wait for web fonts; true when the style went in. */
+async function prepare(browser: WitnessBrowser, plan: CapturePlan): Promise<boolean> {
+  if (plan.css.length === 0 || typeof browser.execute !== 'function') return false;
+  const injected = await injectCaptureCss(browser, plan.css);
+  if (plan.stabilize) await waitForFonts(browser);
+  return injected;
+}
 
-  // 1. Capture screenshot (base64 PNG → Buffer)
+/** Prepare the page, take the viewport screenshot (base64 PNG → Buffer), put the page back. */
+async function shoot(browser: WitnessBrowser, plan: CapturePlan, name: string): Promise<Buffer> {
+  const injected = await prepare(browser, plan);
   let base64: string;
   try {
     base64 = await browser.takeScreenshot();
@@ -357,73 +369,100 @@ async function capture(browser: WitnessBrowser, name: string, options: WitnessOp
   if (typeof base64 !== 'string' || base64.length === 0) {
     throw new Error(`testivai.witness("${name}"): browser.takeScreenshot() returned an empty value`);
   }
-  const screenshot = Buffer.from(base64, 'base64');
+  return Buffer.from(base64, 'base64');
+}
 
-  // 2. Capture DOM (best-effort — never break the screenshot path)
-  let dom: string | undefined;
-  if (!options.skipDom && typeof browser.execute === 'function') {
-    try {
-      const result = await browser.execute<string>(
-        // Inline string form for maximum WDIO sync/async compatibility.
-        // ignoreSelectors excludes elements from the pixel diff, so they
-        // are excluded from the DOM/text signal too (consistent semantic).
-        `var clone = document.documentElement.cloneNode(true);` +
-          `var sels = ${JSON.stringify(ignoreSelectors)};` +
-          `for (var i = 0; i < sels.length; i++) {` +
-          ` try { clone.querySelectorAll(sels[i]).forEach(function(el){ el.remove(); }); } catch (e) {}` +
-          `}` +
-          `return clone.outerHTML;`,
-      );
-      if (typeof result === 'string' && result.length > 0) {
-        dom = result;
-      }
-    } catch {
-      // Suppressed by design. DOM capture failure means the noise hint
-      // is unavailable for this snapshot; pixel diff still works.
-    }
+/** The DOM, best-effort: a failure only means no noise hint for this snapshot. */
+async function readDom(browser: WitnessBrowser, options: WitnessOptions, ignoreSelectors: string[]): Promise<string | undefined> {
+  if (options.skipDom || typeof browser.execute !== 'function') return undefined;
+  try {
+    const result = await browser.execute<string>(
+      // Inline string form for maximum WDIO sync/async compatibility.
+      // ignoreSelectors excludes elements from the pixel diff, so they
+      // are excluded from the DOM/text signal too (consistent semantic).
+      `var clone = document.documentElement.cloneNode(true);` +
+        `var sels = ${JSON.stringify(ignoreSelectors)};` +
+        `for (var i = 0; i < sels.length; i++) {` +
+        ` try { clone.querySelectorAll(sels[i]).forEach(function(el){ el.remove(); }); } catch (e) {}` +
+        `}` +
+        `return clone.outerHTML;`,
+    );
+    return typeof result === 'string' && result.length > 0 ? result : undefined;
+  } catch {
+    // Suppressed by design. DOM capture failure means the noise hint
+    // is unavailable for this snapshot; pixel diff still works.
+    return undefined;
+  }
+}
+
+/**
+ * The element map (best-effort — same contract as the DOM). It powers the
+ * style check, region attribution and page-shift detection on the compare
+ * side. The screenshot is the viewport, so the map keeps only the elements
+ * inside it, in screenshot coordinates. Paths are anchored on
+ * `elementIdAttributes` when config sets them.
+ */
+async function readElementMap(browser: WitnessBrowser, options: WitnessOptions, plan: CapturePlan): Promise<CollectedElement[] | undefined> {
+  if (options.skipElementMap || typeof browser.execute !== 'function') return undefined;
+  try {
+    const result = await browser.execute<unknown>(
+      elementMapScript(options.maxElements ?? DEFAULT_MAX_ELEMENTS, plan.ignoreSelectors, plan.idAttributes),
+    );
+    if (!isPageElementMap(result)) return undefined;
+    const inView = toViewportElementMap(result);
+    return inView.length > 0 ? inView : undefined;
+  } catch {
+    // Suppressed by design, exactly like DOM capture: without a map the
+    // report falls back to the pixel and DOM layers instead of failing.
+    return undefined;
+  }
+}
+
+/** Capture provenance into metadata.json; nothing when no browser can be named. */
+function recordEnvironment(store: BaselineStore, name: string, environment: CaptureEnvironment | null): void {
+  if (!environment) return;
+  try {
+    store.writeTempMetadata(name, { name, environment });
+  } catch {
+    // without it the compare cannot tell rendering drift from noise for this capture
+  }
+}
+
+function writeElementMap(store: BaselineStore, name: string, elementMap: CollectedElement[] | undefined, idAttributes: string[]): void {
+  if (!elementMap) return;
+  try {
+    const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'elements.json'), JSON.stringify(elementMap));
+    if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
+  } catch {
+    // A map we cannot persist is not worth failing a capture over.
+  }
+}
+
+/** One capture in the session's current context: native mode or a page. */
+async function capture(browser: WitnessBrowser, name: string, options: WitnessOptions): Promise<void> {
+  if (await isNativeCapture(browser, options.native)) {
+    return witnessNative(browser, name, options);
   }
 
-  // 3. Capture the element map (best-effort — same contract as the DOM).
-  //    It powers the style check, region attribution and page-shift
-  //    detection on the compare side. The screenshot is the viewport, so the
-  //    map keeps only the elements inside it, in screenshot coordinates.
-  // Opt-in: paths anchored on attributes such as data-testid (config
-  // `elementIdAttributes`), recorded with the capture only when set.
-  const idAttributes = normalizeElementIdAttributes(localConfig.elementIdAttributes);
-  let elementMap: CollectedElement[] | undefined;
-  if (!options.skipElementMap && typeof browser.execute === 'function') {
-    try {
-      const result = await browser.execute<unknown>(
-        elementMapScript(options.maxElements ?? DEFAULT_MAX_ELEMENTS, ignoreSelectors, idAttributes),
-      );
-      if (isPageElementMap(result)) {
-        const inView = toViewportElementMap(result);
-        if (inView.length > 0) elementMap = inView;
-      }
-    } catch {
-      // Suppressed by design, exactly like DOM capture: without a map the
-      // report falls back to the pixel and DOM layers instead of failing.
-    }
-  }
+  const localConfig = loadLocalConfig(process.cwd());
+  const environment = webDriverEnvironment({
+    capabilities: browser.capabilities,
+    probe: await probeRender(browser),
+    adapter: { name: '@testivai/witness-webdriverio', version: ADAPTER_VERSION, captureMethod: CAPTURE_METHODS.WEBDRIVER_VIEWPORT },
+    framework: { name: 'webdriverio', version: installedPackageVersion('webdriverio') },
+  });
+  name = pageSnapshotKey(name, options, environment, localConfig);
+  const plan = capturePlan(options, localConfig);
 
-  // 4. Write to .testivai/temp/<name>/
+  const screenshot = await shoot(browser, plan, name);
+  const dom = await readDom(browser, options, plan.ignoreSelectors);
+  const elementMap = await readElementMap(browser, options, plan);
+
+  // Write to .testivai/temp/<name>/
   const store = new BaselineStore(process.cwd());
   store.writeTemp(name, screenshot, dom);
-  if (environment) {
-    try {
-      store.writeTempMetadata(name, { name, environment });
-    } catch {
-      // without it the compare cannot tell rendering drift from noise for this capture
-    }
-  }
-  if (elementMap) {
-    try {
-      const tempDir = path.join(process.cwd(), '.testivai', 'temp', name);
-      fs.mkdirSync(tempDir, { recursive: true });
-      fs.writeFileSync(path.join(tempDir, 'elements.json'), JSON.stringify(elementMap));
-      if (idAttributes.length > 0) store.writeTempMetadata(name, { elementIdAttributes: idAttributes });
-    } catch {
-      // A map we cannot persist is not worth failing a capture over.
-    }
-  }
+  recordEnvironment(store, name, environment);
+  writeElementMap(store, name, elementMap, plan.idAttributes);
 }
